@@ -5,6 +5,7 @@ import { Link, useLocation } from "react-router";
 import {
   ChevronDownIcon,
   ContactsIcon,
+  GridIcon,
   HorizontaLDots,
   ShieldIcon,
   UsersIcon,
@@ -31,10 +32,16 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
+    icon: <GridIcon fontSize={24} />,
+    name: "Analytics",
+    key: "analytics",
+    path: "/",
+  },
+  {
     icon: <UsersIcon fontSize={24} />,
     name: "Teams",
     key: "ecommerceHome",
-    path: "/",
+    path: "/teams",
   },
   {
     icon: <ShieldIcon fontSize={24} />,
@@ -85,29 +92,24 @@ const AppSidebar: React.FC = () => {
   );
 
   useEffect(() => {
-    let submenuMatched = false;
+    let matched: { type: "main" | "others"; index: number } | null = null;
 
-    ["main"].forEach((menuType) => {
-      const items = menuType === "main" ? navItems : [];
-
-      items.forEach((nav, index) => {
-        if (nav.subItems) {
-          nav.subItems.forEach((subItem) => {
-            if (isActive(subItem.path)) {
-              setOpenSubmenu({
-                type: menuType as "main" | "others",
-                index,
-              });
-              submenuMatched = true;
-            }
-          });
-        }
-      });
+    navItems.forEach((nav, index) => {
+      if (nav.subItems) {
+        nav.subItems.forEach((subItem) => {
+          if (isActive(subItem.path)) {
+            matched = { type: "main", index };
+          }
+        });
+      }
     });
 
-    if (!submenuMatched) {
-      setOpenSubmenu(null);
-    }
+    setOpenSubmenu((prev) => {
+      if (prev?.type === matched?.type && prev?.index === matched?.index) {
+        return prev;
+      }
+      return matched;
+    });
   }, [location, isActive]);
 
   useEffect(() => {
@@ -282,7 +284,7 @@ const AppSidebar: React.FC = () => {
   return (
     <aside
       className={cn(
-        "fixed inset-s-0 top-0 z-50 flex h-screen flex-col border-e border-gray-200 bg-white px-5 text-gray-900 transition-all duration-300 ease-in-out xl:translate-x-0 xl:rtl:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
+        "fixed inset-s-0 top-0 z-[99999] flex h-screen flex-col border-e border-gray-200 bg-white px-5 text-gray-900 transition-all duration-300 ease-in-out xl:translate-x-0 xl:rtl:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
         isExpanded || isMobileOpen ? "w-72.5" : isHovered ? "w-72.5" : "w-22.5",
         isMobileOpen
           ? "translate-x-0"
@@ -293,11 +295,17 @@ const AppSidebar: React.FC = () => {
     >
       <div
         className={cn(
-          "flex py-8",
-          !isExpanded && !isHovered ? "xl:justify-center" : "justify-start",
+          "flex items-center py-6",
+          !isExpanded && !isHovered
+            ? "justify-between xl:justify-center"
+            : "justify-between xl:justify-start",
         )}
       >
-        <Link to="/" className="flex items-center gap-2.5">
+        <Link
+          to="/"
+          onClick={() => isMobileOpen && setIsMobileOpen(false)}
+          className="flex items-center gap-2.5"
+        >
           <img
             src="/images/logo/yatzar-logo.png"
             alt="Yatzar Operation"
@@ -311,6 +319,30 @@ const AppSidebar: React.FC = () => {
             </span>
           ) : null}
         </Link>
+
+        {isMobileOpen && (
+          <button
+            onClick={() => setIsMobileOpen(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 xl:hidden dark:text-gray-400 dark:hover:bg-gray-800"
+            aria-label="Close Sidebar"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M6 18L18 6M6 6l12 12"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       <div className="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
