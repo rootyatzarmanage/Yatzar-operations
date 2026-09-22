@@ -374,17 +374,12 @@ function SearchableSelect({
     const updatePlacement = () => {
       if (!wrapperRef.current) return;
       const rect = wrapperRef.current.getBoundingClientRect();
-      const shouldOpenAbove =
-        window.innerHeight - rect.bottom < 280 && rect.top > 280;
       setMenuStyle({
         position: "fixed",
-        insetInlineStart: rect.left,
-        top: shouldOpenAbove ? undefined : rect.bottom + 4,
-        bottom: shouldOpenAbove ? window.innerHeight - rect.top + 4 : undefined,
+        top: rect.bottom + 4,
         width: rect.width,
       });
     };
-    updatePlacement();
     document.addEventListener("mousedown", handleOutsideClick);
     window.addEventListener("resize", updatePlacement);
     return () => {
@@ -414,7 +409,6 @@ function SearchableSelect({
           className="z-9999 rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
         >
           <input
-            autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className={`${inputClass} h-9`}

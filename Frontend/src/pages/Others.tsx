@@ -49,7 +49,7 @@ export default function Others() {
         description="Manage team dropdown values"
       />
       <PageBreadcrumb pageTitle="Others" />
-      <section className="max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+      <section className="w-full rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
         <div className="border-b border-gray-200 p-5 dark:border-gray-800">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
             Dropdown values
@@ -79,7 +79,7 @@ export default function Others() {
             <input
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              className="h-11 min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs sm:text-sm dark:border-gray-800 dark:text-white/90"
+              className="h-14 min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs sm:h-11 sm:text-sm dark:border-gray-800 dark:text-white/90"
               placeholder={`Enter ${activeType === "departments" ? "department" : "reporting manager"}`}
             />
             <button

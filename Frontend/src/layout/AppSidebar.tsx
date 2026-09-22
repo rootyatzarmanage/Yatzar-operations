@@ -208,6 +208,11 @@ const AppSidebar: React.FC = () => {
                       new CustomEvent("teams:navigate-list"),
                     );
                   }
+                  if (nav.path === "/app-permission") {
+                    window.dispatchEvent(
+                      new CustomEvent("app-permission:navigate-list"),
+                    );
+                  }
                 }}
                 className={`group menu-item ${
                   isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
