@@ -61,6 +61,11 @@ const navItems: NavItem[] = [
     key: "contacts",
     path: "/contacts",
   },
+  {
+    icon: <GridIcon fontSize={24} />,
+    name: "Others",
+    path: "/others",
+  },
 ];
 
 const AppSidebar: React.FC = () => {
@@ -197,6 +202,13 @@ const AppSidebar: React.FC = () => {
               <Link
                 to={nav.path}
                 target={nav.target}
+                onClick={() => {
+                  if (nav.path === "/teams") {
+                    window.dispatchEvent(
+                      new CustomEvent("teams:navigate-list"),
+                    );
+                  }
+                }}
                 className={`group menu-item ${
                   isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
                 }`}
@@ -314,7 +326,7 @@ const AppSidebar: React.FC = () => {
             className="h-10 w-10 shrink-0 object-contain"
           />
           {isExpanded || isHovered || isMobileOpen ? (
-            <span className="text-sm font-semibold leading-5 tracking-wide text-gray-900 dark:text-white">
+            <span className="text-sm leading-5 font-semibold tracking-wide text-gray-900 dark:text-white">
               YATZAR OPERATION
             </span>
           ) : null}

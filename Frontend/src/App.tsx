@@ -5,6 +5,7 @@ import Analytics from "./pages/Analytics";
 import AppPermission from "./pages/AppPermission";
 import Contacts from "./pages/Contacts";
 import NotFound from "./pages/OtherPage/NotFound";
+import Others from "./pages/Others";
 import Teams from "./pages/Teams";
 import Workspace from "./pages/Workspace";
 
@@ -18,6 +19,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index path="/" element={<Analytics />} />
             <Route path="/teams" element={<Teams />} />
+            <Route path="/others" element={<Others />} />
 
             {/* App Permission */}
             <Route path="/app-permission" element={<AppPermission />} />
