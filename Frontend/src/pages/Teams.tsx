@@ -10,7 +10,8 @@ import {
   UsersIcon,
   WorkspaceIcon,
 } from "@/icons";
-import { useRef, useState } from "react";
+import { getTeamDropdownOptions } from "@/utils/teamOptions";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 type Field = {
@@ -31,6 +32,7 @@ type Team = {
   email: string;
 };
 type TeamFormValues = Record<string, string>;
+type LocationData = { name: string };
 
 const fieldGroups: {
   label: string;
@@ -83,7 +85,7 @@ const fieldGroups: {
       },
       {
         name: "photo",
-        label: "Photo",
+        label: "Profile",
         type: "file",
         description: "Upload reference / path",
       },
@@ -132,22 +134,19 @@ const fieldGroups: {
         label: "Address line 1",
         required: true,
       },
-      {
-        name: "address_line2",
-        label: "Address line 2",
-      },
-      { name: "city", label: "City", required: true },
+      { name: "address_line2", label: "Address line 2" },
+      { name: "country", label: "Country", required: true, options: [] },
       {
         name: "state",
         label: "State",
         required: true,
-        options: ["Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"],
+        options: [],
       },
       {
-        name: "country",
-        label: "Country",
+        name: "district",
+        label: "District",
         required: true,
-        options: ["India", "United States", "United Kingdom", "Singapore"],
+        options: [],
       },
       {
         name: "pincode",
@@ -176,6 +175,7 @@ const fieldGroups: {
         name: "department",
         label: "Department",
         required: true,
+        options: [],
       },
       {
         name: "designation",
@@ -185,6 +185,7 @@ const fieldGroups: {
       {
         name: "reporting_manager",
         label: "Reporting manager",
+        options: [],
       },
       {
         name: "work_location",
@@ -206,12 +207,12 @@ const fieldGroups: {
       {
         name: "aadhar_number",
         label: "Aadhar number",
-        required: true,
+        required: false,
       },
       {
         name: "pan_number",
         label: "PAN number",
-        required: true,
+        required: false,
       },
       {
         name: "uan_number",
@@ -337,7 +338,109 @@ const teamRows: Team[] = [
 ];
 
 const inputClass =
-  "h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
+  "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
+const fallbackStates = ["Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"];
+const fallbackDistricts = ["Mumbai", "Bengaluru Urban", "Chennai", "New Delhi"];
+
+function SearchableSelect({
+  label,
+  options,
+  value,
+  onChange,
+  hasError,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  hasError: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const safeOptions = options.filter(
+    (option): option is string =>
+      typeof option === "string" && option.trim().length > 0,
+  );
+  const filteredOptions = safeOptions.filter((option) =>
+    option.toLowerCase().includes(query.toLowerCase()),
+  );
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    const updatePlacement = () => {
+      if (!wrapperRef.current) return;
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setMenuStyle({
+        position: "fixed",
+        top: rect.bottom + 4,
+        width: rect.width,
+      });
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("resize", updatePlacement);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("resize", updatePlacement);
+    };
+  }, [isOpen]);
+  return (
+    <div ref={wrapperRef} className="relative min-w-0">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className={`${inputClass} ${hasError ? "border-error-500" : ""} flex items-center justify-between text-start`}
+      >
+        <span
+          className={
+            value ? "text-gray-800 dark:text-white/90" : "text-gray-400"
+          }
+        >
+          {value || `Select ${label.toLowerCase()}`}
+        </span>
+        <ChevronDownIcon className="size-4 text-gray-400" />
+      </button>
+      {isOpen && (
+        <div
+          style={menuStyle}
+          className="z-9999 rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
+        >
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className={`${inputClass} h-9`}
+            placeholder={`Search ${label.toLowerCase()}`}
+          />
+          <div className="mt-1 max-h-[min(18rem,50vh)] overflow-y-auto overscroll-contain">
+            {filteredOptions.length ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    onChange(option);
+                    setQuery("");
+                    setIsOpen(false);
+                  }}
+                  className="w-full rounded-md px-3 py-2 text-start text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                >
+                  {option}
+                </button>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-sm text-gray-400">
+                No results found
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function FieldControl({
   field,
@@ -346,6 +449,7 @@ function FieldControl({
   isDifferentAddress = false,
   onDifferentAddressChange,
   hasError = false,
+  optionsOverride,
 }: {
   field: Field;
   value?: string;
@@ -353,8 +457,10 @@ function FieldControl({
   isDifferentAddress?: boolean;
   onDifferentAddressChange?: (value: boolean) => void;
   hasError?: boolean;
+  optionsOverride?: string[];
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fieldClass = hasError
     ? "border-error-500 focus:border-error-500 focus:ring-error-500/10"
@@ -394,12 +500,38 @@ function FieldControl({
     );
   if (field.type === "file")
     return (
-      <div className="flex items-center gap-3">
+      <div
+        className={`flex min-h-32 w-full min-w-0 flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition ${isDragging ? "border-brand-500 bg-brand-50 shadow-focus-ring dark:bg-brand-500/10" : "border-gray-300 hover:border-brand-400 dark:border-gray-700 dark:hover:border-brand-500"}`}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          setSelectedFile(event.dataTransfer.files?.[0] ?? null);
+        }}
+      >
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          Drop your file here or{" "}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="font-medium text-brand-500 underline underline-offset-2 hover:text-brand-600"
+          >
+            Browse file
+          </button>
+        </p>
+        <p className="mt-2 truncate text-xs text-gray-400">
+          {selectedFile?.name ?? "No file chosen"}
+        </p>
         <input
           ref={fileInputRef}
           type="file"
           onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-          className={`${inputClass} py-2 text-sm file:me-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-600 dark:file:bg-brand-500/15 dark:file:text-brand-400`}
+          className="hidden"
         />
         {selectedFile && (
           <button
@@ -435,33 +567,37 @@ function FieldControl({
           required={isDifferentAddress}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
+          placeholder={`Enter ${field.label.toLowerCase()}`}
           className={`${inputClass} ${fieldClass} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 dark:disabled:bg-white/5`}
         />
       </div>
     );
-  if (field.options)
+  if (field.options || optionsOverride)
     return (
-      <div className="relative">
-        <select
-          className={`${inputClass} ${fieldClass} appearance-none pe-10`}
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-        >
-          <option value="" disabled>
-            Select {field.label.toLowerCase()}
-          </option>
-          {field.options.map((option) => (
-            <option key={option}>{option}</option>
-          ))}
-        </select>
-        <ChevronDownIcon className="pointer-events-none absolute inset-e-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
-      </div>
+      <SearchableSelect
+        label={field.label}
+        options={optionsOverride ?? field.options ?? []}
+        value={value}
+        onChange={onValueChange}
+        hasError={hasError}
+      />
+    );
+  if (field.type === "date")
+    return (
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        placeholder={`Select ${field.label.toLowerCase()}`}
+        className={`${inputClass} ${fieldClass}`}
+      />
     );
   if (field.type === "textarea")
     return (
       <textarea
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
+        placeholder={`Enter ${field.label.toLowerCase()}`}
         className={`${inputClass} ${fieldClass} h-24 py-3`}
       />
     );
@@ -471,6 +607,7 @@ function FieldControl({
       readOnly={field.name === "employee_code"}
       value={field.name === "employee_code" ? "EMP-2026-0048" : value}
       onChange={(event) => onValueChange(event.target.value)}
+      placeholder={`Enter ${field.label.toLowerCase()}`}
       className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}
     />
   );
@@ -494,6 +631,20 @@ export default function Teams() {
   const [pageSize, setPageSize] = useState(5);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
+  const [departments, setDepartments] = useState(
+    () => getTeamDropdownOptions().departments,
+  );
+  const [reportingManagers, setReportingManagers] = useState(
+    () => getTeamDropdownOptions().reportingManagers,
+  );
+  const [countries, setCountries] = useState<string[]>([
+    "India",
+    "United States",
+    "United Kingdom",
+    "Singapore",
+  ]);
+  const [states, setStates] = useState<string[]>(fallbackStates);
+  const [districts, setDistricts] = useState<string[]>(fallbackDistricts);
   const filteredTeams = teams.filter((team) =>
     Object.values(team).some((value) =>
       value.toLowerCase().includes(search.toLowerCase()),
@@ -509,8 +660,85 @@ export default function Teams() {
     pagedTeams.length > 0 &&
     pagedTeams.every((team) => selectedCodes.includes(team.code));
 
+  useEffect(() => {
+    fetch("https://countriesnow.space/api/v0.1/countries")
+      .then((response) => response.json())
+      .then((result: { data?: LocationData[] }) =>
+        setCountries(
+          result.data
+            ?.map((item) => item.name)
+            .filter(
+              (name): name is string =>
+                typeof name === "string" && name.trim().length > 0,
+            ) ?? [],
+        ),
+      )
+      .catch(() =>
+        setCountries(["India", "United States", "United Kingdom", "Singapore"]),
+      );
+  }, []);
+
+  useEffect(() => {
+    const country = formValues.country;
+    if (!country) return setStates(fallbackStates);
+    fetch("https://countriesnow.space/api/v0.1/countries/states", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ country }),
+    })
+      .then((response) => response.json())
+      .then((result: { data?: { states?: LocationData[] } }) =>
+        setStates(
+          result.data?.states
+            ?.map((item) => item.name)
+            .filter(
+              (name): name is string =>
+                typeof name === "string" && name.trim().length > 0,
+            ) || fallbackStates,
+        ),
+      )
+      .catch(() =>
+        setStates(["Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"]),
+      );
+  }, [formValues.country]);
+
+  useEffect(() => {
+    const country = formValues.country;
+    const state = formValues.state;
+    if (!country || !state) return setDistricts(fallbackDistricts);
+    fetch("https://countriesnow.space/api/v0.1/countries/state/cities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ country, state }),
+    })
+      .then((response) => response.json())
+      .then((result: { data?: string[] }) =>
+        setDistricts(result.data?.length ? result.data : fallbackDistricts),
+      )
+      .catch(() =>
+        setDistricts(["Mumbai", "Bengaluru Urban", "Chennai", "New Delhi"]),
+      );
+  }, [formValues.country, formValues.state]);
+
+  useEffect(() => {
+    const options = getTeamDropdownOptions();
+    setDepartments(options.departments);
+    setReportingManagers(options.reportingManagers);
+  }, [isCreating]);
+
+  useEffect(() => {
+    const showList = () => setIsCreating(false);
+    window.addEventListener("teams:navigate-list", showList);
+    return () => window.removeEventListener("teams:navigate-list", showList);
+  }, []);
+
   const updateFormValue = (name: string, value: string) => {
-    setFormValues((current) => ({ ...current, [name]: value }));
+    setFormValues((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === "country" ? { state: "", district: "" } : {}),
+      ...(name === "state" ? { district: "" } : {}),
+    }));
     setValidationErrors((current) => ({ ...current, [name]: false }));
   };
 
@@ -598,7 +826,7 @@ export default function Teams() {
       />
       <PageBreadcrumb pageTitle={t("ecommerce.title") || "Teams"} />
       {!isCreating ? (
-        <section className="max-w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+        <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -620,7 +848,7 @@ export default function Teams() {
               }}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
             >
-              <span className="text-lg leading-none">+</span>Add team member
+              <span className="text-lg leading-none">+</span>Add
             </button>
           </div>
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -891,7 +1119,7 @@ export default function Teams() {
                 onClick={handleCreate}
                 className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
               >
-                {editingCode ? "Update team member" : "Create team member"}
+                {editingCode ? "Update" : "Save/Submit"}
               </button>
             </div>
           </div>
@@ -957,6 +1185,19 @@ export default function Teams() {
                       if (!value) updateFormValue("permanent_address", "");
                     }}
                     hasError={Boolean(validationErrors[field.name])}
+                    optionsOverride={
+                      field.name === "country"
+                        ? countries
+                        : field.name === "state"
+                          ? states
+                          : field.name === "district"
+                            ? districts
+                            : field.name === "department"
+                              ? departments
+                              : field.name === "reporting_manager"
+                                ? reportingManagers
+                                : undefined
+                    }
                   />
                   {validationErrors[field.name] && (
                     <span className="mt-1.5 block text-xs text-error-500">
