@@ -30,14 +30,6 @@ const AppHeader: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isApplicationMenuOpen) {
-      setTimeout(() => {
-        mobileInputRef.current?.focus();
-      }, 50);
-    }
-  }, [isApplicationMenuOpen]);
-
-  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "k") {
         event.preventDefault();
