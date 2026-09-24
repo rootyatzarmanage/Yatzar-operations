@@ -211,7 +211,7 @@ export default function Workspace() {
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                Workspace directory
+                Workspace information
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Manage workspace records and access in one place.
@@ -222,7 +222,7 @@ export default function Workspace() {
               onClick={handleAddNew}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
             >
-              <span className="text-lg leading-none">+</span>Add
+              <span className="text-lg leading-none">+</span>Add workspace
             </button>
           </div>
 
@@ -405,7 +405,7 @@ export default function Workspace() {
                 onClick={handleSave}
                 className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
               >
-                {editingId !== null ? "Save changes" : "Save"}
+                {editingId !== null ? "Save changes" : "Submit"}
               </button>
             </div>
           </div>
