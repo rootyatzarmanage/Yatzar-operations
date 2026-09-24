@@ -7,11 +7,13 @@ import {
   GridIcon,
   ShieldIcon,
   TrashIcon,
+  UploadIcon,
   UsersIcon,
   WorkspaceIcon,
 } from "@/icons";
 import { getTeamDropdownOptions } from "@/utils/teamOptions";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 type Field = {
@@ -77,7 +79,11 @@ const fieldGroups: {
         required: true,
         options: ["Male", "Female", "Other"],
       },
-      { name: "blood_group", label: "Blood group" },
+      {
+        name: "blood_group",
+        label: "Blood group",
+        options: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+      },
       {
         name: "marital_status",
         label: "Marital status",
@@ -157,7 +163,7 @@ const fieldGroups: {
       {
         name: "permanent_address",
         label: "Permanent address",
-        type: "conditional-text",
+        type: "conditional-address",
       },
     ],
   },
@@ -227,6 +233,47 @@ const fieldGroups: {
     ],
   },
   {
+    label: "Documents / Other",
+    icon: GridIcon,
+    fields: [
+      {
+        name: "resume_file",
+        label: "Resume file",
+        type: "file",
+        description: "Upload reference / path",
+      },
+      {
+        name: "id_proof_file",
+        label: "ID proof file",
+        type: "file",
+        description: "Upload reference / path",
+      },
+      {
+        name: "offer_letter_file",
+        label: "Offer letter",
+        type: "file",
+        description: "Upload reference / path",
+      },
+      {
+        name: "experience",
+        label: "Experience",
+      },
+      {
+        name: "skills",
+        label: "Skills",
+      },
+      {
+        name: "qualifications",
+        label: "Qualifications",
+      },
+      {
+        name: "remarks",
+        label: "Remarks",
+        type: "textarea",
+      },
+    ],
+  },
+  {
     label: "Login & Access",
     icon: ShieldIcon,
     fields: [
@@ -266,33 +313,6 @@ const fieldGroups: {
         label: "Active account",
         type: "checkbox",
         required: true,
-      },
-    ],
-  },
-  {
-    label: "Documents / Other",
-    icon: GridIcon,
-    fields: [
-      {
-        name: "resume_file",
-        label: "Resume file",
-        type: "file",
-        description: "Upload reference / path",
-      },
-      {
-        name: "id_proof_file",
-        label: "ID proof file",
-        type: "file",
-        description: "Upload reference / path",
-      },
-      {
-        name: "skills_qualification",
-        label: "Skills & qualification",
-      },
-      {
-        name: "remarks",
-        label: "Remarks",
-        type: "textarea",
       },
     ],
   },
@@ -359,6 +379,7 @@ function SearchableSelect({
   const [query, setQuery] = useState("");
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const safeOptions = options.filter(
     (option): option is string =>
       typeof option === "string" && option.trim().length > 0,
@@ -369,26 +390,50 @@ function SearchableSelect({
   useEffect(() => {
     if (!isOpen) return;
     const handleOutsideClick = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setIsOpen(false);
+      const target = event.target as Node;
+      if (
+        !wrapperRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setIsOpen(false);
+      }
     };
     const updatePlacement = () => {
       if (!wrapperRef.current) return;
       const rect = wrapperRef.current.getBoundingClientRect();
+      const viewportPadding = 8;
+      const gap = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+      const spaceAbove = rect.top - viewportPadding;
+      const opensAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+      const availableHeight = Math.max(
+        120,
+        Math.min(320, opensAbove ? spaceAbove - gap : spaceBelow - gap),
+      );
       setMenuStyle({
-        position: "fixed",
-        top: rect.bottom + 4,
+        left: rect.left,
         width: rect.width,
+        maxHeight: availableHeight,
+        ...(opensAbove
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
       });
     };
+    updatePlacement();
     document.addEventListener("mousedown", handleOutsideClick);
     window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
       window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
     };
   }, [isOpen]);
   return (
-    <div ref={wrapperRef} className="relative min-w-0">
+    <div
+      ref={wrapperRef}
+      className={`relative min-w-0 ${isOpen ? "z-30" : ""}`}
+    >
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
@@ -403,41 +448,44 @@ function SearchableSelect({
         </span>
         <ChevronDownIcon className="size-4 text-gray-400" />
       </button>
-      {isOpen && (
-        <div
-          style={menuStyle}
-          className="z-9999 rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
-        >
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className={`${inputClass} h-9`}
-            placeholder={`Search ${label.toLowerCase()}`}
-          />
-          <div className="mt-1 max-h-[min(18rem,50vh)] overflow-y-auto overscroll-contain">
-            {filteredOptions.length ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    onChange(option);
-                    setQuery("");
-                    setIsOpen(false);
-                  }}
-                  className="w-full rounded-md px-3 py-2 text-start text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
-                >
-                  {option}
-                </button>
-              ))
-            ) : (
-              <p className="px-3 py-2 text-sm text-gray-400">
-                No results found
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className="fixed z-9999 overflow-hidden rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
+          >
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className={`${inputClass} h-9`}
+              placeholder={`Search ${label.toLowerCase()}`}
+            />
+            <div className="mt-1 max-h-full overflow-y-auto overscroll-contain">
+              {filteredOptions.length ? (
+                filteredOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      onChange(option);
+                      setQuery("");
+                      setIsOpen(false);
+                    }}
+                    className="w-full rounded-md px-3 py-2 text-start text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                  >
+                    {option}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-sm text-gray-400">
+                  No results found
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -450,6 +498,9 @@ function FieldControl({
   onDifferentAddressChange,
   hasError = false,
   optionsOverride,
+  optionsOverrides,
+  addressValues = {},
+  onAddressValueChange,
 }: {
   field: Field;
   value?: string;
@@ -458,6 +509,9 @@ function FieldControl({
   onDifferentAddressChange?: (value: boolean) => void;
   hasError?: boolean;
   optionsOverride?: string[];
+  optionsOverrides?: Record<string, string[]>;
+  addressValues?: TeamFormValues;
+  onAddressValueChange?: (name: string, value: string) => void;
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -501,7 +555,7 @@ function FieldControl({
   if (field.type === "file")
     return (
       <div
-        className={`flex min-h-32 w-full min-w-0 flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition ${isDragging ? "border-brand-500 bg-brand-50 shadow-focus-ring dark:bg-brand-500/10" : "border-gray-300 hover:border-brand-400 dark:border-gray-700 dark:hover:border-brand-500"}`}
+        className={`flex min-h-52 w-full min-w-0 flex-col items-center justify-center rounded-2xl border border-dashed px-5 py-6 text-center transition ${isDragging ? "border-brand-500 bg-brand-50 shadow-focus-ring dark:bg-brand-500/10" : "border-gray-300 bg-gray-50/40 hover:border-brand-400 dark:border-gray-700 dark:bg-white/[0.02] dark:hover:border-brand-500"}`}
         onDragEnter={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -514,19 +568,27 @@ function FieldControl({
           setSelectedFile(event.dataTransfer.files?.[0] ?? null);
         }}
       >
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          Drop your file here or{" "}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="font-medium text-brand-500 underline underline-offset-2 hover:text-brand-600"
-          >
-            Browse file
-          </button>
+        <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-gray-200/80 text-gray-700 dark:bg-white/10 dark:text-gray-200">
+          <UploadIcon className="size-6" />
+        </div>
+        <p className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
+          Drag &amp; Drop Files Here
         </p>
-        <p className="mt-2 truncate text-xs text-gray-400">
-          {selectedFile?.name ?? "No file chosen"}
+        <p className="mt-2 max-w-sm text-sm leading-5 text-gray-600 dark:text-gray-400">
+          Drag and drop your PNG, JPG, WebP, SVG images here or browse
         </p>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="mt-4 text-sm font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400"
+        >
+          Browse File
+        </button>
+        {selectedFile && (
+          <p className="mt-4 max-w-full truncate text-xs text-gray-500 dark:text-gray-400">
+            Selected: {selectedFile.name}
+          </p>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -540,16 +602,43 @@ function FieldControl({
               setSelectedFile(null);
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
-            className="shrink-0 text-sm font-medium text-error-600 hover:text-error-700 dark:text-error-400"
+            className="mt-3 shrink-0 text-sm font-medium text-error-600 hover:text-error-700 dark:text-error-400"
           >
             Delete
           </button>
         )}
       </div>
     );
-  if (field.type === "conditional-text")
+  if (field.type === "conditional-address") {
+    const permanentFields: Field[] = [
+      {
+        name: "permanent_address_line1",
+        label: "Address line 1",
+        required: true,
+      },
+      { name: "permanent_address_line2", label: "Address line 2" },
+      {
+        name: "permanent_country",
+        label: "Country",
+        required: true,
+        options: [],
+      },
+      { name: "permanent_state", label: "State", required: true, options: [] },
+      {
+        name: "permanent_district",
+        label: "District",
+        required: true,
+        options: [],
+      },
+      {
+        name: "permanent_pincode",
+        label: "Pincode",
+        type: "number",
+        required: true,
+      },
+    ];
     return (
-      <div className="space-y-3">
+      <div className="space-y-4 md:col-span-2">
         <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
           <input
             type="checkbox"
@@ -561,17 +650,34 @@ function FieldControl({
           />
           Permanent address is different from current address
         </label>
-        <input
-          type="text"
-          disabled={!isDifferentAddress}
-          required={isDifferentAddress}
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          placeholder={`Enter ${field.label.toLowerCase()}`}
-          className={`${inputClass} ${fieldClass} disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 dark:disabled:bg-white/5`}
-        />
+        {isDifferentAddress && (
+          <div className="grid grid-cols-1 gap-5 rounded-xl border border-gray-200 p-4 md:grid-cols-2 dark:border-gray-800">
+            <h4 className="text-sm font-semibold text-gray-800 md:col-span-2 dark:text-white/90">
+              Permanent address
+            </h4>
+            {permanentFields.map((addressField) => (
+              <label key={addressField.name}>
+                <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {addressField.label}
+                  {addressField.required && (
+                    <span className="ms-1 text-error-500">*</span>
+                  )}
+                </span>
+                <FieldControl
+                  field={addressField}
+                  value={addressValues[addressField.name]}
+                  onValueChange={(nextValue) =>
+                    onAddressValueChange?.(addressField.name, nextValue)
+                  }
+                  optionsOverride={optionsOverrides?.[addressField.name]}
+                />
+              </label>
+            ))}
+          </div>
+        )}
       </div>
     );
+  }
   if (field.options || optionsOverride)
     return (
       <SearchableSelect
@@ -758,8 +864,22 @@ export default function Teams() {
       group.fields.forEach((field) => {
         if (!field.required || field.name === "employee_code") return;
         if (field.name === "permanent_address") {
-          if (isDifferentAddress && !formValues[field.name]?.trim())
-            requiredErrors[field.name] = true;
+          if (isDifferentAddress) {
+            let hasPermanentAddressError = false;
+            [
+              "permanent_address_line1",
+              "permanent_country",
+              "permanent_state",
+              "permanent_district",
+              "permanent_pincode",
+            ].forEach((name) => {
+              if (!formValues[name]?.trim()) {
+                requiredErrors[name] = true;
+                hasPermanentAddressError = true;
+              }
+            });
+            if (hasPermanentAddressError) requiredErrors[field.name] = true;
+          }
           return;
         }
         if (!formValues[field.name]?.trim() && field.name !== "is_active")
@@ -830,7 +950,7 @@ export default function Teams() {
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                Team directory
+                Employee information
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Manage employee records and access in one place.
@@ -848,7 +968,7 @@ export default function Teams() {
               }}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
             >
-              <span className="text-lg leading-none">+</span>Add
+              <span className="text-lg leading-none">+</span>Add employee
             </button>
           </div>
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -1096,7 +1216,7 @@ export default function Teams() {
           <div className="flex flex-col gap-4 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                {editingCode ? "Update team member" : "Add team member"}
+                {editingCode ? "Update employee" : "Add employee"}
               </h3>
             </div>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
@@ -1119,7 +1239,7 @@ export default function Teams() {
                 onClick={handleCreate}
                 className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
               >
-                {editingCode ? "Update" : "Save/Submit"}
+                Submit
               </button>
             </div>
           </div>
@@ -1160,10 +1280,20 @@ export default function Teams() {
               </div>
             </div> */}
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {activeTab === 2 && (
+                <h4 className="text-sm font-semibold text-gray-800 md:col-span-2 dark:text-white/90">
+                  Current address
+                </h4>
+              )}
               {fieldGroups[activeTab].fields.map((field) => (
-                <label
+                <div
                   key={field.name}
-                  className={field.type === "textarea" ? "md:col-span-2" : ""}
+                  className={
+                    field.type === "textarea" ||
+                    field.type === "conditional-address"
+                      ? "md:col-span-2"
+                      : ""
+                  }
                 >
                   <span
                     className={`mb-2 block text-sm font-medium ${validationErrors[field.name] ? "text-error-500" : "text-gray-700 dark:text-gray-300"}`}
@@ -1182,8 +1312,19 @@ export default function Teams() {
                     isDifferentAddress={isDifferentAddress}
                     onDifferentAddressChange={(value) => {
                       setIsDifferentAddress(value);
-                      if (!value) updateFormValue("permanent_address", "");
+                      if (!value) {
+                        [
+                          "permanent_address_line1",
+                          "permanent_address_line2",
+                          "permanent_country",
+                          "permanent_state",
+                          "permanent_district",
+                          "permanent_pincode",
+                        ].forEach((name) => updateFormValue(name, ""));
+                      }
                     }}
+                    addressValues={formValues}
+                    onAddressValueChange={updateFormValue}
                     hasError={Boolean(validationErrors[field.name])}
                     optionsOverride={
                       field.name === "country"
@@ -1198,6 +1339,11 @@ export default function Teams() {
                                 ? reportingManagers
                                 : undefined
                     }
+                    optionsOverrides={{
+                      permanent_country: countries,
+                      permanent_state: states,
+                      permanent_district: districts,
+                    }}
                   />
                   {validationErrors[field.name] && (
                     <span className="mt-1.5 block text-xs text-error-500">
@@ -1209,7 +1355,7 @@ export default function Teams() {
                       {field.description}
                     </span>
                   )}
-                </label>
+                </div>
               ))}
             </div>
           </div>
