@@ -148,6 +148,9 @@ const initialEmployeeRoles: Record<string, string> = {
   "EMP-2026-0004": "Viewer",
 };
 
+const tableInputClass =
+  "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
+
 const getInitials = (name: string) =>
   name
     .split(" ")
@@ -418,7 +421,7 @@ export default function AppPermission() {
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.appPermission")} />
       <div className="space-y-6">
-        {!isEditorOpen && (
+        {/* {!isEditorOpen && (
           <button
             type="button"
             onClick={openCreate}
@@ -427,7 +430,7 @@ export default function AppPermission() {
             <span className="text-lg leading-none">+</span>
             Create role
           </button>
-        )}
+        )} */}
 
         {isEditorOpen && (
           <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
@@ -531,22 +534,64 @@ export default function AppPermission() {
         )}
 
         {!isEditorOpen && (
-          <section>
-            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-              <div className="flex flex-row gap-4 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
-                <div className="relative w-full sm:max-w-md">
-                  <input
-                    value={roleSearch}
+          <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+            <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                  Employee permissions
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Assign created roles to employee accounts.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
+              >
+                <span className="text-lg leading-none">+</span>
+                Create role
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div className="relative w-full sm:max-w-md">
+                <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-lg text-gray-400">
+                  ⌕
+                </span>
+                <input
+                  value={roleSearch}
+                  onChange={(event) => {
+                    setRoleSearch(event.target.value);
+                    setPage(1);
+                  }}
+                  className={`${tableInputClass} ps-10`}
+                  placeholder="Search team members"
+                  aria-label="Search role members"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                <label className="flex items-center gap-2">
+                  Show
+                  <select
+                    value={pageSize}
                     onChange={(event) => {
-                      setRoleSearch(event.target.value);
+                      setPageSize(Number(event.target.value));
                       setPage(1);
                     }}
-                    className="h-10 w-full rounded-full border border-gray-200 bg-transparent px-4 text-sm text-gray-800 outline-none focus:border-brand-500 dark:border-gray-800 dark:text-white/90"
-                    placeholder="Search role members..."
-                    aria-label="Search role members"
-                  />
-                </div>
-                <div className="flex items-center justify-end gap-2">
+                    className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                  >
+                    {[5, 10, 25].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                  entries
+                </label>
+                <span>
+                  {filteredEmployees.length} of {employees.length} members
+                </span>
+                <div className="flex items-center gap-1">
                   <div className="relative">
                     <button
                       type="button"
@@ -595,175 +640,170 @@ export default function AppPermission() {
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-start">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.02]">
-                      <th className="w-20 px-6 py-3 text-start text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                        S.No
-                      </th>
-                      <th className="px-6 py-3 text-start text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                        Member
-                      </th>
-                      <th className="px-6 py-3 text-start text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-start text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                        Role
-                      </th>
-                      <th className="w-36 px-6 py-3 text-end text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleEmployees.map((employee, index) => (
-                      <tr
-                        key={employee.code}
-                        className="border-b border-gray-100 last:border-0 dark:border-gray-800/80"
-                      >
-                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {(page - 1) * pageSize + index + 1}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-full bg-brand-50 text-brand-500 dark:bg-brand-500/10 dark:text-brand-400">
-                              <span className="text-xs font-semibold">
-                                {getInitials(employee.name)}
-                              </span>
-                            </span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-white/90">
-                              {employee.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                          {employee.email}
-                        </td>
-                        <td className="px-6 py-4">
-                          <EmployeeRoleDropdown
-                            roles={roles}
-                            value={employeeRoles[employee.code] ?? ""}
-                            onChange={(roleName) =>
-                              setEmployeeRoles((current) => ({
-                                ...current,
-                                [employee.code]: roleName,
-                              }))
-                            }
-                            employeeName={employee.name}
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openView(
-                                  roles.find(
-                                    (role) =>
-                                      role.name ===
-                                      employeeRoles[employee.code],
-                                  ) ?? roles[0],
-                                )
-                              }
-                              aria-label={`View ${employee.name}`}
-                              title="View"
-                              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5"
-                            >
-                              <EyeIcon className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openEdit(
-                                  roles.find(
-                                    (role) =>
-                                      role.name ===
-                                      employeeRoles[employee.code],
-                                  ) ?? roles[0],
-                                )
-                              }
-                              aria-label={`Edit ${employee.name}`}
-                              title="Edit"
-                              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5"
-                            >
-                              <EditIcon className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setDeleteTarget(
-                                  roles.find(
-                                    (role) =>
-                                      role.name ===
-                                      employeeRoles[employee.code],
-                                  ) ?? roles[0],
-                                )
-                              }
-                              aria-label={`Delete ${employee.name}`}
-                              title="Delete"
-                              className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 dark:hover:bg-error-500/10"
-                            >
-                              <TrashIcon className="size-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                <span>
-                  Showing{" "}
-                  {filteredEmployees.length ? (page - 1) * pageSize + 1 : 0} to{" "}
-                  {Math.min(page * pageSize, filteredEmployees.length)} of{" "}
-                  {filteredEmployees.length} results
-                </span>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2">
-                    Rows per page:
-                    <select
-                      value={pageSize}
-                      onChange={(event) => {
-                        setPageSize(Number(event.target.value));
-                        setPage(1);
-                      }}
-                      className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-sm dark:border-gray-800 dark:text-white/90"
+            </div>
+            <div className="custom-scrollbar max-w-full overflow-x-auto">
+              <table className="w-full min-w-full text-start sm:min-w-[860px] lg:min-w-full">
+                <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
+                  <tr>
+                    <th className="w-20 px-5 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                      S.No
+                    </th>
+                    <th className="px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                      Member
+                    </th>
+                    <th className="px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                      Email
+                    </th>
+                    <th className="px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                      Role
+                    </th>
+                    <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {visibleEmployees.map((employee, index) => (
+                    <tr
+                      key={employee.code}
+                      className="transition hover:bg-gray-50 dark:hover:bg-white/2"
                     >
-                      {[5, 10, 20].map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() =>
-                      setPage((current) => Math.max(1, current - 1))
-                    }
-                    aria-label="Previous page"
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 disabled:opacity-40 dark:border-gray-800"
+                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {(page - 1) * pageSize + index + 1}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex size-9 items-center justify-center rounded-full bg-brand-50 text-brand-500 dark:bg-brand-500/10 dark:text-brand-400">
+                            <span className="text-xs font-semibold">
+                              {getInitials(employee.name)}
+                            </span>
+                          </span>
+                          <span className="text-sm font-semibold text-gray-800 dark:text-white/90">
+                            {employee.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                        {employee.email}
+                      </td>
+                      <td className="px-6 py-4">
+                        <EmployeeRoleDropdown
+                          roles={roles}
+                          value={employeeRoles[employee.code] ?? ""}
+                          onChange={(roleName) =>
+                            setEmployeeRoles((current) => ({
+                              ...current,
+                              [employee.code]: roleName,
+                            }))
+                          }
+                          employeeName={employee.name}
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openView(
+                                roles.find(
+                                  (role) =>
+                                    role.name === employeeRoles[employee.code],
+                                ) ?? roles[0],
+                              )
+                            }
+                            aria-label={`View ${employee.name}`}
+                            title="View"
+                            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5"
+                          >
+                            <EyeIcon className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEdit(
+                                roles.find(
+                                  (role) =>
+                                    role.name === employeeRoles[employee.code],
+                                ) ?? roles[0],
+                              )
+                            }
+                            aria-label={`Edit ${employee.name}`}
+                            title="Edit"
+                            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5"
+                          >
+                            <EditIcon className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeleteTarget(
+                                roles.find(
+                                  (role) =>
+                                    role.name === employeeRoles[employee.code],
+                                ) ?? roles[0],
+                              )
+                            }
+                            aria-label={`Delete ${employee.name}`}
+                            title="Delete"
+                            className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 dark:hover:bg-error-500/10"
+                          >
+                            <TrashIcon className="size-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
+              <span>
+                Showing{" "}
+                {filteredEmployees.length ? (page - 1) * pageSize + 1 : 0} to{" "}
+                {Math.min(page * pageSize, filteredEmployees.length)} of{" "}
+                {filteredEmployees.length} results
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2">
+                  Rows per page:
+                  <select
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(1);
+                    }}
+                    className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-sm dark:border-gray-800 dark:text-white/90"
                   >
-                    ‹
-                  </button>
-                  <span className="min-w-8 text-center font-medium text-gray-800 dark:text-white/90">
-                    {page}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={page >= totalPages}
-                    onClick={() =>
-                      setPage((current) => Math.min(totalPages, current + 1))
-                    }
-                    aria-label="Next page"
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 disabled:opacity-40 dark:border-gray-800"
-                  >
-                    ›
-                  </button>
-                </div>
+                    {[5, 10, 20].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={page === 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  aria-label="Previous page"
+                  className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                >
+                  ‹
+                </button>
+                <span className="min-w-8 text-center font-medium text-gray-800 dark:text-white/90">
+                  {page}
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  aria-label="Next page"
+                  className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                >
+                  ›
+                </button>
               </div>
             </div>
           </section>
