@@ -974,7 +974,20 @@ export default function Teams() {
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
-                ⌕
+                <svg
+                  className="size-5"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.375 17.208a7.833 7.833 0 1 0 0-15.667 7.833 7.833 0 0 0 0 15.667ZM15.418 14.357l2.82 2.821"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </span>
               <input
                 value={search}
