@@ -11,8 +11,9 @@ env/
 # Environment files
 .env
 
-# Local database files
+# Database & SQLite files
 *.db
+*.sqlite3
 storage/
 
 # IDE & OS
