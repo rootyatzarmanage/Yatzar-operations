@@ -1,3 +1,4 @@
-from yo.schemas.responses.person import PersonResponse
+from yo.schemas.responses.employee import EmployeeResponse
+from yo.schemas.responses.role import RoleResponse
 
-__all__ = ["PersonResponse"]
+__all__ = ["EmployeeResponse", "RoleResponse"]

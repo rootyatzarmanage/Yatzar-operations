@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from ycpa.core.config import settings
-from ycpa.models.base import Base
-# Import all models here so Alembic registers them
-import ycpa.models.person # noqa
+from yo.core.config import settings
+from yo.models.base import Base
+import yo.models.employee  # noqa
+import yo.models.user  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

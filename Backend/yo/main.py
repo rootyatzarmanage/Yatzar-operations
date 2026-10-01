@@ -7,15 +7,19 @@ from fastapi.responses import JSONResponse
 from yo.api.v1.router import api_v1_router
 from yo.core.config import settings
 from yo.core.database import engine
+from yo.core.database import AsyncSessionLocal
 from yo.core.database.base import Base
 from yo.core.exceptions import AppException
 from yo.core.schemas.responses import ErrorResponse
+from yo.seeders.admin import seed_default_data
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+    async with AsyncSessionLocal() as session:
+        await seed_default_data(session)
     yield
     await engine.dispose()
 

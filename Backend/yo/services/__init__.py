@@ -1,3 +1,4 @@
-from yo.services.person import PersonService
+from yo.services.employee import EmployeeService
+from yo.services.role import RoleService
 
-__all__ = ["PersonService"]
+__all__ = ["EmployeeService", "RoleService"]

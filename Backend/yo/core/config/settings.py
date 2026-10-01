@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/yo_db"
+    DEFAULT_SUPER_ADMIN_USERNAME: str = "superadmin"
+    DEFAULT_SUPER_ADMIN_EMAIL: str = "admin@yatzar.com"
+    DEFAULT_SUPER_ADMIN_PASSWORD: str = "ChangeMe123!"
 
     model_config = SettingsConfigDict(
         env_file=".env",

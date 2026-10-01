@@ -1,6 +1,19 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
+  createEmployee,
+  deleteEmployee,
+  listCountries,
+  listDistricts,
+  listEmployees,
+  listOptions,
+  listRoles,
+  listStates,
+  saveEmployeeDraft,
+  updateEmployee,
+  type EmployeeRecord,
+} from "@/api";
+import {
   ChevronDownIcon,
   ContactsIcon,
   EditIcon,
@@ -25,6 +38,7 @@ type Field = {
   description?: string;
 };
 type Team = {
+  id: string;
   code: string;
   name: string;
   type: string;
@@ -34,8 +48,6 @@ type Team = {
   email: string;
 };
 type TeamFormValues = Record<string, string>;
-type LocationData = { name: string };
-
 const fieldGroups: {
   label: string;
   icon: React.FC<React.SVGProps<SVGSVGElement>>;
@@ -315,45 +327,6 @@ const fieldGroups: {
         required: true,
       },
     ],
-  },
-];
-
-const teamRows: Team[] = [
-  {
-    code: "EMP-2026-0001",
-    name: "Aarav Mehta",
-    type: "Full-time",
-    department: "Operations",
-    location: "Mumbai HQ",
-    status: "Active",
-    email: "aarav.mehta@yatzar.com",
-  },
-  {
-    code: "EMP-2026-0002",
-    name: "Meera Nair",
-    type: "Full-time",
-    department: "Finance",
-    location: "Bengaluru",
-    status: "Active",
-    email: "meera.nair@yatzar.com",
-  },
-  {
-    code: "EMP-2026-0003",
-    name: "Kabir Shah",
-    type: "Contract",
-    department: "Technology",
-    location: "Pune",
-    status: "On Leave",
-    email: "kabir.shah@yatzar.com",
-  },
-  {
-    code: "EMP-2026-0004",
-    name: "Anaya Rao",
-    type: "Part-time",
-    department: "People",
-    location: "Delhi",
-    status: "Active",
-    email: "anaya.rao@yatzar.com",
   },
 ];
 
@@ -724,7 +697,9 @@ export default function Teams() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
-  const [teams, setTeams] = useState(teamRows);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [apiError, setApiError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [formValues, setFormValues] = useState<TeamFormValues>({});
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [isDifferentAddress, setIsDifferentAddress] = useState(false);
@@ -743,12 +718,8 @@ export default function Teams() {
   const [reportingManagers, setReportingManagers] = useState(
     () => getTeamDropdownOptions().reportingManagers,
   );
-  const [countries, setCountries] = useState<string[]>([
-    "India",
-    "United States",
-    "United Kingdom",
-    "Singapore",
-  ]);
+  const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const [countries, setCountries] = useState<string[]>(["India"]);
   const [states, setStates] = useState<string[]>(fallbackStates);
   const [districts, setDistricts] = useState<string[]>(fallbackDistricts);
   const filteredTeams = teams.filter((team) =>
@@ -766,70 +737,82 @@ export default function Teams() {
     pagedTeams.length > 0 &&
     pagedTeams.every((team) => selectedCodes.includes(team.code));
 
-  useEffect(() => {
-    fetch("https://countriesnow.space/api/v0.1/countries")
-      .then((response) => response.json())
-      .then((result: { data?: LocationData[] }) =>
-        setCountries(
-          result.data
-            ?.map((item) => item.name)
-            .filter(
-              (name): name is string =>
-                typeof name === "string" && name.trim().length > 0,
-            ) ?? [],
-        ),
-      )
-      .catch(() =>
-        setCountries(["India", "United States", "United Kingdom", "Singapore"]),
+  const applyEmployeeRecords = (records: EmployeeRecord[]) => {
+    setTeams(
+      records.map((employee) => ({
+        id: employee.id,
+        code: employee.employee_code,
+        name: employee.employee_name,
+        type: employee.employee_type,
+        department: employee.department,
+        location: employee.work_location,
+        status: employee.employment_status,
+        email: String(employee.login_email || employee.email),
+      })),
+    );
+  };
+
+  const refreshEmployees = async () => {
+    setIsLoading(true);
+    try {
+      applyEmployeeRecords(await listEmployees());
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to load employees.",
       );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshEmployees();
+  }, []);
+
+  useEffect(() => {
+    void listRoles()
+      .then((roles) => setRoleOptions(roles.map((role) => role.name)))
+      .catch(() => setRoleOptions([]));
+  }, []);
+
+  useEffect(() => {
+    void listCountries()
+      .then(setCountries)
+      .catch(() => setCountries(["India"]));
   }, []);
 
   useEffect(() => {
     const country = formValues.country;
     if (!country) return setStates(fallbackStates);
-    fetch("https://countriesnow.space/api/v0.1/countries/states", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ country }),
-    })
-      .then((response) => response.json())
-      .then((result: { data?: { states?: LocationData[] } }) =>
-        setStates(
-          result.data?.states
-            ?.map((item) => item.name)
-            .filter(
-              (name): name is string =>
-                typeof name === "string" && name.trim().length > 0,
-            ) || fallbackStates,
-        ),
-      )
-      .catch(() =>
-        setStates(["Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"]),
-      );
+    void listStates(country)
+      .then(setStates)
+      .catch(() => setStates(fallbackStates));
   }, [formValues.country]);
 
   useEffect(() => {
     const country = formValues.country;
     const state = formValues.state;
     if (!country || !state) return setDistricts(fallbackDistricts);
-    fetch("https://countriesnow.space/api/v0.1/countries/state/cities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ country, state }),
-    })
-      .then((response) => response.json())
-      .then((result: { data?: string[] }) =>
-        setDistricts(result.data?.length ? result.data : fallbackDistricts),
-      )
-      .catch(() =>
-        setDistricts(["Mumbai", "Bengaluru Urban", "Chennai", "New Delhi"]),
-      );
+    void listDistricts(state)
+      .then(setDistricts)
+      .catch(() => setDistricts(fallbackDistricts));
   }, [formValues.country, formValues.state]);
 
   useEffect(() => {
-    const options = getTeamDropdownOptions();
-    setDepartments(options.departments);
-    setReportingManagers(options.reportingManagers);
+    void Promise.all([
+      listOptions("department"),
+      listOptions("reporting_manager"),
+    ])
+      .then(([departmentOptions, managerOptions]) => {
+        setDepartments(departmentOptions.map((option) => option.value));
+        setReportingManagers(managerOptions.map((option) => option.value));
+      })
+      .catch(() => {
+        const options = getTeamDropdownOptions();
+        setDepartments(options.departments);
+        setReportingManagers(options.reportingManagers);
+      });
   }, [isCreating]);
 
   useEffect(() => {
@@ -858,11 +841,12 @@ export default function Teams() {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const requiredErrors: Record<string, boolean> = {};
     fieldGroups.forEach((group) => {
       group.fields.forEach((field) => {
         if (!field.required || field.name === "employee_code") return;
+        if (editingCode && field.name === "password") return;
         if (field.name === "permanent_address") {
           if (isDifferentAddress) {
             let hasPermanentAddressError = false;
@@ -894,48 +878,46 @@ export default function Teams() {
       setActiveTab(firstInvalidTab);
       return;
     }
-    const name = formValues.employee_name?.trim() || "New team member";
-    if (editingCode) {
-      setTeams((current) =>
-        current.map((team) =>
-          team.code === editingCode
-            ? {
-                ...team,
-                name,
-                type: formValues.employee_type || team.type,
-                department: formValues.department || team.department,
-                location: formValues.work_location || team.location,
-                status: formValues.employment_status || team.status,
-                email: formValues.login_email || formValues.email || team.email,
-              }
-            : team,
-        ),
-      );
+    try {
+      const payload: Record<string, unknown> = {
+        ...formValues,
+        is_active: true,
+      };
+      if (editingCode) {
+        const employee = teams.find((team) => team.code === editingCode);
+        if (!employee?.id) throw new Error("Employee id is missing.");
+        if (!payload.password) delete payload.password;
+        await updateEmployee(employee.id, payload);
+      } else {
+        await createEmployee(payload);
+      }
+      await refreshEmployees();
       setEditingCode(null);
       setFormValues({});
       setIsDifferentAddress(false);
       setValidationErrors({});
       setIsCreating(false);
-      return;
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save employee.",
+      );
     }
-    const nextNumber = teams.length + 1;
-    setTeams((current) => [
-      ...current,
-      {
-        code: `EMP-2026-${String(nextNumber).padStart(4, "0")}`,
-        name,
-        type: formValues.employee_type || "Full-time",
-        department: formValues.department || "Operations",
-        location: formValues.work_location || "Unassigned",
-        status: formValues.employment_status || "Active",
-        email: formValues.login_email || formValues.email || "Not provided",
-      },
-    ]);
-    setFormValues({});
-    setIsDifferentAddress(false);
-    setValidationErrors({});
-    setIsCreating(false);
-    setPage(totalPages);
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      await saveEmployeeDraft(formValues);
+      setFormValues({});
+      setIsDifferentAddress(false);
+      setValidationErrors({});
+      setIsCreating(false);
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save draft.",
+      );
+    }
   };
 
   return (
@@ -945,6 +927,11 @@ export default function Teams() {
         description="Yatzar Operation teams"
       />
       <PageBreadcrumb pageTitle={t("ecommerce.title") || "Teams"} />
+      {apiError && (
+        <p className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600">
+          {apiError}
+        </p>
+      )}
       {!isCreating ? (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
@@ -1019,7 +1006,9 @@ export default function Teams() {
                 entries
               </label>
               <span>
-                {filteredTeams.length} of {teams.length} members
+                {isLoading
+                  ? "Loading employees..."
+                  : `${filteredTeams.length} of ${teams.length} members`}
               </span>
             </div>
           </div>
@@ -1242,7 +1231,7 @@ export default function Teams() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsCreating(false)}
+                onClick={() => void handleSaveDraft()}
                 className="h-10 flex-1 rounded-lg border border-brand-200 px-3 text-sm font-medium text-brand-600 hover:bg-brand-50 sm:flex-none sm:px-4 dark:border-brand-500/30 dark:text-brand-400 dark:hover:bg-brand-500/10"
               >
                 Save as draft
@@ -1350,7 +1339,9 @@ export default function Teams() {
                               ? departments
                               : field.name === "reporting_manager"
                                 ? reportingManagers
-                                : undefined
+                                : field.name === "role"
+                                  ? roleOptions
+                                  : undefined
                     }
                     optionsOverrides={{
                       permanent_country: countries,
@@ -1392,7 +1383,8 @@ export default function Teams() {
               Delete team member?
             </h3>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              This will remove {deleteTarget.name} from the mock team directory.
+              This will deactivate {deleteTarget.name} and remove them from the
+              active directory.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -1405,13 +1397,24 @@ export default function Teams() {
               <button
                 type="button"
                 onClick={() => {
-                  setTeams((current) =>
-                    current.filter((team) => team.code !== deleteTarget.code),
-                  );
-                  setSelectedCodes((current) =>
-                    current.filter((code) => code !== deleteTarget.code),
-                  );
-                  setDeleteTarget(null);
+                  void (async () => {
+                    try {
+                      if (!deleteTarget.id)
+                        throw new Error("Employee id is missing.");
+                      await deleteEmployee(deleteTarget.id);
+                      await refreshEmployees();
+                      setSelectedCodes((current) =>
+                        current.filter((code) => code !== deleteTarget.code),
+                      );
+                      setDeleteTarget(null);
+                    } catch (error) {
+                      setApiError(
+                        error instanceof Error
+                          ? error.message
+                          : "Unable to delete employee.",
+                      );
+                    }
+                  })();
                 }}
                 className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
               >
