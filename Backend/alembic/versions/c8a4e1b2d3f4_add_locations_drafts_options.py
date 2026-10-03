@@ -20,7 +20,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    Base.metadata.create_all(bind=op.get_bind())
+    tables = [table for table in Base.metadata.sorted_tables if table.name != "workspaces"]
+    Base.metadata.create_all(bind=op.get_bind(), tables=tables)
 
 
 def downgrade() -> None:

@@ -11,6 +11,7 @@ from yo.core.config import settings
 from yo.models.base import Base
 import yo.models.employee  # noqa
 import yo.models.user  # noqa
+import yo.models.workspace  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

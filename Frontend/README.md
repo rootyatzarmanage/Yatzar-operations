@@ -95,7 +95,16 @@ The workspace page includes:
 The app permission screen organizes permission toggles for different features or modules and is designed to support access control configuration.
 
 ### Contacts and Teams
-These sections provide the front-end foundation for organizational data such as users, teams, and internal relationships.
+The Teams page is connected to the backend employee API. It loads employee and role/location/dropdown data from the API, and supports employee creation, editing, listing, and soft deletion. Employee forms can be saved as drafts, restored, updated, and deleted; passwords are excluded from draft data and are required when creating a login account.
+
+The Workspace page is connected to the workspace API for listing, creating,
+editing, and soft-deleting workspace records. Workspace names must be unique
+among active records, ignoring letter case.
+
+The Teams form's document pickers are not yet connected to storage: the backend
+only accepts document references/paths and does not upload or serve file
+contents. The API also does not currently enforce authentication, so do not
+expose employee data to an untrusted network.
 
 ## Getting Started
 
@@ -112,6 +121,10 @@ npm install
 
 ### Run the app in development mode
 
+Start PostgreSQL and the backend first. Follow the setup instructions in
+[`Backend/README.md`](../Backend/README.md); keep the backend running at
+`http://127.0.0.1:8000`. Vite proxies `/api` requests there during development.
+
 ```bash
 npm run dev
 ```
@@ -121,6 +134,10 @@ The app will usually be served by Vite on the local development port, typically:
 ```text
 http://localhost:5173
 ```
+
+For a deployed frontend or a backend on another host, set
+`VITE_API_BASE_URL` to the backend origin (for example,
+`https://api.example.com`) before building. The frontend appends `/api/v1`.
 
 ### Build for production
 
@@ -149,7 +166,9 @@ npm run lint
 
 ## Notes
 
-This project is the frontend layer of the Yatzar Operations system and is currently focused on dashboard UI, administration screens, and management workflows. It is structured to support further integration with backend APIs and operational business logic as the application grows.
+This project is the frontend layer of the Yatzar Operations system. The Teams
+workflow uses the employee and support-data APIs described in the backend
+README; other frontend areas may still use local/demo data.
 
 ## License
 

@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.core.config import settings
@@ -9,6 +9,7 @@ from yo.models.employee import Employee
 from yo.models.permission import Menu, Role, RolePermission
 from yo.models.support import DropdownOption, Location
 from yo.models.user import User
+from yo.models.workspace import Workspace
 
 
 MENU_SEEDS = [
@@ -53,6 +54,24 @@ INDIA_LOCATIONS = {
     "West Bengal": ["Kolkata", "Howrah", "Siliguri", "Durgapur"],
 }
 
+WORKSPACE_SEEDS = [
+    ("Operations Hub", "Handles daily operational planning and tracking.", "Enabled"),
+    ("Finance Workspace", "Accounting, payroll, and reporting workflows.", "Enabled"),
+    ("HR Workspace", "Employee lifecycle, onboarding, and attendance.", "Disabled"),
+    ("Support Workspace", "Customer support requests and escalation handling.", "Enabled"),
+]
+
+
+async def seed_workspaces(session: AsyncSession) -> None:
+    for name, description, status in WORKSPACE_SEEDS:
+        existing = await session.scalar(
+            select(Workspace.id).where(func.lower(Workspace.name) == name.lower())
+        )
+        if existing is None:
+            session.add(
+                Workspace(name=name, description=description, status=status)
+            )
+
 
 async def seed_support_data(session: AsyncSession) -> None:
     india = await session.scalar(select(Location).where(Location.kind == "country", Location.name == "India"))
@@ -79,6 +98,7 @@ async def seed_support_data(session: AsyncSession) -> None:
 
 async def seed_default_data(session: AsyncSession) -> None:
     await seed_support_data(session)
+    await seed_workspaces(session)
     menus = {}
     for name, key, path in MENU_SEEDS:
         menu = await session.scalar(select(Menu).where(Menu.key == key))
