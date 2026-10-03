@@ -1,226 +1,156 @@
-# TailAdmin React - Free React Tailwind Admin Dashboard Template
+# Yatzar Operations Frontend
 
-TailAdmin is a free and open-source admin dashboard template built on **React and Tailwind CSS**, providing developers
-with everything they need to create a comprehensive, data-driven back-end,
-dashboard, or admin panel solution for upcoming web projects.
+This is the frontend application for the Yatzar Operations dashboard. It provides a modern operations management interface for viewing analytics, managing teams, workspaces, permissions, and contact information in a single admin portal.
 
-With TailAdmin, you get access to all the necessary dashboard UI components, elements, and pages required to build a
-feature-rich and complete dashboard or admin panel. Whether you're building dashboard or admin panel for a complex web
-application or a simple website, TailAdmin is the perfect solution to help you get up and running quickly.
-
-![TailAdmin React.js Dashboard Preview](./banner.png)
+The app is built with React, TypeScript, Vite, and Tailwind CSS, and uses a route-based administration layout for an operations-focused user experience.
 
 ## Overview
 
-TailAdmin provides essential UI components and layouts for building feature-rich, data-driven admin dashboards and
-control panels. It's built on:
+The frontend currently includes:
+
+- Analytics dashboard landing page
+- Team management screen
+- Workspace management with add, edit, search, pagination, and delete actions
+- Contacts overview page
+- App permission controls
+- Shared admin shell with header, sidebar, theme handling, and responsive layout
+- 404 fallback page
+
+## Tech Stack
 
 - React 19
 - TypeScript
+- Vite
 - Tailwind CSS v4
+- React Router
+- react-i18next for multilingual support
+- dark mode and theme context support
+- reusable UI components and layout primitives
 
-### Quick Links
+## Project Structure
 
-- [✨ Visit Website](https://tailadmin.com)
-- [📄 Documentation](https://tailadmin.com/docs)
-- [⬇️ Download](https://tailadmin.com/download)
-- [🖌️ Figma Design File (Community Edition)](https://www.figma.com/community/file/1214477970819985778)
-- [⚡ Get PRO Version](https://tailadmin.com/pricing)
+```text
+Frontend/
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── common/
+│   │   ├── header/
+│   │   └── ui/
+│   ├── context/
+│   ├── hooks/
+│   ├── i18n/
+│   ├── layout/
+│   ├── locales/
+│   ├── pages/
+│   │   ├── Dashboard/
+│   │   ├── OtherPage/
+│   │   ├── Analytics.tsx
+│   │   ├── AppPermission.tsx
+│   │   ├── Contacts.tsx
+│   │   ├── Teams.tsx
+│   │   ├── Workspace.tsx
+│   │   └── Others.tsx
+│   ├── App.tsx
+│   ├── index.css
+│   └── main.tsx
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── eslint.config.js
+├── index.html
+├── AGENTS.md
+├── LICENSE.md
+└── README.md
+```
 
-### Demos
+## Application Routes
 
-- [Free Version](https://free-react-demo.tailadmin.com/)
-- [Pro Version](https://react-demo.tailadmin.com)
+The current frontend routes are registered in `src/App.tsx`:
 
-### Other Versions
+- `/` — Analytics dashboard
+- `/teams` — Teams page
+- `/others` — Additional operational widgets or utility pages
+- `/app-permission` — Application permission management
+- `/workspace` — Workspace records management
+- `/contacts` — Contact directory
+- `*` — Not found page
 
-- [HTML Version](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
-- [Next.js Version](https://github.com/TailAdmin/free-nextjs-admin-dashboard)
-- [Vue.js Version](https://github.com/TailAdmin/vue-tailwind-admin-dashboard)
-- [Angular Version](https://github.com/TailAdmin/free-angular-tailwind-dashboard)
-- [Laravel Version](https://github.com/TailAdmin/tailadmin-laravel)
+## Features in Detail
 
-## Installation
+### Analytics
+The main dashboard area is designed for operational insight and reporting, serving as the entry point for the Yatzar admin app.
+
+### Workspace Management
+The workspace page includes:
+
+- searchable workspace list
+- add new workspace form
+- edit existing workspace details
+- status toggle between Enabled and Disabled
+- bulk selection and delete actions
+- pagination controls
+
+### Permission Management
+The app permission screen organizes permission toggles for different features or modules and is designed to support access control configuration.
+
+### Contacts and Teams
+These sections provide the front-end foundation for organizational data such as users, teams, and internal relationships.
+
+## Getting Started
 
 ### Prerequisites
 
-To get started with TailAdmin, ensure you have the following prerequisites installed and set up:
+- Node.js 20 or newer
+- npm
 
-- Node.js 20.x or later
-
-### Cloning the Repository
-
-Clone the repository using the following command:
+### Install dependencies
 
 ```bash
-git clone https://github.com/TailAdmin/free-react-tailwind-admin-dashboard.git
+npm install
 ```
 
-> Windows Users: place the repository near the root of your drive if you face issues while cloning.
+### Run the app in development mode
 
-1. Install dependencies:
+```bash
+npm run dev
+```
 
-    ```bash
-    npm install
-    # or
-    yarn install
-    ```
+The app will usually be served by Vite on the local development port, typically:
 
-2. Start the development server:
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    ```
+```text
+http://localhost:5173
+```
 
-## Components
+### Build for production
 
-TailAdmin is a pre-designed starting point for building a web-based dashboard using React.js and Tailwind CSS. The
-template includes:
+```bash
+npm run build
+```
 
-- Sophisticated and accessible sidebar
-- Data visualization components
-- Prebuilt profile management and 404 page
-- Tables and Charts(Line and Bar)
-- Authentication forms and input elements
-- Alerts, Dropdowns, Modals, Buttons and more
-- FAQ & Accordion, Testimonials, and Carousels
-- Can't forget Dark Mode 🕶️
+### Lint the project
 
-All components are built with React and styled using Tailwind CSS for easy customization.
+```bash
+npm run lint
+```
 
-## Feature Comparison
+## Scripts
 
-### Free Version
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  }
+}
+```
 
-- 1 Unique Dashboard
-- 35+ dashboard components
-- 50+ UI elements
-- Basic Figma design files
-- Community support
+## Notes
 
-### Pro Version
-
-- 7 Unique Dashboards: Analytics, Ecommerce, Marketing, CRM, SaaS, Stocks, Logistics (more coming soon)
-- 500+ dashboard components and UI elements
-- Complete Figma design file
-- Email support
-
-To learn more about pro version features and pricing, visit our [pricing page](https://tailadmin.com/pricing).
-
-## Changelog
-
-### Version 2.4.0 - [September 13, 2026]
-
-- Added Internationalization (Multi Language) support.
-- Updated complete template styles to support RTL.
-- Added Yearly View into calendar page.
-- Updated `maplibre-gl` implementation with `react-map-gl`.
-- Replaced `@react-jvectormap` with `jsvectormap`.
-- Added new requested components and fixed noted accessibility issues.
-- Updated project structure and component compositions for easy adaption.
-- Added AGENTS.md to easily work with AI Agents.
-- Updated all the packages and libraries to the latest versions. Also removed unused packages.
-
-### Version 2.3.1 - [May 23, 2026]
-
-- Added AI Settings page to configure models, keys, and token limits.
-- Added Maps page with MapLibre GL, Leaflet, and iframe styles.
-- Added Vector Maps page powered by AmCharts 5 geodata (World & USA).
-- Added Radar Charts page with 3 unique formats.
-- Added Radial Progress Charts page featuring 4 custom layout templates.
-- Introduced new Bar Charts Five & Six and Pie Charts Four & Five.
-
-### Version 2.3.0 - [April 28, 2026]
-
-- Added **AI Dashboard** with token usage and revenue tracking.
-- Added **Sales Dashboard** with retention and multi-channel analytics.
-- Added **Finance Dashboard** with cashflow and balance management.
-- Introduced **6 New Layout variations** for improved UI flexibility.
-- Integrated **Advanced Data Visualization** with 7+ new chart types.
-
-### Version 2.1.0 - [Dec 30, 2025]
-
-- Resolved Date Picker positioning and input issues in Charts.
-
-### Version 2.0.2 - [March 25, 2025]
-
-- Upgraded to React 19
-- Included overrides for packages to prevent peer dependency errors.
-- Migrated from react-flatpickr to flatpickr package for React 19 support
-
-### Version 2.0.1 - [February 27, 2025]
-
-#### Update Overview
-
-- Upgraded to Tailwind CSS v4 for better performance and efficiency.
-- Updated class usage to match the latest syntax and features.
-- Replaced deprecated class and optimized styles.
-
-#### Next Steps
-
-- Run npm install or yarn install to update dependencies.
-- Check for any style changes or compatibility issues.
-- Refer to the Tailwind CSS v4 [Migration Guide](https://tailwindcss.com/docs/upgrade-guide) on this release. if needed.
-- This update keeps the project up to date with the latest Tailwind improvements. 🚀
-
-### Version 2.0.0 - [February 2025]
-
-A major update with comprehensive redesign and modern React patterns implementation.
-
-#### Major Improvements
-
-- Complete UI redesign with modern React patterns
-- New features: collapsible sidebar, chat, and calendar
-- Improved performance and accessibility
-- Updated data visualization using ApexCharts
-
-#### Key Features
-
-- Redesigned dashboards (Ecommerce, Analytics, Marketing, CRM)
-- Enhanced navigation with React Router integration
-- Advanced tables with sorting and filtering
-- Calendar with drag-and-drop support
-- New UI components and improved existing ones
-
-#### Breaking Changes
-
-- Updated sidebar component API
-- Migrated charts to ApexCharts
-- Revised authentication system
-
-[Read more](https://tailadmin.com/docs/update-logs/react) on this release.
-
-### Version 1.3.7 - [June 20, 2024]
-
-#### Enhancements
-
-1. Remove Repetition of DefaultLayout in every Pages
-2. Add ClickOutside Component for reduce repeated functionality in Header Message, Notification and User Dropdowns.
-
-### Version 1.3.6 - [Jan 31, 2024]
-
-#### Enhancements
-
-1. Integrate flatpickr in [Date Picker/Form Elements]
-2. Change color after select an option [Select Element/Form Elements].
-3. Make it functional [Multiselect Dropdown/Form Elements].
-4. Make best value editable [Pricing Table One/Pricing Table].
-5. Rearrange Folder structure.
-
-### Version 1.2.0 - [Apr 28, 2023]
-
-- Add Typescript in TailAdmin React.
-
-### Version 1.0.0 - Initial Release - [Mar 13, 2023]
-
-- Initial release of TailAdmin React.
+This project is the frontend layer of the Yatzar Operations system and is currently focused on dashboard UI, administration screens, and management workflows. It is structured to support further integration with backend APIs and operational business logic as the application grows.
 
 ## License
 
-TailAdmin React.js Free Version is released under the MIT License.
-
-## Support
-
-If you find this project helpful, please consider giving it a star on GitHub. Your support helps us continue developing
-and maintaining this template.
+This project includes the original TailAdmin template license file as part of the frontend setup. The app itself is intended for the Yatzar Operations project and may be adapted further as needed.
