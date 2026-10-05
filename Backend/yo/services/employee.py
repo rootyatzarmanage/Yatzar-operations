@@ -19,11 +19,9 @@ class EmployeeService:
         self.repository = EmployeeRepository(session)
 
     async def _ensure_unique_user(self, username: str, email: str, current_user_id: UUID | None = None) -> None:
-        query = select(User.id).where((User.username == username) | (User.email == email))
-        if current_user_id is not None:
-            query = query.where(User.id != current_user_id)
-        existing_user_id = await self.session.scalar(query.limit(1))
-        if existing_user_id is not None:
+        result = await self.session.execute(select(User).where((User.username == username) | (User.email == email)))
+        existing = result.scalars().first()
+        if existing and existing.id != current_user_id:
             raise ConflictException("Username or login email is already in use.")
 
     def _new_code(self) -> str:
@@ -31,15 +29,12 @@ class EmployeeService:
 
     async def create(self, request: EmployeeCreateRequest) -> Employee:
         await self._ensure_unique_user(request.username, request.login_email)
-        employee_code = request.employee_code or self._new_code()
-        if await self.repository.get_by_code(employee_code):
-            raise ConflictException("Employee code is already in use.")
         role = await self.session.scalar(select(Role).where(Role.name == request.role, Role.deleted_at.is_(None)))
         if not role:
             raise ConflictException(f"Role '{request.role}' does not exist.")
         user = User(username=request.username, email=request.login_email, password_hash=hash_password(request.password), role=role, is_active=request.is_active)
         employee_values = request.model_dump(exclude={"employee_code", "username", "login_email", "password", "role", "is_active"})
-        employee = Employee(user=user, employee_code=employee_code, **employee_values)
+        employee = Employee(user=user, employee_code=request.employee_code or self._new_code(), **employee_values)
         return await self.repository.create(employee)
 
     async def get_by_id(self, employee_id: UUID) -> Employee:
@@ -55,12 +50,6 @@ class EmployeeService:
         employee = await self.get_by_id(employee_id)
         values = request.model_dump(exclude_unset=True)
         user_values = {key: values.pop(key) for key in ("username", "login_email", "password", "role", "is_active") if key in values}
-        employee_code = values.pop("employee_code", None)
-        if employee_code is not None and employee_code != employee.employee_code:
-            existing_employee = await self.repository.get_by_code(employee_code)
-            if existing_employee and existing_employee.id != employee.id:
-                raise ConflictException("Employee code is already in use.")
-            employee.employee_code = employee_code
         if "username" in user_values or "login_email" in user_values:
             await self._ensure_unique_user(user_values.get("username", employee.user.username), user_values.get("login_email", employee.user.email), employee.user.id)
         for key, value in values.items():

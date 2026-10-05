@@ -3,18 +3,16 @@ import PageMeta from "@/components/common/PageMeta";
 import {
   createEmployee,
   deleteEmployee,
-  deleteEmployeeDraft,
   listCountries,
   listDistricts,
-  listEmployeeDrafts,
   listEmployees,
   listOptions,
   listRoles,
   listStates,
   saveEmployeeDraft,
   updateEmployee,
-} from "@/api/teams";
-import type { Employee, EmployeeDraft, EmployeePayload } from "@/api/teams";
+  type EmployeeRecord,
+} from "@/api";
 import {
   ChevronDownIcon,
   ContactsIcon,
@@ -26,7 +24,8 @@ import {
   UsersIcon,
   WorkspaceIcon,
 } from "@/icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { getTeamDropdownOptions } from "@/utils/teamOptions";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -49,7 +48,6 @@ type Team = {
   email: string;
 };
 type TeamFormValues = Record<string, string>;
-
 const fieldGroups: {
   label: string;
   icon: React.FC<React.SVGProps<SVGSVGElement>>;
@@ -334,33 +332,8 @@ const fieldGroups: {
 
 const inputClass =
   "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
-function toTeam(employee: Employee): Team {
-  return {
-    id: employee.id,
-    code: employee.employee_code,
-    name: employee.employee_name,
-    type: employee.employee_type,
-    department: employee.department,
-    location: employee.work_location,
-    status: employee.employment_status,
-    email: employee.login_email,
-  };
-}
-
-function toFormValues(employee: Employee): TeamFormValues {
-  const values: TeamFormValues = {};
-  for (const group of fieldGroups) {
-    for (const field of group.fields) {
-      if (field.name === "permanent_address") continue;
-      const value = employee[field.name as keyof Employee];
-      if (typeof value === "string") {
-        values[field.name] = field.type === "date" ? value.slice(0, 10) : value;
-      } else if (typeof value === "boolean") values[field.name] = String(value);
-      else values[field.name] = "";
-    }
-  }
-  return values;
-}
+const fallbackStates = ["Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"];
+const fallbackDistricts = ["Mumbai", "Bengaluru Urban", "Chennai", "New Delhi"];
 
 function SearchableSelect({
   label,
@@ -546,8 +519,7 @@ function FieldControl({
       <label className="flex h-11 items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
         <input
           type="checkbox"
-          checked={value !== "false"}
-          onChange={(event) => onValueChange(String(event.target.checked))}
+          defaultChecked
           className="size-4 rounded accent-brand-500"
         />
         Is active
@@ -712,7 +684,7 @@ function FieldControl({
     <input
       type={field.type || "text"}
       readOnly={field.name === "employee_code"}
-      value={value}
+      value={field.name === "employee_code" ? "EMP-2026-0048" : value}
       onChange={(event) => onValueChange(event.target.value)}
       placeholder={`Enter ${field.label.toLowerCase()}`}
       className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}
@@ -725,16 +697,12 @@ export default function Teams() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const teams = employees.map(toTeam);
-  const [formValues, setFormValues] = useState<TeamFormValues>({});
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [isDifferentAddress, setIsDifferentAddress] = useState(false);
-  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<EmployeeDraft[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [apiError, setApiError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [formValues, setFormValues] = useState<TeamFormValues>({});
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [isDifferentAddress, setIsDifferentAddress] = useState(false);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, boolean>
   >({});
@@ -744,29 +712,16 @@ export default function Teams() {
   const [pageSize, setPageSize] = useState(5);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [reportingManagers, setReportingManagers] = useState<string[]>([]);
-  const [roles, setRoles] = useState<string[]>([]);
-  const [countries, setCountries] = useState<string[]>([]);
-  const [states, setStates] = useState<string[]>([]);
-  const [districts, setDistricts] = useState<string[]>([]);
-  const [permanentStates, setPermanentStates] = useState<string[]>([]);
-  const [permanentDistricts, setPermanentDistricts] = useState<string[]>([]);
-  const refreshEmployees = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      setEmployees(await listEmployees());
-    } catch (error) {
-      setApiError(
-        error instanceof Error ? error.message : "Unable to load employees.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setApiError, setEmployees, setIsLoading]);
-  const refreshDrafts = useCallback(async () => {
-    setDrafts(await listEmployeeDrafts());
-  }, [setDrafts]);
+  const [departments, setDepartments] = useState(
+    () => getTeamDropdownOptions().departments,
+  );
+  const [reportingManagers, setReportingManagers] = useState(
+    () => getTeamDropdownOptions().reportingManagers,
+  );
+  const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const [countries, setCountries] = useState<string[]>(["India"]);
+  const [states, setStates] = useState<string[]>(fallbackStates);
+  const [districts, setDistricts] = useState<string[]>(fallbackDistricts);
   const filteredTeams = teams.filter((team) =>
     Object.values(team).some((value) =>
       value.toLowerCase().includes(search.toLowerCase()),
@@ -782,145 +737,83 @@ export default function Teams() {
     pagedTeams.length > 0 &&
     pagedTeams.every((team) => selectedCodes.includes(team.code));
 
-  useEffect(() => {
-    let active = true;
-    void Promise.all([
-      listCountries(),
-      listOptions("department"),
-      listOptions("reporting_manager"),
-      listRoles(),
-    ])
-      .then(
-        ([countryOptions, departmentOptions, managerOptions, roleOptions]) => {
-          if (!active) return;
-          setCountries(countryOptions);
-          setDepartments(departmentOptions.map((option) => option.value));
-          setReportingManagers(managerOptions.map((option) => option.value));
-          setRoles(roleOptions.map((role) => role.name));
-        },
-      )
-      .catch((error: unknown) => {
-        if (active) {
-          setApiError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load Teams options.",
-          );
-        }
-      });
-    void listEmployeeDrafts()
-      .then((items) => {
-        if (active) setDrafts(items);
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setApiError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load employee drafts.",
-          );
-        }
-      });
-    void listEmployees()
-      .then((items) => {
-        if (active) setEmployees(items);
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setApiError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load employees.",
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [refreshEmployees]);
+  const applyEmployeeRecords = (records: EmployeeRecord[]) => {
+    setTeams(
+      records.map((employee) => ({
+        id: employee.id,
+        code: employee.employee_code,
+        name: employee.employee_name,
+        type: employee.employee_type,
+        department: employee.department,
+        location: employee.work_location,
+        status: employee.employment_status,
+        email: String(employee.login_email || employee.email),
+      })),
+    );
+  };
+
+  const refreshEmployees = async () => {
+    setIsLoading(true);
+    try {
+      applyEmployeeRecords(await listEmployees());
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to load employees.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let active = true;
+    void refreshEmployees();
+  }, []);
+
+  useEffect(() => {
+    void listRoles()
+      .then((roles) => setRoleOptions(roles.map((role) => role.name)))
+      .catch(() => setRoleOptions([]));
+  }, []);
+
+  useEffect(() => {
+    void listCountries()
+      .then(setCountries)
+      .catch(() => setCountries(["India"]));
+  }, []);
+
+  useEffect(() => {
     const country = formValues.country;
-    if (!country) return;
+    if (!country) return setStates(fallbackStates);
     void listStates(country)
-      .then((items) => {
-        if (active) setStates(items);
-      })
-      .catch((error: unknown) => {
-        if (active)
-          setApiError(
-            error instanceof Error ? error.message : "Unable to load states.",
-          );
-      });
-    return () => {
-      active = false;
-    };
+      .then(setStates)
+      .catch(() => setStates(fallbackStates));
   }, [formValues.country]);
 
   useEffect(() => {
-    let active = true;
+    const country = formValues.country;
     const state = formValues.state;
-    if (!state) return;
+    if (!country || !state) return setDistricts(fallbackDistricts);
     void listDistricts(state)
-      .then((items) => {
-        if (active) setDistricts(items);
-      })
-      .catch((error: unknown) => {
-        if (active)
-          setApiError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load districts.",
-          );
-      });
-    return () => {
-      active = false;
-    };
-  }, [formValues.state]);
+      .then(setDistricts)
+      .catch(() => setDistricts(fallbackDistricts));
+  }, [formValues.country, formValues.state]);
 
   useEffect(() => {
-    let active = true;
-    const country = formValues.permanent_country;
-    if (!country) return;
-    void listStates(country)
-      .then((items) => {
-        if (active) setPermanentStates(items);
+    void Promise.all([
+      listOptions("department"),
+      listOptions("reporting_manager"),
+    ])
+      .then(([departmentOptions, managerOptions]) => {
+        setDepartments(departmentOptions.map((option) => option.value));
+        setReportingManagers(managerOptions.map((option) => option.value));
       })
-      .catch((error: unknown) => {
-        if (active)
-          setApiError(
-            error instanceof Error ? error.message : "Unable to load states.",
-          );
+      .catch(() => {
+        const options = getTeamDropdownOptions();
+        setDepartments(options.departments);
+        setReportingManagers(options.reportingManagers);
       });
-    return () => {
-      active = false;
-    };
-  }, [formValues.permanent_country]);
-
-  useEffect(() => {
-    let active = true;
-    const state = formValues.permanent_state;
-    if (!state) return;
-    void listDistricts(state)
-      .then((items) => {
-        if (active) setPermanentDistricts(items);
-      })
-      .catch((error: unknown) => {
-        if (active)
-          setApiError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load districts.",
-          );
-      });
-    return () => {
-      active = false;
-    };
-  }, [formValues.permanent_state]);
+  }, [isCreating]);
 
   useEffect(() => {
     const showList = () => setIsCreating(false);
@@ -932,21 +825,9 @@ export default function Teams() {
     setFormValues((current) => ({
       ...current,
       [name]: value,
-      ...(name === "country"
-        ? { state: "", district: "" }
-        : name === "state"
-          ? { district: "" }
-          : {}),
-      ...(name === "permanent_country"
-        ? { permanent_state: "", permanent_district: "" }
-        : name === "permanent_state"
-          ? { permanent_district: "" }
-          : {}),
+      ...(name === "country" ? { state: "", district: "" } : {}),
+      ...(name === "state" ? { district: "" } : {}),
     }));
-    if (name === "country") setStates([]);
-    if (name === "state") setDistricts([]);
-    if (name === "permanent_country") setPermanentStates([]);
-    if (name === "permanent_state") setPermanentDistricts([]);
     setValidationErrors((current) => ({ ...current, [name]: false }));
   };
 
@@ -964,12 +845,8 @@ export default function Teams() {
     const requiredErrors: Record<string, boolean> = {};
     fieldGroups.forEach((group) => {
       group.fields.forEach((field) => {
-        if (
-          !field.required ||
-          field.name === "employee_code" ||
-          (field.name === "password" && editingId !== null)
-        )
-          return;
+        if (!field.required || field.name === "employee_code") return;
+        if (editingCode && field.name === "password") return;
         if (field.name === "permanent_address") {
           if (isDifferentAddress) {
             let hasPermanentAddressError = false;
@@ -1001,125 +878,45 @@ export default function Teams() {
       setActiveTab(firstInvalidTab);
       return;
     }
-    const payload: EmployeePayload = {};
-    for (const group of fieldGroups) {
-      for (const field of group.fields) {
-        if (field.name === "permanent_address") continue;
-        const value = formValues[field.name]?.trim() ?? "";
-        if (field.name === "is_active") {
-          payload[field.name] = formValues[field.name] !== "false";
-        } else if (field.name === "password" && !value) {
-          continue;
-        } else if (field.name === "employee_code" && !value) {
-          continue;
-        } else {
-          payload[field.name] = value || null;
-        }
-      }
-    }
-    setIsSaving(true);
-    setApiError("");
     try {
-      if (editingId) await updateEmployee(editingId, payload);
-      else await createEmployee(payload);
-      if (selectedDraftId) {
-        try {
-          await deleteEmployeeDraft(selectedDraftId);
-          await refreshDrafts();
-        } catch (error) {
-          setApiError(
-            `Employee saved, but its draft could not be removed: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
-          );
-        }
+      const payload: Record<string, unknown> = {
+        ...formValues,
+        is_active: true,
+      };
+      if (editingCode) {
+        const employee = teams.find((team) => team.code === editingCode);
+        if (!employee?.id) throw new Error("Employee id is missing.");
+        if (!payload.password) delete payload.password;
+        await updateEmployee(employee.id, payload);
+      } else {
+        await createEmployee(payload);
       }
       await refreshEmployees();
-      setEditingId(null);
-      setSelectedDraftId(null);
+      setEditingCode(null);
       setFormValues({});
       setIsDifferentAddress(false);
       setValidationErrors({});
       setIsCreating(false);
-      setPage(totalPages);
+      setApiError("");
     } catch (error) {
       setApiError(
         error instanceof Error ? error.message : "Unable to save employee.",
       );
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleSaveDraft = async () => {
-    const data: TeamFormValues = {
-      ...formValues,
-      __isDifferentAddress: String(isDifferentAddress),
-    };
-    delete data.password;
-    setIsSaving(true);
-    setApiError("");
     try {
-      const saved = await saveEmployeeDraft(data, selectedDraftId ?? undefined);
-      setSelectedDraftId(saved.id);
-      await refreshDrafts();
+      await saveEmployeeDraft(formValues);
+      setFormValues({});
+      setIsDifferentAddress(false);
+      setValidationErrors({});
+      setIsCreating(false);
+      setApiError("");
     } catch (error) {
       setApiError(
         error instanceof Error ? error.message : "Unable to save draft.",
       );
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleLoadDraft = (draft: EmployeeDraft) => {
-    const { __isDifferentAddress, ...data } = draft.data;
-    delete data.password;
-    setFormValues(data);
-    setIsDifferentAddress(__isDifferentAddress === "true");
-    setSelectedDraftId(draft.id);
-    setEditingId(null);
-    setValidationErrors({});
-    setActiveTab(0);
-    setIsCreating(true);
-  };
-
-  const handleDeleteEmployee = async () => {
-    if (!deleteTarget) return;
-    setApiError("");
-    setIsSaving(true);
-    try {
-      await deleteEmployee(deleteTarget.id);
-      setSelectedCodes((current) =>
-        current.filter((code) => code !== deleteTarget.code),
-      );
-      setDeleteTarget(null);
-      await refreshEmployees();
-    } catch (error) {
-      setApiError(
-        error instanceof Error ? error.message : "Unable to delete employee.",
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteDraft = async () => {
-    if (!selectedDraftId) return;
-    setApiError("");
-    setIsSaving(true);
-    try {
-      await deleteEmployeeDraft(selectedDraftId);
-      setSelectedDraftId(null);
-      setFormValues({});
-      setIsDifferentAddress(false);
-      await refreshDrafts();
-    } catch (error) {
-      setApiError(
-        error instanceof Error ? error.message : "Unable to delete draft.",
-      );
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -1131,12 +928,9 @@ export default function Teams() {
       />
       <PageBreadcrumb pageTitle={t("ecommerce.title") || "Teams"} />
       {apiError && (
-        <div
-          role="alert"
-          className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400"
-        >
+        <p className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600">
           {apiError}
-        </div>
+        </p>
       )}
       {!isCreating ? (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
@@ -1152,12 +946,10 @@ export default function Teams() {
             <button
               type="button"
               onClick={() => {
-                setEditingId(null);
-                setSelectedDraftId(null);
+                setEditingCode(null);
                 setFormValues({});
                 setIsDifferentAddress(false);
                 setValidationErrors({});
-                setApiError("");
                 setActiveTab(0);
                 setIsCreating(true);
               }}
@@ -1169,7 +961,20 @@ export default function Teams() {
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
-                ⌕
+                <svg
+                  className="size-5"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.375 17.208a7.833 7.833 0 1 0 0-15.667 7.833 7.833 0 0 0 0 15.667ZM15.418 14.357l2.82 2.821"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </span>
               <input
                 value={search}
@@ -1201,293 +1006,242 @@ export default function Teams() {
                 entries
               </label>
               <span>
-                {filteredTeams.length} of {teams.length} members
+                {isLoading
+                  ? "Loading employees..."
+                  : `${filteredTeams.length} of ${teams.length} members`}
               </span>
             </div>
           </div>
-          {isLoading ? (
-            <p className="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              Loading employees…
-            </p>
-          ) : (
-            <>
-              <div className="custom-scrollbar max-w-full overflow-x-auto">
-                <table className="w-full min-w-full text-start sm:min-w-165 lg:min-w-full">
-                  <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
-                    <tr>
-                      <th className="w-12 px-5 py-3">
-                        <input
-                          type="checkbox"
-                          checked={allVisibleSelected}
-                          onChange={() =>
-                            setSelectedCodes(
-                              allVisibleSelected
-                                ? selectedCodes.filter(
-                                    (code) =>
-                                      !pagedTeams.some(
-                                        (team) => team.code === code,
-                                      ),
-                                  )
-                                : [
-                                    ...new Set([
-                                      ...selectedCodes,
-                                      ...pagedTeams.map((team) => team.code),
-                                    ]),
-                                  ],
-                            )
-                          }
-                          className="size-4 rounded accent-brand-500"
-                          aria-label="Select all visible team members"
-                        />
-                      </th>
-                      {[
-                        ["Employee", "name", ""],
-                        ["Employee code", "code", "hidden sm:table-cell"],
-                        ["Type", "type", "hidden md:table-cell"],
-                        ["Department", "department", "hidden md:table-cell"],
-                        ["Location", "location", "hidden lg:table-cell"],
-                        ["Status", "status", ""],
-                        ["Login email", "email", "hidden lg:table-cell"],
-                      ]
-                        .map((heading) =>
-                          typeof heading === "string" ? (
-                            <th
-                              key={heading}
-                              className={`px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400 ${heading[2]}`}
-                            >
-                              {heading}
-                            </th>
-                          ) : (
-                            <th
-                              key={heading[1]}
-                              className={`px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400 ${heading[2]}`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleSort(heading[1] as keyof Team)
-                                }
-                                className="inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-white"
-                              >
-                                {heading[0]}
-                                <span className="text-[10px]">
-                                  {sortKey === heading[1]
-                                    ? sortDirection === "asc"
-                                      ? "↑"
-                                      : "↓"
-                                    : "↕"}
-                                </span>
-                              </button>
-                            </th>
-                          ),
-                        )
-                        .filter(Boolean)
-                        .map((heading) => heading)}
-                      <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {pagedTeams.map((team) => (
-                      <tr
-                        key={team.code}
-                        className="transition hover:bg-gray-50 dark:hover:bg-white/2"
-                      >
-                        <td className="px-5 py-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedCodes.includes(team.code)}
-                            onChange={() =>
-                              setSelectedCodes((current) =>
-                                current.includes(team.code)
-                                  ? current.filter((code) => code !== team.code)
-                                  : [...current, team.code],
+          <div className="custom-scrollbar max-w-full overflow-x-auto">
+            <table className="w-full min-w-full text-start sm:min-w-165 lg:min-w-full">
+              <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
+                <tr>
+                  <th className="w-12 px-5 py-3">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={() =>
+                        setSelectedCodes(
+                          allVisibleSelected
+                            ? selectedCodes.filter(
+                                (code) =>
+                                  !pagedTeams.some(
+                                    (team) => team.code === code,
+                                  ),
                               )
-                            }
-                            className="size-4 rounded accent-brand-500"
-                            aria-label={`Select ${team.name}`}
-                          />
-                        </td>
-                        <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
-                          {team.name}
-                        </td>
-                        <td className="hidden px-3 py-4 text-sm text-gray-500 sm:table-cell sm:px-5 dark:text-gray-400">
-                          {team.code}
-                        </td>
-                        <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 md:table-cell dark:text-gray-300">
-                          {team.type}
-                        </td>
-                        <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 md:table-cell dark:text-gray-300">
-                          {team.department}
-                        </td>
-                        <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 lg:table-cell dark:text-gray-300">
-                          {team.location}
-                        </td>
-                        <td className="px-3 py-4 sm:px-5">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${team.status === "Active" ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400" : "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"}`}
+                            : [
+                                ...new Set([
+                                  ...selectedCodes,
+                                  ...pagedTeams.map((team) => team.code),
+                                ]),
+                              ],
+                        )
+                      }
+                      className="size-4 rounded accent-brand-500"
+                      aria-label="Select all visible team members"
+                    />
+                  </th>
+                  {[
+                    ["Employee", "name", ""],
+                    ["Employee code", "code", "hidden sm:table-cell"],
+                    ["Type", "type", "hidden md:table-cell"],
+                    ["Department", "department", "hidden md:table-cell"],
+                    ["Location", "location", "hidden lg:table-cell"],
+                    ["Status", "status", ""],
+                    ["Login email", "email", "hidden lg:table-cell"],
+                  ]
+                    .map((heading) =>
+                      typeof heading === "string" ? (
+                        <th
+                          key={heading}
+                          className={`px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400 ${heading[2]}`}
+                        >
+                          {heading}
+                        </th>
+                      ) : (
+                        <th
+                          key={heading[1]}
+                          className={`px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400 ${heading[2]}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSort(heading[1] as keyof Team)}
+                            className="inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-white"
                           >
-                            {team.status}
-                          </span>
-                        </td>
-                        <td className="hidden px-3 py-4 text-sm text-gray-500 sm:px-5 lg:table-cell dark:text-gray-400">
-                          {team.email}
-                        </td>
-                        <td className="px-3 py-4 sm:px-5">
-                          <div className="flex items-center gap-1 text-sm font-medium sm:gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const employee = employees.find(
-                                  (item) => item.id === team.id,
-                                );
-                                if (!employee) return;
-                                setEditingId(employee.id);
-                                setSelectedDraftId(null);
-                                setValidationErrors({});
-                                setApiError("");
-                                setFormValues(toFormValues(employee));
-                                setIsDifferentAddress(
-                                  Boolean(employee.permanent_address_line1),
-                                );
-                                setIsCreating(true);
-                                setActiveTab(0);
-                              }}
-                              className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
-                              aria-label={`Edit ${team.name}`}
-                              title="Edit"
-                            >
-                              <EditIcon className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(team)}
-                              className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
-                              aria-label={`Delete ${team.name}`}
-                              title="Delete"
-                            >
-                              <TrashIcon className="size-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
-                <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-                  <span>{selectedCodes.length} selected</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={page === 1}
-                    onClick={() =>
-                      setPage((current) => Math.max(1, current - 1))
-                    }
-                    className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                            {heading[0]}
+                            <span className="text-[10px]">
+                              {sortKey === heading[1]
+                                ? sortDirection === "asc"
+                                  ? "↑"
+                                  : "↓"
+                                : "↕"}
+                            </span>
+                          </button>
+                        </th>
+                      ),
+                    )
+                    .filter(Boolean)
+                    .map((heading) => heading)}
+                  <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {pagedTeams.map((team) => (
+                  <tr
+                    key={team.code}
+                    className="transition hover:bg-gray-50 dark:hover:bg-white/2"
                   >
-                    Previous
-                  </button>
-                  {Array.from(
-                    { length: totalPages },
-                    (_, index) => index + 1,
-                  ).map((pageNumber) => (
-                    <button
-                      key={pageNumber}
-                      type="button"
-                      onClick={() => setPage(pageNumber)}
-                      className={`size-9 rounded-lg border text-sm font-medium ${page === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"}`}
-                      aria-current={page === pageNumber ? "page" : undefined}
-                    >
-                      {pageNumber}
-                    </button>
-                  ))}
+                    <td className="px-5 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedCodes.includes(team.code)}
+                        onChange={() =>
+                          setSelectedCodes((current) =>
+                            current.includes(team.code)
+                              ? current.filter((code) => code !== team.code)
+                              : [...current, team.code],
+                          )
+                        }
+                        className="size-4 rounded accent-brand-500"
+                        aria-label={`Select ${team.name}`}
+                      />
+                    </td>
+                    <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
+                      {team.name}
+                    </td>
+                    <td className="hidden px-3 py-4 text-sm text-gray-500 sm:table-cell sm:px-5 dark:text-gray-400">
+                      {team.code}
+                    </td>
+                    <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 md:table-cell dark:text-gray-300">
+                      {team.type}
+                    </td>
+                    <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 md:table-cell dark:text-gray-300">
+                      {team.department}
+                    </td>
+                    <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 lg:table-cell dark:text-gray-300">
+                      {team.location}
+                    </td>
+                    <td className="px-3 py-4 sm:px-5">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${team.status === "Active" ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400" : "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"}`}
+                      >
+                        {team.status}
+                      </span>
+                    </td>
+                    <td className="hidden px-3 py-4 text-sm text-gray-500 sm:px-5 lg:table-cell dark:text-gray-400">
+                      {team.email}
+                    </td>
+                    <td className="px-3 py-4 sm:px-5">
+                      <div className="flex items-center gap-1 text-sm font-medium sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCode(team.code);
+                            setValidationErrors({});
+                            setIsDifferentAddress(false);
+                            setFormValues({
+                              employee_name: team.name,
+                              employee_type: team.type,
+                              department: team.department,
+                              work_location: team.location,
+                              employment_status: team.status,
+                              login_email: team.email,
+                            });
+                            setIsCreating(true);
+                            setActiveTab(0);
+                          }}
+                          className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                          aria-label={`Edit ${team.name}`}
+                          title="Edit"
+                        >
+                          <EditIcon className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(team)}
+                          className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
+                          aria-label={`Delete ${team.name}`}
+                          title="Delete"
+                        >
+                          <TrashIcon className="size-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
+            <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+              <span>{selectedCodes.length} selected</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map(
+                (pageNumber) => (
                   <button
+                    key={pageNumber}
                     type="button"
-                    disabled={page === totalPages}
-                    onClick={() =>
-                      setPage((current) => Math.min(totalPages, current + 1))
-                    }
-                    className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                    onClick={() => setPage(pageNumber)}
+                    className={`size-9 rounded-lg border text-sm font-medium ${page === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"}`}
+                    aria-current={page === pageNumber ? "page" : undefined}
                   >
-                    Next
+                    {pageNumber}
                   </button>
-                </div>
-              </div>
-            </>
-          )}
+                ),
+              )}
+              <button
+                type="button"
+                disabled={page === totalPages}
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+                className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </section>
       ) : (
         <section className="max-w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                {editingId ? "Update employee" : "Add employee"}
+                {editingCode ? "Update employee" : "Add employee"}
               </h3>
-              {drafts.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <select
-                    value={selectedDraftId ?? ""}
-                    onChange={(event) => {
-                      const draft = drafts.find(
-                        (item) => item.id === event.target.value,
-                      );
-                      if (draft) handleLoadDraft(draft);
-                      else setSelectedDraftId(null);
-                    }}
-                    className="h-9 max-w-xs rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300"
-                    aria-label="Load saved employee draft"
-                  >
-                    <option value="">Load saved draft…</option>
-                    {drafts.map((draft) => (
-                      <option key={draft.id} value={draft.id}>
-                        {draft.data.employee_name || "Untitled draft"} —{" "}
-                        {new Date(draft.updated_at).toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedDraftId && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteDraft}
-                      disabled={isSaving}
-                      className="text-sm text-error-600 hover:text-error-700 disabled:opacity-50 dark:text-error-400"
-                    >
-                      Delete draft
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  setIsCreating(false);
-                  setApiError("");
-                }}
+                onClick={() => setIsCreating(false)}
                 className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none sm:px-4 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleSaveDraft}
-                disabled={isSaving}
+                onClick={() => void handleSaveDraft()}
                 className="h-10 flex-1 rounded-lg border border-brand-200 px-3 text-sm font-medium text-brand-600 hover:bg-brand-50 sm:flex-none sm:px-4 dark:border-brand-500/30 dark:text-brand-400 dark:hover:bg-brand-500/10"
               >
-                {isSaving ? "Saving…" : "Save as draft"}
+                Save as draft
               </button>
               <button
                 type="button"
-                onClick={() => void handleCreate()}
-                disabled={isSaving}
+                onClick={handleCreate}
                 className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
               >
-                {isSaving ? "Saving…" : "Submit"}
+                Submit
               </button>
             </div>
           </div>
@@ -1533,94 +1287,80 @@ export default function Teams() {
                   Current address
                 </h4>
               )}
-              {fieldGroups[activeTab].fields.map((field) => {
-                const required =
-                  field.required &&
-                  field.name !== "employee_code" &&
-                  !(field.name === "password" && editingId !== null);
-                return (
-                  <div
-                    key={field.name}
-                    className={
-                      field.type === "textarea" ||
-                      field.type === "conditional-address"
-                        ? "md:col-span-2"
-                        : ""
-                    }
+              {fieldGroups[activeTab].fields.map((field) => (
+                <div
+                  key={field.name}
+                  className={
+                    field.type === "textarea" ||
+                    field.type === "conditional-address"
+                      ? "md:col-span-2"
+                      : ""
+                  }
+                >
+                  <span
+                    className={`mb-2 block text-sm font-medium ${validationErrors[field.name] ? "text-error-500" : "text-gray-700 dark:text-gray-300"}`}
                   >
-                    <span
-                      className={`mb-2 block text-sm font-medium ${validationErrors[field.name] ? "text-error-500" : "text-gray-700 dark:text-gray-300"}`}
-                    >
-                      {field.label}
-                      {required && (
-                        <span className="ms-1 text-error-500">*</span>
-                      )}
+                    {field.label}
+                    {field.required && (
+                      <span className="ms-1 text-error-500">*</span>
+                    )}
+                  </span>
+                  <FieldControl
+                    field={field}
+                    value={formValues[field.name]}
+                    onValueChange={(value) =>
+                      updateFormValue(field.name, value)
+                    }
+                    isDifferentAddress={isDifferentAddress}
+                    onDifferentAddressChange={(value) => {
+                      setIsDifferentAddress(value);
+                      if (!value) {
+                        [
+                          "permanent_address_line1",
+                          "permanent_address_line2",
+                          "permanent_country",
+                          "permanent_state",
+                          "permanent_district",
+                          "permanent_pincode",
+                        ].forEach((name) => updateFormValue(name, ""));
+                      }
+                    }}
+                    addressValues={formValues}
+                    onAddressValueChange={updateFormValue}
+                    hasError={Boolean(validationErrors[field.name])}
+                    optionsOverride={
+                      field.name === "country"
+                        ? countries
+                        : field.name === "state"
+                          ? states
+                          : field.name === "district"
+                            ? districts
+                            : field.name === "department"
+                              ? departments
+                              : field.name === "reporting_manager"
+                                ? reportingManagers
+                                : field.name === "role"
+                                  ? roleOptions
+                                  : undefined
+                    }
+                    optionsOverrides={{
+                      permanent_country: countries,
+                      permanent_state: states,
+                      permanent_district: districts,
+                    }}
+                  />
+                  {validationErrors[field.name] && (
+                    <span className="mt-1.5 block text-xs text-error-500">
+                      This field is required.
                     </span>
-                    <FieldControl
-                      field={field}
-                      value={formValues[field.name]}
-                      onValueChange={(value) =>
-                        updateFormValue(field.name, value)
-                      }
-                      isDifferentAddress={isDifferentAddress}
-                      onDifferentAddressChange={(value) => {
-                        setIsDifferentAddress(value);
-                        if (!value) {
-                          [
-                            "permanent_address_line1",
-                            "permanent_address_line2",
-                            "permanent_country",
-                            "permanent_state",
-                            "permanent_district",
-                            "permanent_pincode",
-                          ].forEach((name) => updateFormValue(name, ""));
-                        }
-                      }}
-                      addressValues={formValues}
-                      onAddressValueChange={updateFormValue}
-                      hasError={Boolean(validationErrors[field.name])}
-                      optionsOverride={
-                        field.name === "country"
-                          ? countries
-                          : field.name === "state"
-                            ? formValues.country
-                              ? states
-                              : []
-                            : field.name === "district"
-                              ? formValues.state
-                                ? districts
-                                : []
-                              : field.name === "department"
-                                ? departments
-                                : field.name === "reporting_manager"
-                                  ? reportingManagers
-                                  : field.name === "role"
-                                    ? roles
-                                    : undefined
-                      }
-                      optionsOverrides={{
-                        permanent_country: countries,
-                        permanent_state: formValues.permanent_country
-                          ? permanentStates
-                          : [],
-                        permanent_district: formValues.permanent_state
-                          ? permanentDistricts
-                          : [],
-                      }}
-                    />
-                    {validationErrors[field.name] && (
-                      <span className="mt-1.5 block text-xs text-error-500">
-                        This field is required.
-                      </span>
-                    )}
-                    {field.description && (
-                      <span className="mt-1.5 block text-xs text-gray-400">
-                        {field.description}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+                  )}
+                  {field.description && (
+                    <span className="mt-1.5 block text-xs text-gray-400">
+                      {field.description}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -1643,8 +1383,8 @@ export default function Teams() {
               Delete team member?
             </h3>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              This will deactivate the employee account and remove the record
-              from the active team list.
+              This will deactivate {deleteTarget.name} and remove them from the
+              active directory.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -1656,8 +1396,26 @@ export default function Teams() {
               </button>
               <button
                 type="button"
-                onClick={() => void handleDeleteEmployee()}
-                disabled={isSaving}
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      if (!deleteTarget.id)
+                        throw new Error("Employee id is missing.");
+                      await deleteEmployee(deleteTarget.id);
+                      await refreshEmployees();
+                      setSelectedCodes((current) =>
+                        current.filter((code) => code !== deleteTarget.code),
+                      );
+                      setDeleteTarget(null);
+                    } catch (error) {
+                      setApiError(
+                        error instanceof Error
+                          ? error.message
+                          : "Unable to delete employee.",
+                      );
+                    }
+                  })();
+                }}
                 className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
               >
                 Delete

@@ -1,6 +1,17 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
+  deleteRole,
+  listEmployees,
+  listRoles,
+  updateEmployee,
+  createRole,
+  updateRole,
+  type EmployeeRecord,
+  type PermissionValues,
+  type RoleRecord,
+} from "@/api";
+import {
   ContactsIcon,
   ChevronDownIcon,
   EditIcon,
@@ -19,15 +30,17 @@ type Permission = "create" | "view" | "update" | "delete";
 type PermissionMap = Record<string, Record<Permission, boolean>>;
 
 type Role = {
-  id: number;
+  id: string | number;
   name: string;
   permissions: PermissionMap;
 };
 
 type Employee = {
+  id?: string;
   code: string;
   name: string;
   email: string;
+  role?: string;
 };
 
 type MenuItem = {
@@ -291,9 +304,13 @@ function EmployeeRoleDropdown({
 export default function AppPermission() {
   const { t } = useTranslation();
   const [roles, setRoles] = useState<Role[]>(initialRoles);
+  const [employeeList, setEmployeeList] = useState<Employee[]>(employees);
+  const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
-  const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
+  const [editingRoleId, setEditingRoleId] = useState<string | number | null>(
+    null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState("");
   const [roleSearch, setRoleSearch] = useState("");
@@ -306,6 +323,59 @@ export default function AppPermission() {
     useState<Record<string, string>>(initialEmployeeRoles);
   const [permissions, setPermissions] =
     useState<PermissionMap>(createPermissions());
+
+  const roleFromApi = (record: RoleRecord): Role => ({
+    id: record.id,
+    name: record.name,
+    permissions: Object.fromEntries(
+      record.permissions.map((permission) => [
+        permission.menu,
+        {
+          create: permission.create,
+          view: permission.view,
+          update: permission.update,
+          delete: permission.delete,
+        },
+      ]),
+    ),
+  });
+
+  const employeesFromApi = (records: EmployeeRecord[]): Employee[] =>
+    records.map((employee) => ({
+      id: employee.id,
+      code: employee.employee_code,
+      name: employee.employee_name,
+      email: String(employee.login_email || employee.email),
+      role: String(employee.role || ""),
+    }));
+
+  const refreshPermissionData = async () => {
+    try {
+      const [roleRecords, employeeRecords] = await Promise.all([
+        listRoles(),
+        listEmployees(),
+      ]);
+      setRoles(roleRecords.map(roleFromApi));
+      setEmployeeList(employeesFromApi(employeeRecords));
+      setEmployeeRoles(
+        Object.fromEntries(
+          employeeRecords.map((employee) => [
+            employee.employee_code,
+            String(employee.role || ""),
+          ]),
+        ),
+      );
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to load permissions.",
+      );
+    }
+  };
+
+  useEffect(() => {
+    void refreshPermissionData();
+  }, []);
 
   useEffect(() => {
     const showRoleGrid = () => setIsEditorOpen(false);
@@ -348,48 +418,30 @@ export default function AppPermission() {
     }));
   };
 
-  const saveRole = () => {
+  const saveRole = async () => {
     const trimmedName = roleName.trim();
     if (!trimmedName) return;
 
-    if (editingRoleId === null) {
-      setRoles((current) => [
-        ...current,
-        {
-          id: Date.now(),
-          name: trimmedName,
-          permissions,
-        },
-      ]);
-    } else {
-      const previousRole = roles.find((role) => role.id === editingRoleId);
-      setRoles((current) =>
-        current.map((role) =>
-          role.id === editingRoleId
-            ? {
-                ...role,
-                name: trimmedName,
-                permissions,
-              }
-            : role,
-        ),
-      );
-      if (previousRole && previousRole.name !== trimmedName) {
-        setEmployeeRoles((current) =>
-          Object.fromEntries(
-            Object.entries(current).map(([employeeCode, assignedRole]) => [
-              employeeCode,
-              assignedRole === previousRole.name ? trimmedName : assignedRole,
-            ]),
-          ),
-        );
+    try {
+      const payload = {
+        name: trimmedName,
+        permissions: permissions as Record<string, PermissionValues>,
+      };
+      if (editingRoleId === null) {
+        await createRole(payload);
+      } else {
+        await updateRole(String(editingRoleId), payload);
       }
+      await refreshPermissionData();
+      setIsEditorOpen(false);
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save role.",
+      );
     }
-
-    setIsEditorOpen(false);
   };
 
-  const filteredEmployees = employees
+  const filteredEmployees = employeeList
     .filter((employee) => {
       const searchValue = roleSearch.toLowerCase();
       return (
@@ -420,6 +472,11 @@ export default function AppPermission() {
         description="Yatzar Operation app permissions"
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.appPermission")} />
+      {apiError && (
+        <p className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600">
+          {apiError}
+        </p>
+      )}
       <div className="space-y-6">
         {/* {!isEditorOpen && (
           <button
@@ -555,8 +612,21 @@ export default function AppPermission() {
             </div>
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div className="relative w-full sm:max-w-md">
-                <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-lg text-gray-400">
-                  ⌕
+                <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg
+                    className="size-5"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9.375 17.208a7.833 7.833 0 1 0 0-15.667 7.833 7.833 0 0 0 0 15.667ZM15.418 14.357l2.82 2.821"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </span>
                 <input
                   value={roleSearch}
@@ -589,7 +659,7 @@ export default function AppPermission() {
                   entries
                 </label>
                 <span>
-                  {filteredEmployees.length} of {employees.length} members
+                  {filteredEmployees.length} of {employeeList.length} members
                 </span>
                 <div className="flex items-center gap-1">
                   <div className="relative">
@@ -690,12 +760,27 @@ export default function AppPermission() {
                         <EmployeeRoleDropdown
                           roles={roles}
                           value={employeeRoles[employee.code] ?? ""}
-                          onChange={(roleName) =>
-                            setEmployeeRoles((current) => ({
-                              ...current,
-                              [employee.code]: roleName,
-                            }))
-                          }
+                          onChange={(roleName) => {
+                            void (async () => {
+                              try {
+                                if (!employee.id)
+                                  throw new Error("Employee id is missing.");
+                                await updateEmployee(employee.id, {
+                                  role: roleName,
+                                });
+                                setEmployeeRoles((current) => ({
+                                  ...current,
+                                  [employee.code]: roleName,
+                                }));
+                              } catch (error) {
+                                setApiError(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Unable to assign role.",
+                                );
+                              }
+                            })();
+                          }}
                           employeeName={employee.name}
                         />
                       </td>
@@ -840,10 +925,19 @@ export default function AppPermission() {
               <button
                 type="button"
                 onClick={() => {
-                  setRoles((current) =>
-                    current.filter((role) => role.id !== deleteTarget.id),
-                  );
-                  setDeleteTarget(null);
+                  void (async () => {
+                    try {
+                      await deleteRole(String(deleteTarget.id));
+                      await refreshPermissionData();
+                      setDeleteTarget(null);
+                    } catch (error) {
+                      setApiError(
+                        error instanceof Error
+                          ? error.message
+                          : "Unable to delete role.",
+                      );
+                    }
+                  })();
                 }}
                 className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
               >

@@ -20,6 +20,7 @@
 
     /* Path Aliases & Resolution */
     "ignoreDeprecations": "5.0",
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },

@@ -1,45 +1,66 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import { EditIcon, TrashIcon } from "@/icons";
 import {
-  getTeamDropdownOptions,
-  saveTeamDropdownOptions,
-} from "@/utils/teamOptions";
-import { useState } from "react";
+  createOption,
+  deleteOption,
+  listOptions,
+  updateOption,
+  type DropdownOption,
+} from "@/api";
+import { EditIcon, TrashIcon } from "@/icons";
+import { useEffect, useState } from "react";
 
 export default function Others() {
-  const [departments, setDepartments] = useState(
-    () => getTeamDropdownOptions().departments,
-  );
-  const [reportingManagers, setReportingManagers] = useState(
-    () => getTeamDropdownOptions().reportingManagers,
+  const [departments, setDepartments] = useState<DropdownOption[]>([]);
+  const [reportingManagers, setReportingManagers] = useState<DropdownOption[]>(
+    [],
   );
   const [activeType, setActiveType] = useState<
     "departments" | "reportingManagers"
   >("departments");
   const [value, setValue] = useState("");
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [apiError, setApiError] = useState("");
 
-  const values = activeType === "departments" ? departments : reportingManagers;
-  const setValues = (next: string[]) => {
-    if (activeType === "departments") {
-      setDepartments(next);
-      saveTeamDropdownOptions({ departments: next, reportingManagers });
-    } else {
-      setReportingManagers(next);
-      saveTeamDropdownOptions({ departments, reportingManagers: next });
+  const refreshOptions = async () => {
+    try {
+      const [departmentOptions, managerOptions] = await Promise.all([
+        listOptions("department"),
+        listOptions("reporting_manager"),
+      ]);
+      setDepartments(departmentOptions);
+      setReportingManagers(managerOptions);
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to load options.",
+      );
     }
   };
 
-  const saveValue = () => {
+  useEffect(() => {
+    void refreshOptions();
+  }, []);
+
+  const values = activeType === "departments" ? departments : reportingManagers;
+  const saveValue = async () => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    const next = [...values];
-    if (editingIndex === null) next.push(trimmed);
-    else next[editingIndex] = trimmed;
-    setValues([...new Set(next)]);
-    setValue("");
-    setEditingIndex(null);
+    try {
+      if (editingId) await updateOption(editingId, trimmed);
+      else
+        await createOption(
+          activeType === "departments" ? "department" : "reporting_manager",
+          trimmed,
+        );
+      await refreshOptions();
+      setValue("");
+      setEditingId(null);
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save option.",
+      );
+    }
   };
 
   return (
@@ -49,6 +70,11 @@ export default function Others() {
         description="Manage team dropdown values"
       />
       <PageBreadcrumb pageTitle="Others" />
+      {apiError && (
+        <p className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600">
+          {apiError}
+        </p>
+      )}
       <section className="w-full rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
         <div className="border-b border-gray-200 p-5 dark:border-gray-800">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -66,7 +92,7 @@ export default function Others() {
               onClick={() => {
                 setActiveType(type);
                 setValue("");
-                setEditingIndex(null);
+                setEditingId(null);
               }}
               className={`border-b-2 py-4 text-sm font-medium ${activeType === type ? "border-brand-500 text-brand-500" : "border-transparent text-gray-500 dark:text-gray-400"}`}
             >
@@ -87,27 +113,27 @@ export default function Others() {
               onClick={saveValue}
               className="h-11 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600"
             >
-              {editingIndex === null ? "Add" : "Update"}
+              {editingId === null ? "Add" : "Update"}
             </button>
           </div>
           <div className="mt-5 divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
-            {values.map((item, index) => (
+            {values.map((item) => (
               <div
-                key={item}
+                key={item.id}
                 className="flex items-center justify-between gap-3 px-4 py-3"
               >
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {item}
+                  {item.value}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => {
-                      setValue(item);
-                      setEditingIndex(index);
+                      setValue(item.value);
+                      setEditingId(item.id);
                     }}
                     className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
-                    aria-label={`Edit ${item}`}
+                    aria-label={`Edit ${item.value}`}
                     title="Edit"
                   >
                     <EditIcon className="size-4" />
@@ -115,12 +141,18 @@ export default function Others() {
                   <button
                     type="button"
                     onClick={() =>
-                      setValues(
-                        values.filter((_, itemIndex) => itemIndex !== index),
-                      )
+                      void deleteOption(item.id)
+                        .then(refreshOptions)
+                        .catch((error: unknown) =>
+                          setApiError(
+                            error instanceof Error
+                              ? error.message
+                              : "Unable to delete option.",
+                          ),
+                        )
                     }
                     className="rounded-md p-1.5 text-error-500 hover:bg-error-50 dark:text-error-400 dark:hover:bg-error-500/10"
-                    aria-label={`Delete ${item}`}
+                    aria-label={`Delete ${item.value}`}
                     title="Delete"
                   >
                     <TrashIcon className="size-4" />
