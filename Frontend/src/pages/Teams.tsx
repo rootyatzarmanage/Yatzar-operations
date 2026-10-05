@@ -1,0 +1,1671 @@
+import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import PageMeta from "@/components/common/PageMeta";
+import {
+  createEmployee,
+  deleteEmployee,
+  deleteEmployeeDraft,
+  listCountries,
+  listDistricts,
+  listEmployeeDrafts,
+  listEmployees,
+  listOptions,
+  listRoles,
+  listStates,
+  saveEmployeeDraft,
+  updateEmployee,
+} from "@/api/teams";
+import type { Employee, EmployeeDraft, EmployeePayload } from "@/api/teams";
+import {
+  ChevronDownIcon,
+  ContactsIcon,
+  EditIcon,
+  GridIcon,
+  ShieldIcon,
+  TrashIcon,
+  UploadIcon,
+  UsersIcon,
+  WorkspaceIcon,
+} from "@/icons";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
+
+type Field = {
+  name: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  options?: string[];
+  description?: string;
+};
+type Team = {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  department: string;
+  location: string;
+  status: string;
+  email: string;
+};
+type TeamFormValues = Record<string, string>;
+
+const fieldGroups: {
+  label: string;
+  icon: React.FC<React.SVGProps<SVGSVGElement>>;
+  fields: Field[];
+}[] = [
+  {
+    label: "Identity & Registration",
+    icon: UsersIcon,
+    fields: [
+      {
+        name: "employee_code",
+        label: "Employee code",
+        required: true,
+        description: "Auto-generated unique code",
+      },
+      {
+        name: "employee_name",
+        label: "Employee name",
+        required: true,
+      },
+      {
+        name: "display_name",
+        label: "Display name",
+      },
+      {
+        name: "employee_type",
+        label: "Employee type",
+        required: true,
+        options: ["Full-time", "Part-time", "Contract", "Intern"],
+      },
+      {
+        name: "date_of_birth",
+        label: "Date of birth",
+        type: "date",
+        required: true,
+      },
+      {
+        name: "gender",
+        label: "Gender",
+        type: "radio",
+        required: true,
+        options: ["Male", "Female", "Other"],
+      },
+      {
+        name: "blood_group",
+        label: "Blood group",
+        options: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+      },
+      {
+        name: "marital_status",
+        label: "Marital status",
+        options: ["Single", "Married", "Divorced", "Widowed"],
+      },
+      {
+        name: "photo",
+        label: "Profile",
+        type: "file",
+        description: "Upload reference / path",
+      },
+    ],
+  },
+  {
+    label: "Contact Details",
+    icon: ContactsIcon,
+    fields: [
+      {
+        name: "mobile_number",
+        label: "Mobile number",
+        type: "number",
+        required: true,
+        description: "Primary contact number",
+      },
+      {
+        name: "alternate_phone",
+        label: "Alternate phone",
+        type: "number",
+      },
+      {
+        name: "email",
+        label: "Email",
+        type: "email",
+        required: true,
+        description: "Personal email, validated format",
+      },
+      {
+        name: "emergency_contact_name",
+        label: "Emergency contact name",
+      },
+      {
+        name: "emergency_contact_number",
+        label: "Emergency contact number",
+        type: "number",
+      },
+    ],
+  },
+  {
+    label: "Address",
+    icon: GridIcon,
+    fields: [
+      {
+        name: "address_line1",
+        label: "Address line 1",
+        required: true,
+      },
+      { name: "address_line2", label: "Address line 2" },
+      { name: "country", label: "Country", required: true, options: [] },
+      {
+        name: "state",
+        label: "State",
+        required: true,
+        options: [],
+      },
+      {
+        name: "district",
+        label: "District",
+        required: true,
+        options: [],
+      },
+      {
+        name: "pincode",
+        label: "Pincode",
+        type: "number",
+        required: true,
+      },
+      {
+        name: "permanent_address",
+        label: "Permanent address",
+        type: "conditional-address",
+      },
+    ],
+  },
+  {
+    label: "Employment Details",
+    icon: WorkspaceIcon,
+    fields: [
+      {
+        name: "date_of_joining",
+        label: "Date of joining",
+        type: "date",
+        required: true,
+      },
+      {
+        name: "department",
+        label: "Department",
+        required: true,
+        options: [],
+      },
+      {
+        name: "designation",
+        label: "Designation",
+        required: true,
+      },
+      {
+        name: "reporting_manager",
+        label: "Reporting manager",
+        options: [],
+      },
+      {
+        name: "work_location",
+        label: "Work location",
+        required: true,
+      },
+      {
+        name: "employment_status",
+        label: "Employment status",
+        required: true,
+        options: ["Active", "Inactive", "Resigned", "On Leave"],
+      },
+    ],
+  },
+  {
+    label: "Statutory / Compliance",
+    icon: ShieldIcon,
+    fields: [
+      {
+        name: "aadhar_number",
+        label: "Aadhar number",
+        required: false,
+      },
+      {
+        name: "pan_number",
+        label: "PAN number",
+        required: false,
+      },
+      {
+        name: "uan_number",
+        label: "UAN number",
+      },
+      { name: "bank_name", label: "Bank name" },
+      {
+        name: "account_number",
+        label: "Account number",
+      },
+      { name: "ifsc_code", label: "IFSC code" },
+    ],
+  },
+  {
+    label: "Documents / Other",
+    icon: GridIcon,
+    fields: [
+      {
+        name: "resume_file",
+        label: "Resume file",
+        type: "file",
+        description: "Upload reference / path",
+      },
+      {
+        name: "id_proof_file",
+        label: "ID proof file",
+        type: "file",
+        description: "Upload reference / path",
+      },
+      {
+        name: "offer_letter_file",
+        label: "Offer letter",
+        type: "file",
+        description: "Upload reference / path",
+      },
+      {
+        name: "experience",
+        label: "Experience",
+      },
+      {
+        name: "skills",
+        label: "Skills",
+      },
+      {
+        name: "qualifications",
+        label: "Qualifications",
+      },
+      {
+        name: "remarks",
+        label: "Remarks",
+        type: "textarea",
+      },
+    ],
+  },
+  {
+    label: "Login & Access",
+    icon: ShieldIcon,
+    fields: [
+      {
+        name: "login_email",
+        label: "Login email",
+        type: "email",
+        required: true,
+      },
+      {
+        name: "username",
+        label: "Username",
+        required: true,
+      },
+      {
+        name: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+      },
+      {
+        name: "role",
+        label: "Role",
+        required: true,
+        options: [
+          "Super Admin",
+          "Admin",
+          "Manager",
+          "Team Leader",
+          "Accountant",
+          "Employee",
+          "Viewer",
+        ],
+      },
+      {
+        name: "is_active",
+        label: "Active account",
+        type: "checkbox",
+        required: true,
+      },
+    ],
+  },
+];
+
+const inputClass =
+  "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
+function toTeam(employee: Employee): Team {
+  return {
+    id: employee.id,
+    code: employee.employee_code,
+    name: employee.employee_name,
+    type: employee.employee_type,
+    department: employee.department,
+    location: employee.work_location,
+    status: employee.employment_status,
+    email: employee.login_email,
+  };
+}
+
+function toFormValues(employee: Employee): TeamFormValues {
+  const values: TeamFormValues = {};
+  for (const group of fieldGroups) {
+    for (const field of group.fields) {
+      if (field.name === "permanent_address") continue;
+      const value = employee[field.name as keyof Employee];
+      if (typeof value === "string") {
+        values[field.name] = field.type === "date" ? value.slice(0, 10) : value;
+      } else if (typeof value === "boolean") values[field.name] = String(value);
+      else values[field.name] = "";
+    }
+  }
+  return values;
+}
+
+function SearchableSelect({
+  label,
+  options,
+  value,
+  onChange,
+  hasError,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  hasError: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const safeOptions = options.filter(
+    (option): option is string =>
+      typeof option === "string" && option.trim().length > 0,
+  );
+  const filteredOptions = safeOptions.filter((option) =>
+    option.toLowerCase().includes(query.toLowerCase()),
+  );
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        !wrapperRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    const updatePlacement = () => {
+      if (!wrapperRef.current) return;
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const viewportPadding = 8;
+      const gap = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+      const spaceAbove = rect.top - viewportPadding;
+      const opensAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+      const availableHeight = Math.max(
+        120,
+        Math.min(320, opensAbove ? spaceAbove - gap : spaceBelow - gap),
+      );
+      setMenuStyle({
+        left: rect.left,
+        width: rect.width,
+        maxHeight: availableHeight,
+        ...(opensAbove
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+      });
+    };
+    updatePlacement();
+    document.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [isOpen]);
+  return (
+    <div
+      ref={wrapperRef}
+      className={`relative min-w-0 ${isOpen ? "z-30" : ""}`}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className={`${inputClass} ${hasError ? "border-error-500" : ""} flex items-center justify-between text-start`}
+      >
+        <span
+          className={
+            value ? "text-gray-800 dark:text-white/90" : "text-gray-400"
+          }
+        >
+          {value || `Select ${label.toLowerCase()}`}
+        </span>
+        <ChevronDownIcon className="size-4 text-gray-400" />
+      </button>
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className="fixed z-9999 overflow-hidden rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
+          >
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className={`${inputClass} h-9`}
+              placeholder={`Search ${label.toLowerCase()}`}
+            />
+            <div className="mt-1 max-h-full overflow-y-auto overscroll-contain">
+              {filteredOptions.length ? (
+                filteredOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      onChange(option);
+                      setQuery("");
+                      setIsOpen(false);
+                    }}
+                    className="w-full rounded-md px-3 py-2 text-start text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                  >
+                    {option}
+                  </button>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-sm text-gray-400">
+                  No results found
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+function FieldControl({
+  field,
+  value = "",
+  onValueChange,
+  isDifferentAddress = false,
+  onDifferentAddressChange,
+  hasError = false,
+  optionsOverride,
+  optionsOverrides,
+  addressValues = {},
+  onAddressValueChange,
+}: {
+  field: Field;
+  value?: string;
+  onValueChange: (value: string) => void;
+  isDifferentAddress?: boolean;
+  onDifferentAddressChange?: (value: boolean) => void;
+  hasError?: boolean;
+  optionsOverride?: string[];
+  optionsOverrides?: Record<string, string[]>;
+  addressValues?: TeamFormValues;
+  onAddressValueChange?: (name: string, value: string) => void;
+}) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fieldClass = hasError
+    ? "border-error-500 focus:border-error-500 focus:ring-error-500/10"
+    : "";
+
+  if (field.type === "radio")
+    return (
+      <div className="flex flex-wrap gap-4 pt-2">
+        {field.options?.map((option) => (
+          <label
+            key={option}
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+          >
+            <input
+              type="radio"
+              name={field.name}
+              value={option}
+              checked={value === option}
+              onChange={(event) => onValueChange(event.target.value)}
+              className="size-4 accent-brand-500"
+            />
+            {option}
+          </label>
+        ))}
+      </div>
+    );
+  if (field.type === "checkbox")
+    return (
+      <label className="flex h-11 items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+        <input
+          type="checkbox"
+          checked={value !== "false"}
+          onChange={(event) => onValueChange(String(event.target.checked))}
+          className="size-4 rounded accent-brand-500"
+        />
+        Is active
+      </label>
+    );
+  if (field.type === "file")
+    return (
+      <div
+        className={`flex min-h-52 w-full min-w-0 flex-col items-center justify-center rounded-2xl border border-dashed px-5 py-6 text-center transition ${isDragging ? "border-brand-500 bg-brand-50 shadow-focus-ring dark:bg-brand-500/10" : "border-gray-300 bg-gray-50/40 hover:border-brand-400 dark:border-gray-700 dark:bg-white/[0.02] dark:hover:border-brand-500"}`}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          setSelectedFile(event.dataTransfer.files?.[0] ?? null);
+        }}
+      >
+        <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-gray-200/80 text-gray-700 dark:bg-white/10 dark:text-gray-200">
+          <UploadIcon className="size-6" />
+        </div>
+        <p className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
+          Drag &amp; Drop Files Here
+        </p>
+        <p className="mt-2 max-w-sm text-sm leading-5 text-gray-600 dark:text-gray-400">
+          Drag and drop your PNG, JPG, WebP, SVG images here or browse
+        </p>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="mt-4 text-sm font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400"
+        >
+          Browse File
+        </button>
+        {selectedFile && (
+          <p className="mt-4 max-w-full truncate text-xs text-gray-500 dark:text-gray-400">
+            Selected: {selectedFile.name}
+          </p>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+          className="hidden"
+        />
+        {selectedFile && (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedFile(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+            className="mt-3 shrink-0 text-sm font-medium text-error-600 hover:text-error-700 dark:text-error-400"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    );
+  if (field.type === "conditional-address") {
+    const permanentFields: Field[] = [
+      {
+        name: "permanent_address_line1",
+        label: "Address line 1",
+        required: true,
+      },
+      { name: "permanent_address_line2", label: "Address line 2" },
+      {
+        name: "permanent_country",
+        label: "Country",
+        required: true,
+        options: [],
+      },
+      { name: "permanent_state", label: "State", required: true, options: [] },
+      {
+        name: "permanent_district",
+        label: "District",
+        required: true,
+        options: [],
+      },
+      {
+        name: "permanent_pincode",
+        label: "Pincode",
+        type: "number",
+        required: true,
+      },
+    ];
+    return (
+      <div className="space-y-4 md:col-span-2">
+        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={isDifferentAddress}
+            onChange={(event) =>
+              onDifferentAddressChange?.(event.target.checked)
+            }
+            className="size-4 rounded accent-brand-500"
+          />
+          Permanent address is different from current address
+        </label>
+        {isDifferentAddress && (
+          <div className="grid grid-cols-1 gap-5 rounded-xl border border-gray-200 p-4 md:grid-cols-2 dark:border-gray-800">
+            <h4 className="text-sm font-semibold text-gray-800 md:col-span-2 dark:text-white/90">
+              Permanent address
+            </h4>
+            {permanentFields.map((addressField) => (
+              <label key={addressField.name}>
+                <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {addressField.label}
+                  {addressField.required && (
+                    <span className="ms-1 text-error-500">*</span>
+                  )}
+                </span>
+                <FieldControl
+                  field={addressField}
+                  value={addressValues[addressField.name]}
+                  onValueChange={(nextValue) =>
+                    onAddressValueChange?.(addressField.name, nextValue)
+                  }
+                  optionsOverride={optionsOverrides?.[addressField.name]}
+                />
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (field.options || optionsOverride)
+    return (
+      <SearchableSelect
+        label={field.label}
+        options={optionsOverride ?? field.options ?? []}
+        value={value}
+        onChange={onValueChange}
+        hasError={hasError}
+      />
+    );
+  if (field.type === "date")
+    return (
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        placeholder={`Select ${field.label.toLowerCase()}`}
+        className={`${inputClass} ${fieldClass}`}
+      />
+    );
+  if (field.type === "textarea")
+    return (
+      <textarea
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        placeholder={`Enter ${field.label.toLowerCase()}`}
+        className={`${inputClass} ${fieldClass} h-24 py-3`}
+      />
+    );
+  return (
+    <input
+      type={field.type || "text"}
+      readOnly={field.name === "employee_code"}
+      value={value}
+      onChange={(event) => onValueChange(event.target.value)}
+      placeholder={`Enter ${field.label.toLowerCase()}`}
+      className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}
+    />
+  );
+}
+
+export default function Teams() {
+  const { t } = useTranslation();
+  const [isCreating, setIsCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [search, setSearch] = useState("");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const teams = employees.map(toTeam);
+  const [formValues, setFormValues] = useState<TeamFormValues>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isDifferentAddress, setIsDifferentAddress] = useState(false);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<EmployeeDraft[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, boolean>
+  >({});
+  const [sortKey, setSortKey] = useState<keyof Team>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [reportingManagers, setReportingManagers] = useState<string[]>([]);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [permanentStates, setPermanentStates] = useState<string[]>([]);
+  const [permanentDistricts, setPermanentDistricts] = useState<string[]>([]);
+  const refreshEmployees = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      setEmployees(await listEmployees());
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to load employees.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setApiError, setEmployees, setIsLoading]);
+  const refreshDrafts = useCallback(async () => {
+    setDrafts(await listEmployeeDrafts());
+  }, [setDrafts]);
+  const filteredTeams = teams.filter((team) =>
+    Object.values(team).some((value) =>
+      value.toLowerCase().includes(search.toLowerCase()),
+    ),
+  );
+  const sortedTeams = [...filteredTeams].sort((first, second) => {
+    const comparison = first[sortKey].localeCompare(second[sortKey]);
+    return sortDirection === "asc" ? comparison : -comparison;
+  });
+  const totalPages = Math.max(1, Math.ceil(sortedTeams.length / pageSize));
+  const pagedTeams = sortedTeams.slice((page - 1) * pageSize, page * pageSize);
+  const allVisibleSelected =
+    pagedTeams.length > 0 &&
+    pagedTeams.every((team) => selectedCodes.includes(team.code));
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([
+      listCountries(),
+      listOptions("department"),
+      listOptions("reporting_manager"),
+      listRoles(),
+    ])
+      .then(
+        ([countryOptions, departmentOptions, managerOptions, roleOptions]) => {
+          if (!active) return;
+          setCountries(countryOptions);
+          setDepartments(departmentOptions.map((option) => option.value));
+          setReportingManagers(managerOptions.map((option) => option.value));
+          setRoles(roleOptions.map((role) => role.name));
+        },
+      )
+      .catch((error: unknown) => {
+        if (active) {
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load Teams options.",
+          );
+        }
+      });
+    void listEmployeeDrafts()
+      .then((items) => {
+        if (active) setDrafts(items);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load employee drafts.",
+          );
+        }
+      });
+    void listEmployees()
+      .then((items) => {
+        if (active) setEmployees(items);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load employees.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshEmployees]);
+
+  useEffect(() => {
+    let active = true;
+    const country = formValues.country;
+    if (!country) return;
+    void listStates(country)
+      .then((items) => {
+        if (active) setStates(items);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setApiError(
+            error instanceof Error ? error.message : "Unable to load states.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [formValues.country]);
+
+  useEffect(() => {
+    let active = true;
+    const state = formValues.state;
+    if (!state) return;
+    void listDistricts(state)
+      .then((items) => {
+        if (active) setDistricts(items);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load districts.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [formValues.state]);
+
+  useEffect(() => {
+    let active = true;
+    const country = formValues.permanent_country;
+    if (!country) return;
+    void listStates(country)
+      .then((items) => {
+        if (active) setPermanentStates(items);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setApiError(
+            error instanceof Error ? error.message : "Unable to load states.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [formValues.permanent_country]);
+
+  useEffect(() => {
+    let active = true;
+    const state = formValues.permanent_state;
+    if (!state) return;
+    void listDistricts(state)
+      .then((items) => {
+        if (active) setPermanentDistricts(items);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load districts.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [formValues.permanent_state]);
+
+  useEffect(() => {
+    const showList = () => setIsCreating(false);
+    window.addEventListener("teams:navigate-list", showList);
+    return () => window.removeEventListener("teams:navigate-list", showList);
+  }, []);
+
+  const updateFormValue = (name: string, value: string) => {
+    setFormValues((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === "country"
+        ? { state: "", district: "" }
+        : name === "state"
+          ? { district: "" }
+          : {}),
+      ...(name === "permanent_country"
+        ? { permanent_state: "", permanent_district: "" }
+        : name === "permanent_state"
+          ? { permanent_district: "" }
+          : {}),
+    }));
+    if (name === "country") setStates([]);
+    if (name === "state") setDistricts([]);
+    if (name === "permanent_country") setPermanentStates([]);
+    if (name === "permanent_state") setPermanentDistricts([]);
+    setValidationErrors((current) => ({ ...current, [name]: false }));
+  };
+
+  const handleSort = (key: keyof Team) => {
+    setPage(1);
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const handleCreate = async () => {
+    const requiredErrors: Record<string, boolean> = {};
+    fieldGroups.forEach((group) => {
+      group.fields.forEach((field) => {
+        if (
+          !field.required ||
+          field.name === "employee_code" ||
+          (field.name === "password" && editingId !== null)
+        )
+          return;
+        if (field.name === "permanent_address") {
+          if (isDifferentAddress) {
+            let hasPermanentAddressError = false;
+            [
+              "permanent_address_line1",
+              "permanent_country",
+              "permanent_state",
+              "permanent_district",
+              "permanent_pincode",
+            ].forEach((name) => {
+              if (!formValues[name]?.trim()) {
+                requiredErrors[name] = true;
+                hasPermanentAddressError = true;
+              }
+            });
+            if (hasPermanentAddressError) requiredErrors[field.name] = true;
+          }
+          return;
+        }
+        if (!formValues[field.name]?.trim() && field.name !== "is_active")
+          requiredErrors[field.name] = true;
+      });
+    });
+    setValidationErrors(requiredErrors);
+    const firstInvalidTab = fieldGroups.findIndex((group) =>
+      group.fields.some((field) => requiredErrors[field.name]),
+    );
+    if (firstInvalidTab >= 0) {
+      setActiveTab(firstInvalidTab);
+      return;
+    }
+    const payload: EmployeePayload = {};
+    for (const group of fieldGroups) {
+      for (const field of group.fields) {
+        if (field.name === "permanent_address") continue;
+        const value = formValues[field.name]?.trim() ?? "";
+        if (field.name === "is_active") {
+          payload[field.name] = formValues[field.name] !== "false";
+        } else if (field.name === "password" && !value) {
+          continue;
+        } else if (field.name === "employee_code" && !value) {
+          continue;
+        } else {
+          payload[field.name] = value || null;
+        }
+      }
+    }
+    setIsSaving(true);
+    setApiError("");
+    try {
+      if (editingId) await updateEmployee(editingId, payload);
+      else await createEmployee(payload);
+      if (selectedDraftId) {
+        try {
+          await deleteEmployeeDraft(selectedDraftId);
+          await refreshDrafts();
+        } catch (error) {
+          setApiError(
+            `Employee saved, but its draft could not be removed: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          );
+        }
+      }
+      await refreshEmployees();
+      setEditingId(null);
+      setSelectedDraftId(null);
+      setFormValues({});
+      setIsDifferentAddress(false);
+      setValidationErrors({});
+      setIsCreating(false);
+      setPage(totalPages);
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save employee.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    const data: TeamFormValues = {
+      ...formValues,
+      __isDifferentAddress: String(isDifferentAddress),
+    };
+    delete data.password;
+    setIsSaving(true);
+    setApiError("");
+    try {
+      const saved = await saveEmployeeDraft(data, selectedDraftId ?? undefined);
+      setSelectedDraftId(saved.id);
+      await refreshDrafts();
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to save draft.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoadDraft = (draft: EmployeeDraft) => {
+    const { __isDifferentAddress, ...data } = draft.data;
+    delete data.password;
+    setFormValues(data);
+    setIsDifferentAddress(__isDifferentAddress === "true");
+    setSelectedDraftId(draft.id);
+    setEditingId(null);
+    setValidationErrors({});
+    setActiveTab(0);
+    setIsCreating(true);
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!deleteTarget) return;
+    setApiError("");
+    setIsSaving(true);
+    try {
+      await deleteEmployee(deleteTarget.id);
+      setSelectedCodes((current) =>
+        current.filter((code) => code !== deleteTarget.code),
+      );
+      setDeleteTarget(null);
+      await refreshEmployees();
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to delete employee.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteDraft = async () => {
+    if (!selectedDraftId) return;
+    setApiError("");
+    setIsSaving(true);
+    try {
+      await deleteEmployeeDraft(selectedDraftId);
+      setSelectedDraftId(null);
+      setFormValues({});
+      setIsDifferentAddress(false);
+      await refreshDrafts();
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to delete draft.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <PageMeta
+        title="Teams | Yatzar Operation"
+        description="Yatzar Operation teams"
+      />
+      <PageBreadcrumb pageTitle={t("ecommerce.title") || "Teams"} />
+      {apiError && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400"
+        >
+          {apiError}
+        </div>
+      )}
+      {!isCreating ? (
+        <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+          <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                Employee information
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Manage employee records and access in one place.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingId(null);
+                setSelectedDraftId(null);
+                setFormValues({});
+                setIsDifferentAddress(false);
+                setValidationErrors({});
+                setApiError("");
+                setActiveTab(0);
+                setIsCreating(true);
+              }}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
+            >
+              <span className="text-lg leading-none">+</span>Add employee
+            </button>
+          </div>
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="relative w-full sm:max-w-xs">
+              <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
+                ⌕
+              </span>
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                className={`${inputClass} ps-9`}
+                placeholder="Search team members"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+              <label className="flex items-center gap-2">
+                Show
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(1);
+                  }}
+                  className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                >
+                  {[5, 10, 25].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+                entries
+              </label>
+              <span>
+                {filteredTeams.length} of {teams.length} members
+              </span>
+            </div>
+          </div>
+          {isLoading ? (
+            <p className="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              Loading employees…
+            </p>
+          ) : (
+            <>
+              <div className="custom-scrollbar max-w-full overflow-x-auto">
+                <table className="w-full min-w-full text-start sm:min-w-165 lg:min-w-full">
+                  <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
+                    <tr>
+                      <th className="w-12 px-5 py-3">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={() =>
+                            setSelectedCodes(
+                              allVisibleSelected
+                                ? selectedCodes.filter(
+                                    (code) =>
+                                      !pagedTeams.some(
+                                        (team) => team.code === code,
+                                      ),
+                                  )
+                                : [
+                                    ...new Set([
+                                      ...selectedCodes,
+                                      ...pagedTeams.map((team) => team.code),
+                                    ]),
+                                  ],
+                            )
+                          }
+                          className="size-4 rounded accent-brand-500"
+                          aria-label="Select all visible team members"
+                        />
+                      </th>
+                      {[
+                        ["Employee", "name", ""],
+                        ["Employee code", "code", "hidden sm:table-cell"],
+                        ["Type", "type", "hidden md:table-cell"],
+                        ["Department", "department", "hidden md:table-cell"],
+                        ["Location", "location", "hidden lg:table-cell"],
+                        ["Status", "status", ""],
+                        ["Login email", "email", "hidden lg:table-cell"],
+                      ]
+                        .map((heading) =>
+                          typeof heading === "string" ? (
+                            <th
+                              key={heading}
+                              className={`px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400 ${heading[2]}`}
+                            >
+                              {heading}
+                            </th>
+                          ) : (
+                            <th
+                              key={heading[1]}
+                              className={`px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400 ${heading[2]}`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleSort(heading[1] as keyof Team)
+                                }
+                                className="inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-white"
+                              >
+                                {heading[0]}
+                                <span className="text-[10px]">
+                                  {sortKey === heading[1]
+                                    ? sortDirection === "asc"
+                                      ? "↑"
+                                      : "↓"
+                                    : "↕"}
+                                </span>
+                              </button>
+                            </th>
+                          ),
+                        )
+                        .filter(Boolean)
+                        .map((heading) => heading)}
+                      <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {pagedTeams.map((team) => (
+                      <tr
+                        key={team.code}
+                        className="transition hover:bg-gray-50 dark:hover:bg-white/2"
+                      >
+                        <td className="px-5 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedCodes.includes(team.code)}
+                            onChange={() =>
+                              setSelectedCodes((current) =>
+                                current.includes(team.code)
+                                  ? current.filter((code) => code !== team.code)
+                                  : [...current, team.code],
+                              )
+                            }
+                            className="size-4 rounded accent-brand-500"
+                            aria-label={`Select ${team.name}`}
+                          />
+                        </td>
+                        <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
+                          {team.name}
+                        </td>
+                        <td className="hidden px-3 py-4 text-sm text-gray-500 sm:table-cell sm:px-5 dark:text-gray-400">
+                          {team.code}
+                        </td>
+                        <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 md:table-cell dark:text-gray-300">
+                          {team.type}
+                        </td>
+                        <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 md:table-cell dark:text-gray-300">
+                          {team.department}
+                        </td>
+                        <td className="hidden px-3 py-4 text-sm text-gray-600 sm:px-5 lg:table-cell dark:text-gray-300">
+                          {team.location}
+                        </td>
+                        <td className="px-3 py-4 sm:px-5">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${team.status === "Active" ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400" : "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"}`}
+                          >
+                            {team.status}
+                          </span>
+                        </td>
+                        <td className="hidden px-3 py-4 text-sm text-gray-500 sm:px-5 lg:table-cell dark:text-gray-400">
+                          {team.email}
+                        </td>
+                        <td className="px-3 py-4 sm:px-5">
+                          <div className="flex items-center gap-1 text-sm font-medium sm:gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const employee = employees.find(
+                                  (item) => item.id === team.id,
+                                );
+                                if (!employee) return;
+                                setEditingId(employee.id);
+                                setSelectedDraftId(null);
+                                setValidationErrors({});
+                                setApiError("");
+                                setFormValues(toFormValues(employee));
+                                setIsDifferentAddress(
+                                  Boolean(employee.permanent_address_line1),
+                                );
+                                setIsCreating(true);
+                                setActiveTab(0);
+                              }}
+                              className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                              aria-label={`Edit ${team.name}`}
+                              title="Edit"
+                            >
+                              <EditIcon className="size-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(team)}
+                              className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
+                              aria-label={`Delete ${team.name}`}
+                              title="Delete"
+                            >
+                              <TrashIcon className="size-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
+                <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                  <span>{selectedCodes.length} selected</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page === 1}
+                    onClick={() =>
+                      setPage((current) => Math.max(1, current - 1))
+                    }
+                    className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                  >
+                    Previous
+                  </button>
+                  {Array.from(
+                    { length: totalPages },
+                    (_, index) => index + 1,
+                  ).map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      onClick={() => setPage(pageNumber)}
+                      className={`size-9 rounded-lg border text-sm font-medium ${page === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"}`}
+                      aria-current={page === pageNumber ? "page" : undefined}
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={page === totalPages}
+                    onClick={() =>
+                      setPage((current) => Math.min(totalPages, current + 1))
+                    }
+                    className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      ) : (
+        <section className="max-w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+          <div className="flex flex-col gap-4 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                {editingId ? "Update employee" : "Add employee"}
+              </h3>
+              {drafts.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedDraftId ?? ""}
+                    onChange={(event) => {
+                      const draft = drafts.find(
+                        (item) => item.id === event.target.value,
+                      );
+                      if (draft) handleLoadDraft(draft);
+                      else setSelectedDraftId(null);
+                    }}
+                    className="h-9 max-w-xs rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                    aria-label="Load saved employee draft"
+                  >
+                    <option value="">Load saved draft…</option>
+                    {drafts.map((draft) => (
+                      <option key={draft.id} value={draft.id}>
+                        {draft.data.employee_name || "Untitled draft"} —{" "}
+                        {new Date(draft.updated_at).toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedDraftId && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteDraft}
+                      disabled={isSaving}
+                      className="text-sm text-error-600 hover:text-error-700 disabled:opacity-50 dark:text-error-400"
+                    >
+                      Delete draft
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreating(false);
+                  setApiError("");
+                }}
+                className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none sm:px-4 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className="h-10 flex-1 rounded-lg border border-brand-200 px-3 text-sm font-medium text-brand-600 hover:bg-brand-50 sm:flex-none sm:px-4 dark:border-brand-500/30 dark:text-brand-400 dark:hover:bg-brand-500/10"
+              >
+                {isSaving ? "Saving…" : "Save as draft"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCreate()}
+                disabled={isSaving}
+                className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
+              >
+                {isSaving ? "Saving…" : "Submit"}
+              </button>
+            </div>
+          </div>
+          <div className="max-w-full overflow-x-auto border-b border-gray-200 px-4 sm:px-5 dark:border-gray-800">
+            <div className="flex min-w-max gap-6">
+              {fieldGroups.map((group, index) => {
+                const Icon = group.icon;
+                return (
+                  <button
+                    key={group.label}
+                    type="button"
+                    onClick={() => setActiveTab(index)}
+                    className={`relative flex items-center gap-2 py-4 text-sm font-medium transition ${activeTab === index ? "text-brand-500" : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"}`}
+                  >
+                    <Icon className="size-4" />
+                    {group.label}
+                    {activeTab === index && (
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-500" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-5 md:p-7">
+            {/* <div className="mb-6 flex items-start gap-3">
+              <div className="rounded-lg bg-brand-50 p-2.5 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400">
+                <UsersIcon className="size-5" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800 dark:text-white/90">
+                  {fieldGroups[activeTab].label}
+                </h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Fields marked with <span className="text-error-500">*</span>{" "}
+                  are required.
+                </p>
+              </div>
+            </div> */}
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {activeTab === 2 && (
+                <h4 className="text-sm font-semibold text-gray-800 md:col-span-2 dark:text-white/90">
+                  Current address
+                </h4>
+              )}
+              {fieldGroups[activeTab].fields.map((field) => {
+                const required =
+                  field.required &&
+                  field.name !== "employee_code" &&
+                  !(field.name === "password" && editingId !== null);
+                return (
+                  <div
+                    key={field.name}
+                    className={
+                      field.type === "textarea" ||
+                      field.type === "conditional-address"
+                        ? "md:col-span-2"
+                        : ""
+                    }
+                  >
+                    <span
+                      className={`mb-2 block text-sm font-medium ${validationErrors[field.name] ? "text-error-500" : "text-gray-700 dark:text-gray-300"}`}
+                    >
+                      {field.label}
+                      {required && (
+                        <span className="ms-1 text-error-500">*</span>
+                      )}
+                    </span>
+                    <FieldControl
+                      field={field}
+                      value={formValues[field.name]}
+                      onValueChange={(value) =>
+                        updateFormValue(field.name, value)
+                      }
+                      isDifferentAddress={isDifferentAddress}
+                      onDifferentAddressChange={(value) => {
+                        setIsDifferentAddress(value);
+                        if (!value) {
+                          [
+                            "permanent_address_line1",
+                            "permanent_address_line2",
+                            "permanent_country",
+                            "permanent_state",
+                            "permanent_district",
+                            "permanent_pincode",
+                          ].forEach((name) => updateFormValue(name, ""));
+                        }
+                      }}
+                      addressValues={formValues}
+                      onAddressValueChange={updateFormValue}
+                      hasError={Boolean(validationErrors[field.name])}
+                      optionsOverride={
+                        field.name === "country"
+                          ? countries
+                          : field.name === "state"
+                            ? formValues.country
+                              ? states
+                              : []
+                            : field.name === "district"
+                              ? formValues.state
+                                ? districts
+                                : []
+                              : field.name === "department"
+                                ? departments
+                                : field.name === "reporting_manager"
+                                  ? reportingManagers
+                                  : field.name === "role"
+                                    ? roles
+                                    : undefined
+                      }
+                      optionsOverrides={{
+                        permanent_country: countries,
+                        permanent_state: formValues.permanent_country
+                          ? permanentStates
+                          : [],
+                        permanent_district: formValues.permanent_state
+                          ? permanentDistricts
+                          : [],
+                      }}
+                    />
+                    {validationErrors[field.name] && (
+                      <span className="mt-1.5 block text-xs text-error-500">
+                        This field is required.
+                      </span>
+                    )}
+                    {field.description && (
+                      <span className="mt-1.5 block text-xs text-gray-400">
+                        {field.description}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-gray-950/40 p-4"
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-xl dark:border-gray-800 dark:bg-gray-dark"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-team-title"
+          >
+            <h3
+              id="delete-team-title"
+              className="text-lg font-semibold text-gray-800 dark:text-white/90"
+            >
+              Delete team member?
+            </h3>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              This will deactivate the employee account and remove the record
+              from the active team list.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteEmployee()}
+                disabled={isSaving}
+                className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

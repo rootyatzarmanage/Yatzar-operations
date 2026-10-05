@@ -1,0 +1,175 @@
+# Yatzar Operations Frontend
+
+This is the frontend application for the Yatzar Operations dashboard. It provides a modern operations management interface for viewing analytics, managing teams, workspaces, permissions, and contact information in a single admin portal.
+
+The app is built with React, TypeScript, Vite, and Tailwind CSS, and uses a route-based administration layout for an operations-focused user experience.
+
+## Overview
+
+The frontend currently includes:
+
+- Analytics dashboard landing page
+- Team management screen
+- Workspace management with add, edit, search, pagination, and delete actions
+- Contacts overview page
+- App permission controls
+- Shared admin shell with header, sidebar, theme handling, and responsive layout
+- 404 fallback page
+
+## Tech Stack
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS v4
+- React Router
+- react-i18next for multilingual support
+- dark mode and theme context support
+- reusable UI components and layout primitives
+
+## Project Structure
+
+```text
+Frontend/
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── common/
+│   │   ├── header/
+│   │   └── ui/
+│   ├── context/
+│   ├── hooks/
+│   ├── i18n/
+│   ├── layout/
+│   ├── locales/
+│   ├── pages/
+│   │   ├── Dashboard/
+│   │   ├── OtherPage/
+│   │   ├── Analytics.tsx
+│   │   ├── AppPermission.tsx
+│   │   ├── Contacts.tsx
+│   │   ├── Teams.tsx
+│   │   ├── Workspace.tsx
+│   │   └── Others.tsx
+│   ├── App.tsx
+│   ├── index.css
+│   └── main.tsx
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── eslint.config.js
+├── index.html
+├── AGENTS.md
+├── LICENSE.md
+└── README.md
+```
+
+## Application Routes
+
+The current frontend routes are registered in `src/App.tsx`:
+
+- `/` — Analytics dashboard
+- `/teams` — Teams page
+- `/others` — Additional operational widgets or utility pages
+- `/app-permission` — Application permission management
+- `/workspace` — Workspace records management
+- `/contacts` — Contact directory
+- `*` — Not found page
+
+## Features in Detail
+
+### Analytics
+The main dashboard area is designed for operational insight and reporting, serving as the entry point for the Yatzar admin app.
+
+### Workspace Management
+The workspace page includes:
+
+- searchable workspace list
+- add new workspace form
+- edit existing workspace details
+- status toggle between Enabled and Disabled
+- bulk selection and delete actions
+- pagination controls
+
+### Permission Management
+The app permission screen organizes permission toggles for different features or modules and is designed to support access control configuration.
+
+### Contacts and Teams
+The Teams page is connected to the backend employee API. It loads employee and role/location/dropdown data from the API, and supports employee creation, editing, listing, and soft deletion. Employee forms can be saved as drafts, restored, updated, and deleted; passwords are excluded from draft data and are required when creating a login account.
+
+The Workspace page is connected to the workspace API for listing, creating,
+editing, and soft-deleting workspace records. Workspace names must be unique
+among active records, ignoring letter case.
+
+The Teams form's document pickers are not yet connected to storage: the backend
+only accepts document references/paths and does not upload or serve file
+contents. The API also does not currently enforce authentication, so do not
+expose employee data to an untrusted network.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20 or newer
+- npm
+
+### Install dependencies
+
+```bash
+npm install
+```
+
+### Run the app in development mode
+
+Start PostgreSQL and the backend first. Follow the setup instructions in
+[`Backend/README.md`](../Backend/README.md); keep the backend running at
+`http://127.0.0.1:8000`. Vite proxies `/api` requests there during development.
+
+```bash
+npm run dev
+```
+
+The app will usually be served by Vite on the local development port, typically:
+
+```text
+http://localhost:5173
+```
+
+For a deployed frontend or a backend on another host, set
+`VITE_API_BASE_URL` to the backend origin (for example,
+`https://api.example.com`) before building. The frontend appends `/api/v1`.
+
+### Build for production
+
+```bash
+npm run build
+```
+
+### Lint the project
+
+```bash
+npm run lint
+```
+
+## Scripts
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  }
+}
+```
+
+## Notes
+
+This project is the frontend layer of the Yatzar Operations system. The Teams
+workflow uses the employee and support-data APIs described in the backend
+README; other frontend areas may still use local/demo data.
+
+## License
+
+This project includes the original TailAdmin template license file as part of the frontend setup. The app itself is intended for the Yatzar Operations project and may be adapted further as needed.
