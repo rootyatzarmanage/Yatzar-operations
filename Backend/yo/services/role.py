@@ -17,23 +17,33 @@ class RoleService:
 
     async def _save_permissions(self, role: Role, permissions: dict) -> None:
         menus = {menu.name: menu for menu in await self.repository.menus()}
-        for menu_name, values in permissions.items():
-            menu = menus.get(menu_name)
-            if not menu:
-                continue
-            existing = next((item for item in role.permissions if item.menu_id == menu.id), None)
+        unknown_menus = set(permissions) - menus.keys()
+        if unknown_menus:
+            names = ", ".join(sorted(unknown_menus))
+            raise ConflictException(f"Unknown menu permission(s): {names}.")
+
+        result = await self.session.execute(
+            select(RolePermission).where(RolePermission.role_id == role.id)
+        )
+        existing_permissions = {
+            permission.menu_id: permission for permission in result.scalars().all()
+        }
+        for menu_name, menu in menus.items():
+            values = permissions.get(menu_name)
+            existing = existing_permissions.get(menu.id)
             if not existing:
-                existing = RolePermission(role=role, menu=menu)
+                existing = RolePermission(role_id=role.id, menu_id=menu.id)
                 self.session.add(existing)
-            existing.can_create = values.create
-            existing.can_view = values.view
-            existing.can_update = values.update
-            existing.can_delete = values.delete
+            existing.deleted_at = None
+            existing.can_create = values.create if values else False
+            existing.can_view = values.view if values else False
+            existing.can_update = values.update if values else False
+            existing.can_delete = values.delete if values else False
 
     async def create(self, request: RoleCreateRequest) -> Role:
         if await self.repository.get_by_name(request.name):
             raise ConflictException(f"Role '{request.name}' already exists.")
-        role = Role(name=request.name, description=request.description)
+        role = Role(name=request.name.strip(), description=request.description)
         self.session.add(role)
         await self.session.flush()
         await self._save_permissions(role, request.permissions)
@@ -53,7 +63,7 @@ class RoleService:
         duplicate = await self.repository.get_by_name(request.name)
         if duplicate and duplicate.id != role.id:
             raise ConflictException(f"Role '{request.name}' already exists.")
-        role.name = request.name
+        role.name = request.name.strip()
         role.description = request.description
         await self._save_permissions(role, request.permissions)
         return await self.repository.update(role)

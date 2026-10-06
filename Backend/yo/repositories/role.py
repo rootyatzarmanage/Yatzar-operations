@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,7 +20,12 @@ class RoleRepository:
         return result.scalars().first()
 
     async def get_by_name(self, name: str) -> Role | None:
-        result = await self.session.execute(select(Role).where(Role.name == name, Role.deleted_at.is_(None)))
+        result = await self.session.execute(
+            select(Role).where(
+                func.lower(Role.name) == name.casefold(),
+                Role.deleted_at.is_(None),
+            )
+        )
         return result.scalars().first()
 
     async def list_all(self) -> Sequence[Role]:
