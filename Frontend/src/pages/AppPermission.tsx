@@ -76,91 +76,6 @@ const createPermissions = (enabled = false): PermissionMap =>
     ]),
   );
 
-const initialRoles: Role[] = [
-  {
-    id: 1,
-    name: "Super Admin",
-    permissions: createPermissions(true),
-  },
-  {
-    id: 2,
-    name: "Admin",
-    permissions: {
-      ...createPermissions(),
-      Teams: { create: true, view: true, update: true, delete: true },
-      Workspace: { create: true, view: true, update: true, delete: false },
-      Contacts: { create: true, view: true, update: true, delete: false },
-    },
-  },
-  {
-    id: 3,
-    name: "Manager",
-    permissions: {
-      ...createPermissions(),
-      Teams: { create: true, view: true, update: true, delete: false },
-      Workspace: { create: false, view: true, update: true, delete: false },
-      Contacts: { create: true, view: true, update: true, delete: false },
-    },
-  },
-  {
-    id: 4,
-    name: "Team Leader",
-    permissions: {
-      ...createPermissions(),
-      Teams: { create: false, view: true, update: true, delete: false },
-      Workspace: { create: false, view: true, update: false, delete: false },
-      Contacts: { create: false, view: true, update: false, delete: false },
-    },
-  },
-  {
-    id: 5,
-    name: "Accountant",
-    permissions: {
-      ...createPermissions(),
-      Workspace: { create: true, view: true, update: true, delete: false },
-      Contacts: { create: false, view: true, update: false, delete: false },
-    },
-  },
-  {
-    id: 6,
-    name: "Employee",
-    permissions: {
-      ...createPermissions(),
-      Teams: { create: false, view: true, update: false, delete: false },
-      Workspace: { create: false, view: true, update: false, delete: false },
-    },
-  },
-  {
-    id: 7,
-    name: "Viewer",
-    permissions: menuItems.reduce(
-      (permissions, { name }) => ({
-        ...permissions,
-        [name]: { create: false, view: true, update: false, delete: false },
-      }),
-      {},
-    ),
-  },
-];
-
-const employees: Employee[] = [
-  {
-    code: "EMP-2026-0001",
-    name: "Aarav Mehta",
-    email: "aarav.mehta@yatzar.com",
-  },
-  { code: "EMP-2026-0002", name: "Meera Nair", email: "meera.nair@yatzar.com" },
-  { code: "EMP-2026-0003", name: "Kabir Shah", email: "kabir.shah@yatzar.com" },
-  { code: "EMP-2026-0004", name: "Anaya Rao", email: "anaya.rao@yatzar.com" },
-];
-
-const initialEmployeeRoles: Record<string, string> = {
-  "EMP-2026-0001": "Admin",
-  "EMP-2026-0002": "Manager",
-  "EMP-2026-0003": "Employee",
-  "EMP-2026-0004": "Viewer",
-};
-
 const tableInputClass =
   "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
 
@@ -303,8 +218,8 @@ function EmployeeRoleDropdown({
 
 export default function AppPermission() {
   const { t } = useTranslation();
-  const [roles, setRoles] = useState<Role[]>(initialRoles);
-  const [employeeList, setEmployeeList] = useState<Employee[]>(employees);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [employeeList, setEmployeeList] = useState<Employee[]>([]);
   const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -320,7 +235,7 @@ export default function AppPermission() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [employeeRoles, setEmployeeRoles] =
-    useState<Record<string, string>>(initialEmployeeRoles);
+    useState<Record<string, string>>({});
   const [permissions, setPermissions] =
     useState<PermissionMap>(createPermissions());
 
@@ -478,17 +393,6 @@ export default function AppPermission() {
         </p>
       )}
       <div className="space-y-6">
-        {/* {!isEditorOpen && (
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white transition hover:bg-brand-600"
-          >
-            <span className="text-lg leading-none">+</span>
-            Create role
-          </button>
-        )} */}
-
         {isEditorOpen && (
           <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
             <div className="border-b border-gray-200 px-5 py-5 sm:px-6 dark:border-gray-800">
