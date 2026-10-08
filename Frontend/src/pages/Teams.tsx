@@ -489,6 +489,13 @@ function FieldControl({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const readProfilePhoto = (file: File | undefined) => {
+    if (!file) return;
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = () => onValueChange(String(reader.result));
+    reader.readAsDataURL(file);
+  };
   const fieldClass = hasError
     ? "border-error-500 focus:border-error-500 focus:ring-error-500/10"
     : "";
@@ -538,7 +545,7 @@ function FieldControl({
         onDrop={(event) => {
           event.preventDefault();
           setIsDragging(false);
-          setSelectedFile(event.dataTransfer.files?.[0] ?? null);
+          readProfilePhoto(event.dataTransfer.files?.[0]);
         }}
       >
         <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-gray-200/80 text-gray-700 dark:bg-white/10 dark:text-gray-200">
@@ -565,7 +572,7 @@ function FieldControl({
         <input
           ref={fileInputRef}
           type="file"
-          onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+          onChange={(event) => readProfilePhoto(event.target.files?.[0])}
           className="hidden"
         />
         {selectedFile && (
@@ -573,6 +580,7 @@ function FieldControl({
             type="button"
             onClick={() => {
               setSelectedFile(null);
+              onValueChange("");
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
             className="mt-3 shrink-0 text-sm font-medium text-error-600 hover:text-error-700 dark:text-error-400"
@@ -923,8 +931,8 @@ export default function Teams() {
   return (
     <>
       <PageMeta
-        title="Teams | Yatzar Operation"
-        description="Yatzar Operation teams"
+        title="Teams | Yatzar Operations"
+        description="Yatzar Operations teams"
       />
       <PageBreadcrumb pageTitle={t("ecommerce.title") || "Teams"} />
       {apiError && (

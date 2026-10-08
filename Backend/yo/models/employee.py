@@ -22,7 +22,7 @@ class Employee(Base, TimestampMixin, SoftDeleteMixin):
     gender: Mapped[str] = mapped_column(String(20), nullable=False)
     blood_group: Mapped[str | None] = mapped_column(String(10))
     marital_status: Mapped[str | None] = mapped_column(String(30))
-    photo: Mapped[str | None] = mapped_column(String(500))
+    photo: Mapped[str | None] = mapped_column(Text)
     mobile_number: Mapped[str] = mapped_column(String(30), nullable=False)
     alternate_phone: Mapped[str | None] = mapped_column(String(30))
     email: Mapped[str] = mapped_column(String(255), nullable=False)

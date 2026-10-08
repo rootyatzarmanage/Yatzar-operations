@@ -5,6 +5,8 @@ import { cn } from "@/utils";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dropdown } from "../ui/dropdown/Dropdown";
+import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "react-router";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,6 +14,8 @@ export default function UserDropdown() {
   const subDropdownRef = useRef<HTMLLIElement>(null);
   const { t } = useTranslation();
   const { language: locale, setLanguage } = useLanguage();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const currentLang = getLanguage(locale as Locale);
   const CurrentFlagIcon = currentLang.FlagIcon;
 
@@ -34,6 +38,11 @@ export default function UserDropdown() {
     setIsSubDropdownOpen(false);
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login", { replace: true });
+  };
+
   useEffect(() => {
     return () => {
       setIsOpen(false);
@@ -48,10 +57,10 @@ export default function UserDropdown() {
         className="dropdown-toggle flex items-center text-gray-700 dark:text-gray-400"
       >
         <span className="me-3 h-11 w-11 overflow-hidden rounded-full">
-          <img src="/images/user/owner.png" alt="User" />
+          <img src={user?.photo || "/images/user/owner.png"} alt={user?.employee_name || "User"} />
         </span>
 
-        <span className="me-1 block text-theme-sm font-medium">Musharof</span>
+        <span className="me-1 block text-theme-sm font-medium">{user?.display_name || user?.employee_name || user?.username}</span>
         <svg
           className={`stroke-gray-500 transition-transform duration-200 dark:stroke-gray-400 ${
             isOpen ? "rotate-180" : ""
@@ -79,10 +88,10 @@ export default function UserDropdown() {
       >
         <div>
           <span className="block text-theme-sm font-medium text-gray-700 no-underline dark:text-gray-400">
-            Musharof Chowdhury
+            {user?.display_name || user?.employee_name || user?.username}
           </span>
           <span className="mt-0.5 block text-theme-xs text-gray-500 no-underline dark:text-gray-400">
-            randomuser@pimjo.com
+            {user?.email}
           </span>
         </div>
 
@@ -173,7 +182,16 @@ export default function UserDropdown() {
               </div>
             )}
           </li>
-</ul>
+          <li className="mt-1 border-t border-gray-200 pt-1 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex w-full items-center rounded-lg px-3 py-2 text-start text-theme-sm font-medium text-error-600 hover:bg-error-50 dark:text-error-400 dark:hover:bg-error-500/10"
+            >
+              Sign out
+            </button>
+          </li>
+        </ul>
       </Dropdown>
     </div>
   );

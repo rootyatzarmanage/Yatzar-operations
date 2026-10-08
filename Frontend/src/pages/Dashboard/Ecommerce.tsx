@@ -8,8 +8,8 @@ export default function Ecommerce() {
   return (
     <>
       <PageMeta
-        title="Teams | Yatzar Operation"
-        description="Yatzar Operation dashboard"
+        title="Teams | Yatzar Operations"
+        description="Yatzar Operations dashboard"
       />
       <PageBreadcrumb pageTitle={t("ecommerce.title")} />
     </>

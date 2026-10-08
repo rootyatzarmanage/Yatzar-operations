@@ -66,7 +66,7 @@ export default function Others() {
   return (
     <>
       <PageMeta
-        title="Others | Yatzar Operation"
+        title="Others | Yatzar Operations"
         description="Manage team dropdown values"
       />
       <PageBreadcrumb pageTitle="Others" />

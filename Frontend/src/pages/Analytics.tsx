@@ -8,8 +8,8 @@ export default function Analytics() {
   return (
     <>
       <PageMeta
-        title="Analytics | Yatzar Operation"
-        description="Yatzar Operation analytics dashboard"
+        title="Analytics | Yatzar Operations"
+        description="Yatzar Operations analytics dashboard"
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.analytics") || "Analytics"} />
     </>

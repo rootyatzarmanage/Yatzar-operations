@@ -1,15 +1,16 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
 from yo.core.database import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
 from yo.schemas.requests.role import RoleCreateRequest, RoleUpdateRequest
 from yo.schemas.responses.role import RoleResponse
 from yo.services.role import RoleService
+from yo.api.v1.endpoints.auth import require_user
 
-router = APIRouter(prefix="/roles", tags=["Roles"])
+router = APIRouter(prefix="/roles", tags=["Roles"], dependencies=[Depends(require_user)])
 
 
 def serialize_role(role) -> RoleResponse:

@@ -11,8 +11,8 @@ export default function NotFound({ className }: NotFoundProps) {
   return (
     <>
       <PageMeta
-        title="404 Page | Yatzar Operation"
-        description="This is the 404 page for Yatzar Operation"
+        title="404 Page | Yatzar Operations"
+        description="This is the 404 page for Yatzar Operations"
       />
       <div
         className={cn(
@@ -52,7 +52,7 @@ export default function NotFound({ className }: NotFoundProps) {
             "absolute inset-s-1/2 bottom-6 -translate-x-1/2 text-center text-sm text-gray-500 rtl:translate-x-1/2 dark:text-gray-400",
           )}
         >
-          &copy; {new Date().getFullYear()} - Yatzar Operation
+          &copy; {new Date().getFullYear()} - Yatzar Operations
         </p>
       </div>
     </>

@@ -8,8 +8,8 @@ export default function Workspace() {
   return (
     <>
       <PageMeta
-        title="Workspace | Yatzar Operation"
-        description="Yatzar Operation workspace"
+        title="Workspace | Yatzar Operations"
+        description="Yatzar Operations workspace"
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.workspace")} />
     </>

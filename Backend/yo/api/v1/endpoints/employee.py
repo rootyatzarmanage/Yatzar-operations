@@ -1,15 +1,16 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from yo.core.database import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
 from yo.schemas.requests.employee import EmployeeCreateRequest, EmployeeUpdateRequest
 from yo.schemas.responses.employee import EmployeeResponse
 from yo.services.employee import EmployeeService
+from yo.api.v1.endpoints.auth import require_user
 
-router = APIRouter(prefix="/employees", tags=["Employees"])
+router = APIRouter(prefix="/employees", tags=["Employees"], dependencies=[Depends(require_user)])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=SuccessResponse[EmployeeResponse])

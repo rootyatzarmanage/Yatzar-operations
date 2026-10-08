@@ -95,16 +95,31 @@ async def seed_default_data(session: AsyncSession) -> None:
             role = Role(name=name, is_system=True)
             session.add(role)
             await session.flush()
+        else:
+            role.is_system = True
+            role.deleted_at = None
         roles[name] = role
         for menu_name, menu in menus.items():
             values = (True, True, True, True) if permissions.get("all") else permissions.get(menu_name, (False, False, False, False))
             permission = await session.scalar(select(RolePermission).where(RolePermission.role_id == role.id, RolePermission.menu_id == menu.id))
             if not permission:
                 session.add(RolePermission(role=role, menu=menu, can_create=values[0], can_view=values[1], can_update=values[2], can_delete=values[3]))
+            else:
+                permission.deleted_at = None
+                permission.can_create = values[0]
+                permission.can_view = values[1]
+                permission.can_update = values[2]
+                permission.can_delete = values[3]
 
     admin = await session.scalar(select(User).where(User.username == settings.DEFAULT_SUPER_ADMIN_USERNAME))
     if not admin:
         session.add(User(username=settings.DEFAULT_SUPER_ADMIN_USERNAME, email=settings.DEFAULT_SUPER_ADMIN_EMAIL, password_hash=hash_password(settings.DEFAULT_SUPER_ADMIN_PASSWORD), role=roles["Super Admin"], is_active=True))
+    else:
+        admin.role = roles["Super Admin"]
+        admin.is_active = True
+        admin.deleted_at = None
+        admin.email = settings.DEFAULT_SUPER_ADMIN_EMAIL
+        admin.password_hash = hash_password(settings.DEFAULT_SUPER_ADMIN_PASSWORD)
 
     sample_employees = [
         ("EMP-2026-0001", "Aarav Mehta", "aarav.mehta@yatzar.com", "Admin", "Operations", "Mumbai HQ", "Full-time", "Active"),
