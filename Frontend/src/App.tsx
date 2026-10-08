@@ -8,6 +8,17 @@ import NotFound from "./pages/OtherPage/NotFound";
 import Others from "./pages/Others";
 import Teams from "./pages/Teams";
 import Workspace from "./pages/Workspace";
+import Login from "./pages/Login";
+import { useAuth } from "./context/AuthContext";
+import { Navigate, useLocation } from "react-router";
+
+function ProtectedApp() {
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+  if (isLoading) return null;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  return <AppLayout />;
+}
 
 export default function App() {
   return (
@@ -16,7 +27,8 @@ export default function App() {
         <ScrollToTop />
         <Routes>
           {/* Dashboard Layout */}
-          <Route element={<AppLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route element={<ProtectedApp />}>
             <Route index path="/" element={<Analytics />} />
             <Route path="/teams" element={<Teams />} />
             <Route path="/others" element={<Others />} />

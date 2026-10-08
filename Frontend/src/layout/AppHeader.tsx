@@ -93,13 +93,13 @@ const AppHeader: React.FC = () => {
           <Link to="/" className="flex items-center gap-2 xl:hidden">
             <img
               src="/images/logo/yatzar-logo.png"
-              alt="Yatzar Operation"
+              alt="Yatzar Operations"
               width={36}
               height={36}
               className="h-9 w-9 shrink-0 object-contain"
             />
             <span className="text-xs font-semibold tracking-wide text-gray-900 sm:text-sm dark:text-white">
-              YATZAR OPERATION
+              YATZAR OPERATIONS
             </span>
           </Link>
 

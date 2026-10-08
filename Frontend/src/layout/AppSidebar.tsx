@@ -325,14 +325,14 @@ const AppSidebar: React.FC = () => {
         >
           <img
             src="/images/logo/yatzar-logo.png"
-            alt="Yatzar Operation"
+            alt="Yatzar Operations"
             width={40}
             height={40}
             className="h-10 w-10 shrink-0 object-contain"
           />
           {isExpanded || isHovered || isMobileOpen ? (
             <span className="text-sm leading-5 font-semibold tracking-wide text-gray-900 dark:text-white">
-              YATZAR OPERATION
+              YATZAR OPERATIONS
             </span>
           ) : null}
         </Link>

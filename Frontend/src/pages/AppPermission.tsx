@@ -383,8 +383,8 @@ export default function AppPermission() {
   return (
     <>
       <PageMeta
-        title="App Permission | Yatzar Operation"
-        description="Yatzar Operation app permissions"
+        title="App Permission | Yatzar Operations"
+        description="Yatzar Operations app permissions"
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.appPermission")} />
       {apiError && (

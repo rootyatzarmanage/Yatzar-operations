@@ -8,8 +8,8 @@ export default function Contacts() {
   return (
     <>
       <PageMeta
-        title="Contacts | Yatzar Operation"
-        description="Yatzar Operation contacts"
+        title="Contacts | Yatzar Operations"
+        description="Yatzar Operations contacts"
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.contacts")} />
     </>

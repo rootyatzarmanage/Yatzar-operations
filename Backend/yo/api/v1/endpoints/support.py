@@ -1,15 +1,16 @@
 from typing import Any, List
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from yo.core.database import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
 from yo.models.support import DropdownOption, EmployeeDraft, Location
 from yo.schemas.requests.support import DraftRequest, DropdownOptionRequest
+from yo.api.v1.endpoints.auth import require_user
 
-router = APIRouter(tags=["Support data"])
+router = APIRouter(tags=["Support data"], dependencies=[Depends(require_user)])
 
 
 @router.get("/locations/countries", response_model=SuccessResponse[List[str]])
