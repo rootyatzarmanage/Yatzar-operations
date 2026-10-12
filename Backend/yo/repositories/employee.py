@@ -14,11 +14,20 @@ class EmployeeRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def _reload(self, employee: Employee) -> Employee:
+        result = await self.session.execute(
+            select(Employee)
+            .options(joinedload(Employee.user).joinedload(User.role))
+            .where(Employee.id == employee.id)
+            .execution_options(populate_existing=True)
+        )
+        return result.scalars().one()
+
+
     async def create(self, employee: Employee) -> Employee:
         self.session.add(employee)
         await self.session.flush()
-        await self.session.refresh(employee)
-        return employee
+        return await self._reload(employee)
 
     async def get_by_id(self, employee_id: UUID) -> Employee | None:
         result = await self.session.execute(
@@ -40,8 +49,7 @@ class EmployeeRepository:
 
     async def update(self, employee: Employee) -> Employee:
         await self.session.flush()
-        await self.session.refresh(employee)
-        return employee
+        return await self._reload(employee)
 
     async def soft_delete(self, employee: Employee) -> None:
         employee.deleted_at = datetime.now(timezone.utc)
