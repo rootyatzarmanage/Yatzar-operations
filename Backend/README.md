@@ -196,7 +196,20 @@ npm run build
 
 For local development, keep `Frontend/.env` aligned with the backend URL and keep `FRONTEND_ORIGINS` aligned with the browser origin. Update the relevant README section immediately so configuration and behavior are never documented only in source code.
 
+# To Run use this 
 
+# Create virtual environment
 
+python -m venv venv
 
-venv\Scripts\activate
+# Activate virtual environment
+.\venv\Scripts\Activate.ps1
+
+# Upgrade pip
+python -m pip install --upgrade pip
+
+# Install requirements
+pip install -r requirements.txt
+
+# to run
+python run.py
