@@ -23,6 +23,7 @@ class ContactResponse(BaseModel):
     date_of_birth: date | None = None
     lead_source: str | None = None
     department: str | None = None
+    tag_id: UUID | None = None
     mailing_country: str | None = None
     mailing_state: str | None = None
     mailing_city: str | None = None

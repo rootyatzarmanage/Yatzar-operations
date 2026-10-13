@@ -18,6 +18,7 @@ class ContactCreateRequest(BaseModel):
     date_of_birth: date | None = None
     lead_source: str | None = Field(default=None, max_length=100)
     department: str | None = Field(default=None, max_length=150)
+    tag_id: UUID | None = None
     mailing_country: str | None = None
     mailing_state: str | None = None
     mailing_city: str | None = None
@@ -50,6 +51,7 @@ class ContactUpdateRequest(BaseModel):
     date_of_birth: date | None = None
     lead_source: str | None = Field(default=None, max_length=100)
     department: str | None = Field(default=None, max_length=150)
+    tag_id: UUID | None = None
     mailing_country: str | None = None
     mailing_state: str | None = None
     mailing_city: str | None = None

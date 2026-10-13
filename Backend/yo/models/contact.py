@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
+from sqlalchemy import ForeignKey
 from yo.core.database.base import Base
 
 
@@ -32,6 +32,7 @@ class Contact(Base):
     home_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     mobile: Mapped[str | None] = mapped_column(String(30), nullable=True)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tags.id"),nullable=True,index=True)
     lead_source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     department: Mapped[str | None] = mapped_column(String(150), nullable=True)
     mailing_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
