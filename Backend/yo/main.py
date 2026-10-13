@@ -12,6 +12,8 @@ from yo.core.database.base import Base
 from yo.core.exceptions import AppException
 from yo.core.schemas.responses import ErrorResponse
 from yo.seeders.admin import seed_default_data
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 
 
 @asynccontextmanager
@@ -29,6 +31,14 @@ app = FastAPI(
     version="1.0.0",
     description="YO FastAPI backend",
     lifespan=lifespan,
+)
+STORAGE_DIR = Path(__file__).resolve().parent / "storage"
+STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/storage",
+    StaticFiles(directory=STORAGE_DIR),
+    name="storage",
 )
 
 app.add_middleware(
