@@ -1,3 +1,5 @@
+import { getAuthToken } from "@/api";
+
 export type ContactFields = {
   contactOwner: string;
   secondaryEmail: string;
@@ -45,7 +47,7 @@ type ApiEnvelope<T> = {
 };
 
 export type ContactPayload = {
-  contact_owner: string | null;
+  workspace_id?: string | null;
   secondary_email: string | null;
   home_phone: string | null;
   mobile: string | null;
@@ -54,41 +56,53 @@ export type ContactPayload = {
   description: string | null;
   first_name: string;
   last_name: string | null;
-  email: string;
-  phone: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
   other_phone: string | null;
   department: string | null;
-  lead_source: string;
-  address_line1: string;
-  address_line2: string | null;
-  city: string;
-  state: string;
-  country: string;
-  pincode: string;
-  latitude: string | null;
-  longitude: string | null;
-  other_address_line1: string | null;
-  other_address_line2: string | null;
-  other_city: string | null;
-  other_state: string | null;
+  lead_source: string | null;
+  mailing_country: string | null;
+  mailing_state: string | null;
+  mailing_city: string | null;
+  mailing_zip: string | null;
+  mailing_building: string | null;
+  mailing_street: string | null;
   other_country: string | null;
-  other_pincode: string | null;
-  other_latitude: string | null;
-  other_longitude: string | null;
+  other_state: string | null;
+  other_city: string | null;
+  other_zip: string | null;
+  other_building: string | null;
+  other_street: string | null;
 };
 
-export type Contact = ContactPayload & {
+export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   id: string;
+  first_name: string | null;
+  email: string | null;
+  phone: string | null;
+  workspace_id: string | null;
+  owner_id: string | null;
+  photo: string | null;
+  stage: "contact" | "lead" | "customer";
+  created_by: string | null;
+  updated_by: string | null;
   created_at: string;
-  updated_at: string;
-  photo_url?: string | null;
+  updated_at: string | null;
+};
+
+export type ContactStage = Contact["stage"];
+export type ContactList = {
+  items: Contact[];
+  total: number;
+  page: number;
+  per_page: number;
 };
 
 const nullable = (value: string): string | null => value.trim() || null;
 
 export function toContactPayload(fields: ContactFields): ContactPayload {
   return {
-    contact_owner: nullable(fields.contactOwner),
     secondary_email: nullable(fields.secondaryEmail),
     home_phone: nullable(fields.homePhone),
     mobile: nullable(fields.mobile),
@@ -97,40 +111,50 @@ export function toContactPayload(fields: ContactFields): ContactPayload {
     description: nullable(fields.description),
     first_name: fields.firstName.trim(),
     last_name: nullable(fields.lastName),
+    company: null,
     email: fields.email.trim(),
     phone: fields.phone.trim(),
     other_phone: nullable(fields.otherPhone),
     department: nullable(fields.department),
-    lead_source: fields.leadSource.trim(),
-    address_line1: fields.addressLine1.trim(),
-    address_line2: nullable(fields.addressLine2),
-    city: fields.city.trim(),
-    state: fields.state.trim(),
-    country: fields.country.trim(),
-    pincode: fields.pincode.trim(),
-    latitude: nullable(fields.latitude),
-    longitude: nullable(fields.longitude),
-    other_address_line1: nullable(fields.otherAddressLine1),
-    other_address_line2: nullable(fields.otherAddressLine2),
-    other_city: nullable(fields.otherCity),
-    other_state: nullable(fields.otherState),
+    lead_source: nullable(fields.leadSource),
+    mailing_country: nullable(fields.country),
+    mailing_state: nullable(fields.state),
+    mailing_city: nullable(fields.city),
+    mailing_zip: nullable(fields.pincode),
+    mailing_building: nullable(fields.addressLine1),
+    mailing_street: nullable(fields.addressLine2),
     other_country: nullable(fields.otherCountry),
-    other_pincode: nullable(fields.otherPincode),
-    other_latitude: nullable(fields.otherLatitude),
-    other_longitude: nullable(fields.otherLongitude),
+    other_state: nullable(fields.otherState),
+    other_city: nullable(fields.otherCity),
+    other_zip: nullable(fields.otherPincode),
+    other_building: nullable(fields.otherAddressLine1),
+    other_street: nullable(fields.otherAddressLine2),
   };
 }
 
-const apiOrigin = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
-const apiPrefix = `${apiOrigin}/api/v1`;
+const apiPrefix = (
+  import.meta.env.VITE_API_URL ||
+  `http://${window.location.hostname}:8000/api/v1`
+).replace(/\/+$/, "");
+
+export function getContactPhotoUrl(photo: string | null): string {
+  if (!photo) return "";
+  if (/^https?:\/\//i.test(photo)) return photo;
+
+  const backendOrigin = apiPrefix.replace(/\/api\/v1\/?$/, "");
+  return `${backendOrigin}/${photo.replace(/^\/+/, "")}`;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
   const response = await fetch(`${apiPrefix}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       ...(init?.body && !(init.body instanceof FormData)
         ? { "Content-Type": "application/json" }
         : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
@@ -162,20 +186,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function listContacts(): Promise<Contact[]> {
-  const contacts: Contact[] = [];
-  const pageSize = 100;
-  let skip = 0;
-  let page: Contact[];
+  return listContactStage("contact");
+}
 
-  do {
-    page = await request<Contact[]>(
-      `/contacts?skip=${skip}&limit=${pageSize}`,
-    );
-    contacts.push(...page);
-    skip += page.length;
-  } while (page.length === pageSize);
-
-  return contacts;
+export async function listContactStage(
+  stage: ContactStage,
+  search = "",
+  page = 1,
+  perPage = 100,
+): Promise<Contact[]> {
+  const query = new URLSearchParams({
+    stage,
+    page: String(page),
+    per_page: String(perPage),
+  });
+  if (search.trim()) query.set("search", search.trim());
+  const result = await request<ContactList>(`/contacts?${query}`);
+  if (page * perPage < result.total) {
+    return [
+      ...result.items,
+      ...(await listContactStage(stage, search, page + 1, perPage)),
+    ];
+  }
+  return result.items;
 }
 
 export function createContact(payload: ContactPayload): Promise<Contact> {
@@ -187,7 +220,7 @@ export function createContact(payload: ContactPayload): Promise<Contact> {
 
 export function updateContact(
   contactId: string,
-  payload: ContactPayload,
+  payload: Partial<ContactPayload>,
 ): Promise<Contact> {
   return request<Contact>(`/contacts/${contactId}`, {
     method: "PUT",
@@ -209,8 +242,26 @@ export function uploadContactPhoto(
 ): Promise<Contact> {
   const formData = new FormData();
   formData.append("file", file);
-  return request<Contact>(`/contacts/${contactId}/photo`, {
+  return request<Contact>(`/contacts/${contactId}/image`, {
     method: "POST",
     body: formData,
+  });
+}
+
+export function moveContact(
+  contactId: string,
+  stage: Exclude<ContactStage, "contact">,
+): Promise<Contact> {
+  return request<Contact>(`/contacts/${contactId}/move-to-${stage}`, {
+    method: "POST",
+  });
+}
+
+export function bulkDeleteContacts(
+  ids: string[],
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/contacts/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
   });
 }

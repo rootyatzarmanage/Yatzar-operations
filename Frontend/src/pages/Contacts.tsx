@@ -2,6 +2,7 @@ import { listOptions } from "@/api/teams";
 import {
   createContact,
   deleteContact,
+  getContactPhotoUrl,
   listContacts,
   toContactPayload,
   uploadContactPhoto,
@@ -84,40 +85,40 @@ function contactName(contact: LocalContact): string {
 
 function fromApiContact(contact: Contact): LocalContact {
   return {
-    contactOwner: contact.contact_owner ?? "",
+    contactOwner: contact.owner_id ?? "",
     secondaryEmail: contact.secondary_email ?? "",
     homePhone: contact.home_phone ?? "",
     mobile: contact.mobile ?? "",
     dateOfBirth: contact.date_of_birth ?? "",
     emailOptOut: contact.email_opt_out,
     description: contact.description ?? "",
-    firstName: contact.first_name,
+    firstName: contact.first_name ?? "",
     lastName: contact.last_name ?? "",
-    email: contact.email,
-    phone: contact.phone,
+    email: contact.email ?? "",
+    phone: contact.phone ?? "",
     otherPhone: contact.other_phone ?? "",
     department: contact.department ?? "",
-    leadSource: contact.lead_source,
-    addressLine1: contact.address_line1,
-    addressLine2: contact.address_line2 ?? "",
-    city: contact.city,
-    state: contact.state,
-    country: contact.country,
-    pincode: contact.pincode,
-      latitude: contact.latitude ?? "",
-      longitude: contact.longitude ?? "",
-    otherAddressLine1: contact.other_address_line1 ?? "",
-    otherAddressLine2: contact.other_address_line2 ?? "",
+    leadSource: contact.lead_source ?? "",
+    addressLine1: contact.mailing_building ?? "",
+    addressLine2: contact.mailing_street ?? "",
+    city: contact.mailing_city ?? "",
+    state: contact.mailing_state ?? "",
+    country: contact.mailing_country ?? "",
+    pincode: contact.mailing_zip ?? "",
+    latitude: "",
+    longitude: "",
+    otherAddressLine1: contact.other_building ?? "",
+    otherAddressLine2: contact.other_street ?? "",
     otherCity: contact.other_city ?? "",
     otherState: contact.other_state ?? "",
     otherCountry: contact.other_country ?? "",
-    otherPincode: contact.other_pincode ?? "",
+    otherPincode: contact.other_zip ?? "",
     id: contact.id,
     createdAt: contact.created_at,
-    updatedAt: contact.updated_at,
-    otherLatitude: contact.other_latitude ?? "",
-    otherLongitude: contact.other_longitude ?? "",
-    photoUrl: contact.photo_url ?? "",
+    updatedAt: contact.updated_at ?? contact.created_at,
+    otherLatitude: "",
+    otherLongitude: "",
+    photoUrl: getContactPhotoUrl(contact.photo),
   };
 }
 
@@ -355,17 +356,6 @@ export default function Contacts() {
       ["firstName", "First name"],
       ["email", "Email"],
       ["phone", "Phone"],
-      ["leadSource", "Lead source"],
-      ["addressLine1", "Address Line 1"],
-      ["city", "City"],
-      ["state", "State"],
-      ["country", "Country"],
-      ["pincode", "Pincode"],
-      ["otherAddressLine1", "Address Line 1"],
-      ["otherCity", "City"],
-      ["otherState", "State"],
-      ["otherCountry", "Country"],
-      ["otherPincode", "Pincode"],
     ];
     for (const [field, label] of requiredFields) {
       if (
@@ -475,8 +465,14 @@ export default function Contacts() {
       const saved = await saveContact();
       if (!saved) return;
       try {
-        if (to === "leads") addContactToLeads(saved.id, saved);
-        else addContactToCustomers(saved.id, saved);
+        if (to === "leads") await addContactToLeads(saved.id);
+        else await addContactToCustomers(saved.id);
+        setContacts((current) =>
+          current.filter((contact) => contact.id !== saved.id),
+        );
+        setSelectedIds((current) =>
+          current.filter((contactId) => contactId !== saved.id),
+        );
       } catch (error) {
         setFormError(
           error instanceof Error
@@ -504,9 +500,8 @@ export default function Contacts() {
     }
     setIsSaving(true);
     try {
-      if (moveRequest.to === "leads") addContactToLeads(contact.id, contact);
-      else addContactToCustomers(contact.id, contact);
-      await deleteContact(contact.id);
+      if (moveRequest.to === "leads") await addContactToLeads(contact.id);
+      else await addContactToCustomers(contact.id);
       setContacts((current) => current.filter((item) => item.id !== contact.id));
       setSelectedIds((current) => current.filter((id) => id !== contact.id));
       setPageError("");
@@ -812,18 +807,6 @@ export default function Contacts() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openViewForm(contact)}
-                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10"
-                          aria-label={`View ${contactName(contact)}`}
-                          title="View"
-                        >
-                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
-                            <circle cx="12" cy="12" r="2.5" />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => {
                             clearMessages();
                             setMoveRequest({ id: contact.id, to: "customers" });
@@ -836,6 +819,18 @@ export default function Contacts() {
                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                             <circle cx="9" cy="7" r="4" />
                             <path d="m16 11 2 2 4-4" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openViewForm(contact)}
+                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10"
+                          aria-label={`View ${contactName(contact)}`}
+                          title="View"
+                        >
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                            <circle cx="12" cy="12" r="2.5" />
                           </svg>
                         </button>
                         <button

@@ -32,7 +32,7 @@ app = FastAPI(
     description="YO FastAPI backend",
     lifespan=lifespan,
 )
-STORAGE_DIR = Path(__file__).resolve().parent / "storage"
+STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(

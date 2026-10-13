@@ -1,86 +1,89 @@
-import type { ContactFields } from "@/api/contacts";
 import {
-  createLocalStore,
-  type RecordValues,
-  type StoredRecord,
-} from "@/api/localStore";
+  createContact,
+  deleteContact,
+  listContactStage,
+  moveContact,
+  updateContact,
+  type Contact,
+  type ContactPayload,
+} from "@/api/contacts";
+import type { RecordValues, StoredRecord } from "@/api/localStore";
 
 export type CustomerRecord = StoredRecord;
 
-const store = createLocalStore("yatzar-operations.customers.v1", "customers");
+const text = (values: RecordValues, key: string) => String(values[key] ?? "").trim();
+const nullable = (values: RecordValues, key: string) => text(values, key) || null;
 
-export const customerDefaults: RecordValues = {
-  customerId: "",
-  firstName: "",
-  lastName: "",
-  email: "",
-  phone: "",
-  otherPhone: "",
-  department: "",
-  leadSource: "",
-  addressLine1: "",
-  addressLine2: "",
-  city: "",
-  state: "",
-  country: "",
-  pincode: "",
-  otherAddressLine1: "",
-  otherAddressLine2: "",
-  otherCity: "",
-  otherState: "",
-  otherCountry: "",
-  otherPincode: "",
-  sourceContactId: "",
-};
-
-function nextCustomerId(): RecordValues {
-  const highest = store.list().reduce((max, customer) => {
-    const match = /^CUS-(\d+)$/.exec(String(customer.customerId));
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return { customerId: `CUS-${String(highest + 1).padStart(4, "0")}` };
-}
-
-export const listCustomers = () => store.list();
-export const createCustomer = (values: RecordValues) =>
-  store.create({ ...values, ...nextCustomerId() });
-export const updateCustomer = (id: string, values: RecordValues) =>
-  store.update(id, values);
-export const deleteCustomer = (id: string) => store.remove(id);
-
-export function contactToCustomerValues(contact: ContactFields): RecordValues {
+function toPayload(values: RecordValues): ContactPayload {
   return {
-    ...customerDefaults,
-    firstName: contact.firstName,
-    lastName: contact.lastName,
-    email: contact.email,
-    phone: contact.phone,
-    otherPhone: contact.otherPhone,
-    department: contact.department,
-    leadSource: contact.leadSource,
-    addressLine1: contact.addressLine1,
-    addressLine2: contact.addressLine2,
-    city: contact.city,
-    state: contact.state,
-    country: contact.country,
-    pincode: contact.pincode,
-    otherAddressLine1: contact.otherAddressLine1,
-    otherAddressLine2: contact.otherAddressLine2,
-    otherCity: contact.otherCity,
-    otherState: contact.otherState,
-    otherCountry: contact.otherCountry,
-    otherPincode: contact.otherPincode,
+    first_name: text(values, "firstName"),
+    last_name: nullable(values, "lastName"),
+    email: nullable(values, "email"),
+    phone: nullable(values, "phone"),
+    other_phone: nullable(values, "otherPhone"),
+    department: nullable(values, "department"),
+    lead_source: nullable(values, "leadSource"),
+    mailing_building: nullable(values, "addressLine1"),
+    mailing_street: nullable(values, "addressLine2"),
+    mailing_city: nullable(values, "city"),
+    mailing_state: nullable(values, "state"),
+    mailing_country: nullable(values, "country"),
+    mailing_zip: nullable(values, "pincode"),
+    other_building: nullable(values, "otherAddressLine1"),
+    other_street: nullable(values, "otherAddressLine2"),
+    other_city: nullable(values, "otherCity"),
+    other_state: nullable(values, "otherState"),
+    other_country: nullable(values, "otherCountry"),
+    other_zip: nullable(values, "otherPincode"),
+    secondary_email: null,
+    home_phone: null,
+    mobile: null,
+    date_of_birth: null,
+    description: null,
+    email_opt_out: false,
   };
 }
 
-/** Adds the contact to Customers (or refreshes the customer already made from it). */
-export function addContactToCustomers(
-  contactId: string,
-  contact: ContactFields,
-): CustomerRecord {
-  return store.upsertBySource(
-    contactId,
-    contactToCustomerValues(contact),
-    nextCustomerId,
-  );
+function fromContact(contact: Contact): CustomerRecord {
+  return {
+    id: contact.id,
+    createdAt: contact.created_at,
+    updatedAt: contact.updated_at ?? contact.created_at,
+    customerId: contact.id,
+    firstName: contact.first_name ?? "",
+    lastName: contact.last_name ?? "",
+    email: contact.email ?? "",
+    phone: contact.phone ?? "",
+    otherPhone: contact.other_phone ?? "",
+    department: contact.department ?? "",
+    leadSource: contact.lead_source ?? "",
+    addressLine1: contact.mailing_building ?? "",
+    addressLine2: contact.mailing_street ?? "",
+    city: contact.mailing_city ?? "",
+    state: contact.mailing_state ?? "",
+    country: contact.mailing_country ?? "",
+    pincode: contact.mailing_zip ?? "",
+    otherAddressLine1: contact.other_building ?? "",
+    otherAddressLine2: contact.other_street ?? "",
+    otherCity: contact.other_city ?? "",
+    otherState: contact.other_state ?? "",
+    otherCountry: contact.other_country ?? "",
+    otherPincode: contact.other_zip ?? "",
+  };
 }
+
+export const listCustomers = async () =>
+  (await listContactStage("customer")).map(fromContact);
+
+export const createCustomer = async (values: RecordValues) =>
+  fromContact(await moveContact((await createContact(toPayload(values))).id, "customer"));
+
+export const updateCustomer = async (id: string, values: RecordValues) =>
+  fromContact(await updateContact(id, toPayload(values)));
+
+export const deleteCustomer = async (id: string) => {
+  await deleteContact(id);
+};
+
+export const addContactToCustomers = (contactId: string) =>
+  moveContact(contactId, "customer");

@@ -1,7 +1,7 @@
 import type { RecordValues, StoredRecord } from "@/api/localStore";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 export type FieldDef = {
   key: string;
@@ -23,10 +23,10 @@ export type FormSection = {
 export type Column<T> = { header: string; render: (record: T) => ReactNode };
 
 export type RecordStore<T extends StoredRecord> = {
-  list: () => T[];
-  create: (values: RecordValues) => T;
-  update: (id: string, values: RecordValues) => T;
-  remove: (id: string) => void;
+  list: () => T[] | Promise<T[]>;
+  create: (values: RecordValues) => T | Promise<T>;
+  update: (id: string, values: RecordValues) => T | Promise<T>;
+  remove: (id: string) => void | Promise<void>;
 };
 
 type Props<T extends StoredRecord> = {
@@ -95,21 +95,9 @@ export default function RecordPage<T extends StoredRecord>({
     [allFields],
   );
 
-  const [initial] = useState(() => {
-    try {
-      return { records: store.list(), error: "" };
-    } catch (error) {
-      return {
-        records: [] as T[],
-        error:
-          error instanceof Error
-            ? error.message
-            : `Unable to load local ${plural}.`,
-      };
-    }
-  });
-  const [records, setRecords] = useState<T[]>(initial.records);
-  const [pageError, setPageError] = useState(initial.error);
+  const [records, setRecords] = useState<T[]>([]);
+  const [pageError, setPageError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -122,6 +110,23 @@ export default function RecordPage<T extends StoredRecord>({
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [formError, setFormError] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve(store.list())
+      .then((items) => {
+        if (active) setRecords(items);
+      })
+      .catch((error: unknown) => {
+        if (active) setPageError(error instanceof Error ? error.message : `Unable to load ${plural}.`);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [plural, store]);
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -206,7 +211,7 @@ export default function RecordPage<T extends StoredRecord>({
     return found;
   };
 
-  const handleSave = (event: FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const found = validate();
     setErrors(found);
@@ -221,7 +226,7 @@ export default function RecordPage<T extends StoredRecord>({
     );
     try {
       if (editingId) {
-        const updated = store.update(editingId, cleaned);
+        const updated = await store.update(editingId, cleaned);
         setRecords((current) =>
           current.map((record) =>
             record.id === updated.id ? (updated as T) : record,
@@ -229,7 +234,7 @@ export default function RecordPage<T extends StoredRecord>({
         );
         setNotice(`${singular} updated in this browser.`);
       } else {
-        const created = store.create(cleaned);
+        const created = await store.create(cleaned);
         setRecords((current) => [created, ...current]);
         setPage(1);
         setNotice(`${singular} saved in this browser.`);
@@ -242,10 +247,10 @@ export default function RecordPage<T extends StoredRecord>({
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteId) return;
     try {
-      store.remove(deleteId);
+      await store.remove(deleteId);
       setRecords((current) => current.filter((record) => record.id !== deleteId));
       setSelectedIds((current) => current.filter((id) => id !== deleteId));
       setNotice(`${singular} deleted from this browser.`);
