@@ -63,6 +63,16 @@ const navItems: NavItem[] = [
   },
   {
     icon: <GridIcon fontSize={24} />,
+    name: "Settings",
+    path: "/settings",
+  },
+  {
+    icon: <GridIcon fontSize={24} />,
+    name: "Profile",
+    path: "/profile",
+  },
+  {
+    icon: <GridIcon fontSize={24} />,
     name: "Others",
     path: "/others",
   },

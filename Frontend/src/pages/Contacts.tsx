@@ -390,6 +390,7 @@ export default function Contacts() {
       type?: string;
       inputMode?: "text" | "email" | "tel" | "decimal";
       fullWidth?: boolean;
+      placeholder?: string;
     } = {},
   ) => (
     <div className={options.fullWidth ? "md:col-span-2" : undefined}>
@@ -404,6 +405,7 @@ export default function Contacts() {
         id={`contact-${field}`}
         type={options.type ?? "text"}
         inputMode={options.inputMode}
+        placeholder={options.placeholder}
         value={formValues[field]}
         onChange={(event) => updateField(field, event.target.value)}
         aria-invalid={Boolean(formErrors[field])}
@@ -435,27 +437,37 @@ export default function Contacts() {
         {renderInput(field("AddressLine1"), "Address Line 1", {
           required: true,
           fullWidth: true,
+          placeholder: "Enter address line 1",
         })}
         {renderInput(field("AddressLine2"), "Address Line 2", {
           fullWidth: true,
+          placeholder: "Enter address line 2",
         })}
-        {renderInput(field("City"), "City", { required: true })}
+        {renderInput(field("City"), "City", {
+          required: true,
+          placeholder: "Enter city",
+        })}
         {renderInput(field("State"), "State", {
           required: true,
+          placeholder: "Enter state",
         })}
         {renderInput(field("Country"), "Country", {
           required: true,
+          placeholder: "Enter country",
         })}
         {renderInput(field("Pincode"), "Pincode", {
           required: true,
+          placeholder: "Enter pincode",
         })}
         {renderInput(field("Latitude"), "Latitude", {
           required: true,
           inputMode: "decimal",
+          placeholder: "e.g. 18.5204",
         })}
         {renderInput(field("Longitude"), "Longitude", {
           required: true,
           inputMode: "decimal",
+          placeholder: "e.g. 73.8567",
         })}
       </div>
     );
@@ -750,23 +762,31 @@ export default function Contacts() {
                   <div className="grid gap-5 md:grid-cols-2">
                     {renderInput("firstName", "First Name", {
                       required: true,
+                      placeholder: "Enter first name",
                     })}
-                    {renderInput("lastName", "Last Name")}
+                    {renderInput("lastName", "Last Name", {
+                      placeholder: "Enter last name",
+                    })}
                     {renderInput("email", "Email", {
                       required: true,
                       type: "email",
                       inputMode: "email",
+                      placeholder: "name@example.com",
                     })}
                     {renderInput("phone", "Phone", {
                       required: true,
                       type: "tel",
                       inputMode: "tel",
+                      placeholder: "Enter phone number",
                     })}
                     {renderInput("otherPhone", "Other Phone", {
                       type: "tel",
                       inputMode: "tel",
+                      placeholder: "Enter alternate phone number",
                     })}
-                    {renderInput("department", "Department")}
+                    {renderInput("department", "Department", {
+                      placeholder: "Enter department",
+                    })}
                     <div>
                       <label
                         htmlFor="contact-leadSource"
