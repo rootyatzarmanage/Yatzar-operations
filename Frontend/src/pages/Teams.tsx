@@ -3,16 +3,14 @@ import PageMeta from "@/components/common/PageMeta";
 import {
   createEmployee,
   deleteEmployee,
-  listCountries,
-  listDistricts,
   listEmployees,
-  listOptions,
-  listRoles,
-  listStates,
-  saveEmployeeDraft,
   updateEmployee,
   type EmployeeRecord,
-} from "@/api";
+} from "@/api/employees";
+import { listRoles } from "@/api/roles";
+import { listOptions } from "@/api/options";
+import { listCountries, listDistricts, listStates } from "@/api/locations";
+import { saveEmployeeDraft } from "@/api/employeeDrafts";
 import {
   ChevronDownIcon,
   ContactsIcon,

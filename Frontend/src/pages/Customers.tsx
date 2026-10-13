@@ -1,4 +1,5 @@
-import { listOptions } from "@/api/teams";
+import { listOptions } from "@/api/options";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   createCustomer,
   deleteCustomer,
@@ -14,7 +15,6 @@ import RecordPage, {
 import { useEffect, useMemo, useState } from "react";
 
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
-const store = { list: listCustomers, create: createCustomer, update: updateCustomer, remove: deleteCustomer };
 const text = (value: string | boolean | undefined) => String(value ?? "");
 const customerName = (c: CustomerRecord) => `${text(c.firstName)} ${text(c.lastName)}`.trim();
 
@@ -40,7 +40,26 @@ const addressFields = (prefix: "" | "other"): FieldDef[] => {
 };
 
 export default function Customers() {
+  const { currentWorkspace } = useWorkspace();
   const [sources, setSources] = useState<string[]>(fallbackSources);
+
+  const store = useMemo(
+    () => ({
+      list: async () => {
+        if (!currentWorkspace) return [];
+
+        const customers = await listCustomers();
+
+        return customers.filter(
+          (customer) => customer.workspaceId === currentWorkspace.id,
+        );
+      },
+      create: createCustomer,
+      update: updateCustomer,
+      remove: deleteCustomer,
+    }),
+    [currentWorkspace],
+  )
 
   useEffect(() => {
     let active = true;
@@ -89,6 +108,12 @@ export default function Customers() {
       searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource)]}
       recordName={customerName}
       store={store}
+      viewBadge={() => currentWorkspace?.name ?? ""}
+      filters={[{ label: "Lead source", get: (r) => text(r.leadSource) }]}
+      sorts={[
+        { label: "Name", get: customerName },
+        { label: "Customer ID", get: (r) => text(r.customerId) },
+      ]}
     />
   );
 }

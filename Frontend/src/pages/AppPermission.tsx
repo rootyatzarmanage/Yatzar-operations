@@ -1,16 +1,18 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
-  deleteRole,
   listEmployees,
-  listRoles,
   updateEmployee,
-  createRole,
-  updateRole,
   type EmployeeRecord,
+} from "@/api/employees";
+import {
+  createRole,
+  deleteRole,
+  listRoles,
+  updateRole,
   type PermissionValues,
   type RoleRecord,
-} from "@/api";
+} from "@/api/roles";
 import {
   ContactsIcon,
   ChevronDownIcon,

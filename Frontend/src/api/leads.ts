@@ -7,7 +7,7 @@ import {
   type Contact,
   type ContactPayload,
 } from "@/api/contacts";
-import type { RecordValues, StoredRecord } from "@/api/localStore";
+import type { RecordValues, StoredRecord } from "@/storage/localStore";
 
 export type LeadRecord = StoredRecord;
 
@@ -48,6 +48,7 @@ function toPayload(values: RecordValues): ContactPayload {
 function fromContact(contact: Contact): LeadRecord {
   return {
     id: contact.id,
+    workspaceId: contact.workspace_id ?? "",
     createdAt: contact.created_at,
     updatedAt: contact.updated_at ?? contact.created_at,
     leadOwner: contact.owner_id ?? "",
@@ -87,3 +88,6 @@ export const deleteLead = async (id: string) => {
 
 export const addContactToLeads = (contactId: string) =>
   moveContact(contactId, "lead");
+
+export const addLeadToCustomers = (leadId: string) =>
+  moveContact(leadId, "customer");

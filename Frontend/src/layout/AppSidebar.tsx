@@ -429,7 +429,7 @@ const AppSidebar: React.FC = () => {
                   {(isExpanded || isHovered || isMobileOpen) && (
                     <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold tracking-wide text-brand-500 uppercase dark:bg-white/5 dark:text-brand-400">
                       <WorkspaceIcon className="size-5 shrink-0" />
-                      <span className="truncate">{currentWorkspace}</span>
+                      <span className="truncate">{currentWorkspace.name}</span>
                     </div>
                   )}
                 </div>

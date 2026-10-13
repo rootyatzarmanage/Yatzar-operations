@@ -6,7 +6,7 @@ import {
   listOptions,
   updateOption,
   type DropdownOption,
-} from "@/api";
+} from "@/api/options";
 import { EditIcon, TrashIcon } from "@/icons";
 import { useEffect, useState } from "react";
 

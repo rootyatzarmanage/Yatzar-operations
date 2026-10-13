@@ -1,4 +1,4 @@
-import { listOptions } from "@/api/teams";
+import { listOptions } from "@/api/options";
 import {
   createContact,
   deleteContact,
@@ -12,9 +12,11 @@ import {
   type LocalContact,
 } from "@/api/contacts";
 import { addContactToCustomers } from "@/api/customers";
+import { listWorkspaces, type Workspace } from "@/api/workspaces"
 import { addContactToLeads } from "@/api/leads";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import RecordView from "@/components/records/RecordView";
 import {
   useEffect,
   useMemo,
@@ -26,6 +28,7 @@ import { useTranslation } from "react-i18next";
 
 const emptyForm: ContactFields = {
   contactOwner: "",
+  workspace: "",
   secondaryEmail: "",
   homePhone: "",
   mobile: "",
@@ -86,6 +89,7 @@ function contactName(contact: LocalContact): string {
 function fromApiContact(contact: Contact): LocalContact {
   return {
     contactOwner: contact.owner_id ?? "",
+    workspace: contact.workspace_id ?? "",
     secondaryEmail: contact.secondary_email ?? "",
     homePhone: contact.home_phone ?? "",
     mobile: contact.mobile ?? "",
@@ -165,6 +169,11 @@ export default function Contacts() {
   const [isSaving, setIsSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const workspaceNames = useMemo(
+  () => new Map(workspaces.map((workspace) => [workspace.id, workspace.name])),
+  [workspaces],
+);
 
   useEffect(() => {
     let active = true;
@@ -214,6 +223,26 @@ export default function Contacts() {
     };
   }, []);
 
+  useEffect(() => {
+  let active = true;
+
+  void listWorkspaces()
+    .then((workspaces) => {
+      if (active) {
+        setWorkspaces(workspaces);
+      }
+    })
+    .catch((error: unknown) => {
+      if (active) {
+        console.error(error);
+      }
+    });
+
+  return () => {
+    active = false;
+  };
+}, []);
+
   const filteredContacts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return contacts;
@@ -223,7 +252,7 @@ export default function Contacts() {
         contact.email,
         contact.phone,
         contact.otherPhone,
-        contact.department,
+        contact.workspace,
         contact.leadSource,
       ].some((value) => value.toLowerCase().includes(query)),
     );
@@ -275,6 +304,7 @@ export default function Contacts() {
     setViewing(false);
     setFormValues({
       contactOwner: contact.contactOwner,
+      workspace: contact.workspace,
       secondaryEmail: contact.secondaryEmail,
       homePhone: contact.homePhone,
       mobile: contact.mobile,
@@ -750,7 +780,7 @@ export default function Contacts() {
                   <th className={tableHeaderClass}>Contact Name</th>
                   <th className={tableHeaderClass}>Email</th>
                   <th className={tableHeaderClass}>Phone</th>
-                  <th className={tableHeaderClass}>Department</th>
+                  <th className={tableHeaderClass}>Workspaces</th>
                   <th className={tableHeaderClass}>Lead Source</th>
                   <th className="px-3 py-3 text-center text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
                     Actions
@@ -782,7 +812,7 @@ export default function Contacts() {
                       {contact.phone}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
-                      {contact.department || "—"}
+                      {workspaceNames.get(contact.workspace) ?? "—"}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
                       {contact.leadSource}
@@ -937,7 +967,64 @@ export default function Contacts() {
         </section>
       )}
 
-      {showForm && (
+      {showForm && viewing && (
+        <RecordView
+          singular="Contact"
+          plural="contacts"
+          name={`${formValues.firstName} ${formValues.lastName}`.trim()}
+          subtitle={`${formValues.email || "—"}  |  ${formValues.phone || "—"}`}
+          badge={workspaceNames.get(formValues.workspace) ?? ""}
+          imageUrl={photoPreview || undefined}
+          onBack={closeForm}
+          onEdit={() => setViewing(false)}
+          actions={
+            editingId ? (
+              <>
+                <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "leads" })} className="inline-flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Move to lead</button>
+                <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "customers" })} className="inline-flex h-10 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">Move to customer</button>
+              </>
+            ) : null
+          }
+          blocks={[
+            { title: "Profile", subtitle: "Your basic contact information.", items: [
+              { label: "Contact owner", value: formValues.contactOwner },
+              { label: "Workspace", value: workspaceNames.get(formValues.workspace) ?? "" },
+              { label: "Lead source", value: formValues.leadSource },
+              { label: "Date of birth", value: formValues.dateOfBirth },
+              { label: "First name", value: formValues.firstName },
+              { label: "Last name", value: formValues.lastName },
+              { label: "Email", value: formValues.email },
+              { label: "Secondary email", value: formValues.secondaryEmail },
+              { label: "Phone", value: formValues.phone },
+              { label: "Other phone", value: formValues.otherPhone },
+              { label: "Home phone", value: formValues.homePhone },
+              { label: "Mobile", value: formValues.mobile },
+              { label: "Email opt out", value: formValues.emailOptOut ? "Yes" : "No" },
+            ] },
+            { title: "Mailing address", items: [
+              { label: "Country", value: formValues.country },
+              { label: "State", value: formValues.state },
+              { label: "City", value: formValues.city },
+              { label: "Pincode", value: formValues.pincode },
+              { label: "Flat / House no. / Building", value: formValues.addressLine1 },
+              { label: "Street address", value: formValues.addressLine2 },
+            ] },
+            { title: "Other address", items: [
+              { label: "Country", value: formValues.otherCountry },
+              { label: "State", value: formValues.otherState },
+              { label: "City", value: formValues.otherCity },
+              { label: "Pincode", value: formValues.otherPincode },
+              { label: "Flat / House no. / Building", value: formValues.otherAddressLine1 },
+              { label: "Street address", value: formValues.otherAddressLine2 },
+            ] },
+            { title: "Description", subtitle: "Notes about this contact.", items: [
+              { label: "Description", value: formValues.description },
+            ] },
+          ]}
+        />
+      )}
+
+      {showForm && !viewing && (
         <div className="mx-auto w-full max-w-6xl">
           <div
             aria-labelledby="contact-form-title"
@@ -1015,6 +1102,28 @@ export default function Contacts() {
                   <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Your basic contact information.</p>
                   <div className="grid gap-4 md:grid-cols-2">
                     {renderInput("contactOwner", "Contact owner", { placeholder: "Select contact owner" })}
+                    <div>
+                      <label
+                        htmlFor="contact-workspace"
+                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        Workspace
+                      </label>
+                      <select
+                        id="contact-workspace"
+                        value={formValues.workspace}
+                        onChange={(event) => updateField("workspace", event.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="">Select Workspace</option>
+
+                        {workspaces.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div>
                       <label htmlFor="contact-leadSource" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Lead source <span className="text-red-500">*</span>

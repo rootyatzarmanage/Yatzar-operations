@@ -2,6 +2,7 @@ export type StoredRecord = {
   id: string;
   createdAt: string;
   updatedAt: string;
+  workspaceId?: string;
 } & { [field: string]: string | boolean };
 
 export type RecordValues = Record<string, string | boolean>;

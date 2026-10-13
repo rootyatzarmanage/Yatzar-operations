@@ -8,10 +8,13 @@ import {
 } from "react";
 
 const storageKey = "yatzar-operations.current-workspace.v1";
-
+type CurrentWorkspace = {
+  id: string;
+  name: string;
+};
 type WorkspaceContextType = {
-  currentWorkspace: string | null;
-  enterWorkspace: (name: string) => void;
+  currentWorkspace: CurrentWorkspace | null;
+  enterWorkspace: (workspace: CurrentWorkspace) => void;
   leaveWorkspace: () => void;
 };
 
@@ -28,20 +31,39 @@ export const useWorkspace = () => {
 };
 
 export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
-  const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(
-    () => {
+  const [currentWorkspace, setCurrentWorkspace] =
+    useState<CurrentWorkspace | null>(() => {
       try {
-        return window.localStorage.getItem(storageKey);
+        const stored = window.localStorage.getItem(storageKey);
+        if (!stored) return null;
+
+        const parsed: unknown = JSON.parse(stored);
+
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "id" in parsed &&
+          "name" in parsed &&
+          typeof parsed.id === "string" &&
+          typeof parsed.name === "string"
+        ) {
+          return {
+            id: parsed.id,
+            name: parsed.name,
+          };
+        }
+
+        return null;
       } catch {
         return null;
       }
-    },
-  );
+    });
 
-  const enterWorkspace = useCallback((name: string) => {
-    setCurrentWorkspace(name);
+  const enterWorkspace = useCallback((workspace: CurrentWorkspace) => {
+    setCurrentWorkspace(workspace);
+
     try {
-      window.localStorage.setItem(storageKey, name);
+      window.localStorage.setItem(storageKey, JSON.stringify(workspace));
     } catch {
       // Storage unavailable: the workspace still opens for this session.
     }
@@ -49,6 +71,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
 
   const leaveWorkspace = useCallback(() => {
     setCurrentWorkspace(null);
+
     try {
       window.localStorage.removeItem(storageKey);
     } catch {

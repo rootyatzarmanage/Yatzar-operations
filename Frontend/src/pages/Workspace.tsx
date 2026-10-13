@@ -355,7 +355,10 @@ export default function Workspace() {
                         <button
                           type="button"
                           onClick={() => {
-                            enterWorkspace(workspace.name);
+                            enterWorkspace({
+                              id: workspace.id,
+                              name: workspace.name,
+                            });
                             navigate("/leads");
                           }}
                           className="font-semibold text-brand-500 hover:text-brand-600 hover:underline dark:text-brand-400"

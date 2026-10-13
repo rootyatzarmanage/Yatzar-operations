@@ -1,7 +1,8 @@
-import { getAuthToken } from "@/api";
+import { API_BASE, request } from "@/api/client";
 
 export type ContactFields = {
   contactOwner: string;
+  workspace: string;
   secondaryEmail: string;
   homePhone: string;
   mobile: string;
@@ -38,12 +39,6 @@ export type LocalContact = ContactFields & {
   createdAt: string;
   updatedAt: string;
   photoUrl: string;
-};
-
-type ApiEnvelope<T> = {
-  success: boolean;
-  message: string;
-  data: T;
 };
 
 export type ContactPayload = {
@@ -129,60 +124,16 @@ export function toContactPayload(fields: ContactFields): ContactPayload {
     other_zip: nullable(fields.otherPincode),
     other_building: nullable(fields.otherAddressLine1),
     other_street: nullable(fields.otherAddressLine2),
+    workspace_id: fields.workspace.trim() || null,
   };
 }
-
-const apiPrefix = (
-  import.meta.env.VITE_API_URL ||
-  `http://${window.location.hostname}:8000/api/v1`
-).replace(/\/+$/, "");
 
 export function getContactPhotoUrl(photo: string | null): string {
   if (!photo) return "";
   if (/^https?:\/\//i.test(photo)) return photo;
 
-  const backendOrigin = apiPrefix.replace(/\/api\/v1\/?$/, "");
+  const backendOrigin = API_BASE.replace(/\/api\/v1\/?$/, "");
   return `${backendOrigin}/${photo.replace(/^\/+/, "")}`;
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getAuthToken();
-  const response = await fetch(`${apiPrefix}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      ...(init?.body && !(init.body instanceof FormData)
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-  });
-  const body = (await response.json()) as
-    | ApiEnvelope<T>
-    | { detail?: string | { msg: string }[]; message?: string };
-
-  if (!response.ok) {
-    const detail = "detail" in body ? body.detail : undefined;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((item) => item.msg).join("; ")
-          : "message" in body && body.message
-            ? body.message
-            : `Request failed (${response.status})`;
-    throw new Error(message);
-  }
-
-  if (!("success" in body) || !body.success) {
-    throw new Error(
-      "message" in body && body.message
-        ? body.message
-        : "The server returned an invalid response.",
-    );
-  }
-  return body.data;
 }
 
 export async function listContacts(): Promise<Contact[]> {

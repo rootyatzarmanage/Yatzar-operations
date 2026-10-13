@@ -7,7 +7,7 @@ import {
   type Contact,
   type ContactPayload,
 } from "@/api/contacts";
-import type { RecordValues, StoredRecord } from "@/api/localStore";
+import type { RecordValues, StoredRecord } from "@/storage/localStore";
 
 export type CustomerRecord = StoredRecord;
 
@@ -50,6 +50,7 @@ function fromContact(contact: Contact): CustomerRecord {
     createdAt: contact.created_at,
     updatedAt: contact.updated_at ?? contact.created_at,
     customerId: contact.id,
+    workspaceId: contact.workspace_id ?? "",
     firstName: contact.first_name ?? "",
     lastName: contact.last_name ?? "",
     email: contact.email ?? "",

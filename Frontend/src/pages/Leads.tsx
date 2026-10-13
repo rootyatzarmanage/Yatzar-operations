@@ -1,5 +1,7 @@
-import { listOptions } from "@/api/teams";
+import { listOptions } from "@/api/options";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import {
+  addLeadToCustomers,
   createLead,
   deleteLead,
   listLeads,
@@ -14,7 +16,6 @@ import RecordPage, {
 import { useEffect, useMemo, useState } from "react";
 
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
-const store = { list: listLeads, create: createLead, update: updateLead, remove: deleteLead };
 const text = (value: string | boolean | undefined) => String(value ?? "");
 const leadName = (lead: LeadRecord) =>
   `${text(lead.firstName)} ${text(lead.lastName)}`.trim() || text(lead.company);
@@ -30,7 +31,26 @@ const columns: Column<LeadRecord>[] = [
 ];
 
 export default function Leads() {
+  const { currentWorkspace } = useWorkspace();
   const [sources, setSources] = useState<string[]>(fallbackSources);
+
+  const store = useMemo(
+    () => ({
+      list: async () => {
+        if (!currentWorkspace) return [];
+
+        const leads = await listLeads();
+
+        return leads.filter(
+          (lead) => lead.workspaceId === currentWorkspace.id,
+        );
+      },
+      create: createLead,
+      update: updateLead,
+      remove: deleteLead,
+    }),
+    [currentWorkspace],
+  );
 
   useEffect(() => {
     let active = true;
@@ -107,6 +127,25 @@ export default function Leads() {
       searchText={(r) => [leadName(r), text(r.company), text(r.email), text(r.phone), text(r.leadSource), text(r.leadOwner)]}
       recordName={leadName}
       store={store}
+      viewBadge={() => currentWorkspace?.name ?? ""}
+      moves={[
+        {
+          label: "Move to customer",
+          tone: "emerald",
+          confirm: (n) => `Move ${n} to Customers? It will be removed from Leads.`,
+          done: (n) => `${n} moved to Customers.`,
+          run: (r) => addLeadToCustomers(r.id),
+        },
+      ]}
+      filters={[
+        { label: "Lead status", get: (r) => text(r.leadStatus) },
+        { label: "Lead source", get: (r) => text(r.leadSource) },
+      ]}
+      sorts={[
+        { label: "Name", get: leadName },
+        { label: "Company", get: (r) => text(r.company) },
+        { label: "Lead status", get: (r) => text(r.leadStatus) },
+      ]}
     />
   );
 }

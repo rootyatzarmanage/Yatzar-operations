@@ -1,6 +1,7 @@
-import type { RecordValues, StoredRecord } from "@/api/localStore";
+import type { RecordValues, StoredRecord } from "@/storage/localStore";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import RecordView from "@/components/records/RecordView";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 export type FieldDef = {
@@ -29,7 +30,30 @@ export type RecordStore<T extends StoredRecord> = {
   remove: (id: string) => void | Promise<void>;
 };
 
+export type RecordMove<T> = {
+  label: string;
+  tone: "amber" | "emerald";
+  confirm: (name: string) => string;
+  done: (name: string) => string;
+  run: (record: T) => Promise<unknown>;
+};
+export type FilterDef<T> = { label: string; get: (record: T) => string };
+export type SortDef<T> = { label: string; get: (record: T) => string };
+
+const toneClass = {
+  amber:
+    "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
+  emerald:
+    "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
+};
+const toolBtn =
+  "inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5";
+
 type Props<T extends StoredRecord> = {
+  moves?: RecordMove<T>[];
+  filters?: FilterDef<T>[];
+  sorts?: SortDef<T>[];
+  viewBadge?: (record: T) => string;
   pageTitle: string;
   heading: string;
   subtitle: string;
@@ -79,6 +103,10 @@ export default function RecordPage<T extends StoredRecord>({
   searchText,
   recordName,
   store,
+  moves = [],
+  filters = [],
+  sorts = [],
+  viewBadge,
 }: Props<T>) {
   const allFields = useMemo(
     () => sections.flatMap((section) => section.fields),
@@ -110,6 +138,12 @@ export default function RecordPage<T extends StoredRecord>({
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [formError, setFormError] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{ record: T; move: RecordMove<T> } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<"filter" | "sort" | null>(null);
+  const [filterValues, setFilterValues] = useState<Record<number, string>>({});
+  const [sortState, setSortState] = useState<{ i: number; dir: "asc" | "desc" } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -130,11 +164,22 @@ export default function RecordPage<T extends StoredRecord>({
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return records;
-    return records.filter((record) =>
-      searchText(record).some((value) => value.toLowerCase().includes(query)),
+    let list = records.filter(
+      (record) =>
+        (!query || searchText(record).some((value) => value.toLowerCase().includes(query))) &&
+        filters.every((f, i) => !filterValues[i] || f.get(record) === filterValues[i]),
     );
-  }, [records, searchTerm, searchText]);
+    if (sortState && sorts[sortState.i]) {
+      const get = sorts[sortState.i].get;
+      const dir = sortState.dir === "desc" ? -1 : 1;
+      list = [...list].sort(
+        (a, b) => get(a).localeCompare(get(b), undefined, { numeric: true }) * dir,
+      );
+    }
+    return list;
+  }, [records, searchTerm, searchText, filters, filterValues, sorts, sortState]);
+  const viewRecord = records.find((record) => record.id === viewId) ?? null;
+  const filterCount = Object.values(filterValues).filter(Boolean).length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / entriesPerPage));
   const currentPage = Math.min(page, totalPages);
@@ -177,9 +222,107 @@ export default function RecordPage<T extends StoredRecord>({
   };
 
   const openView = (record: T) => {
-    openEdit(record);
-    setViewing(true);
+    setNotice("");
+    setViewId(record.id);
   };
+
+  const cleanValues = (): RecordValues =>
+    Object.fromEntries(
+      Object.entries(values).map(([key, value]) => [
+        key,
+        typeof value === "string" ? value.trim() : value,
+      ]),
+    );
+
+  const runMove = async (record: T, move: RecordMove<T>) => {
+    setBusy(true);
+    try {
+      await move.run(record);
+      setRecords((current) => current.filter((r) => r.id !== record.id));
+      setSelectedIds((current) => current.filter((id) => id !== record.id));
+      setViewId(null);
+      setPageError("");
+      setNotice(move.done(recordName(record)));
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Unable to move this record.");
+    } finally {
+      setBusy(false);
+      setMoveTarget(null);
+    }
+  };
+
+  const saveAndMove = async (move: RecordMove<T>) => {
+    const found = validate();
+    setErrors(found);
+    setFormError("");
+    if (Object.values(found).some(Boolean)) return;
+    setBusy(true);
+    try {
+      const cleaned = cleanValues();
+      const saved = editingId ? await store.update(editingId, cleaned) : await store.create(cleaned);
+      await move.run(saved as T);
+      setRecords((current) => current.filter((r) => r.id !== saved.id));
+      setNotice(move.done(recordName(saved as T)));
+      closeForm();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to save and move.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportCsv = () => {
+    const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      allFields.map((f) => q(f.label)).join(","),
+      ...filtered.map((r) => allFields.map((f) => q(r[f.key])).join(",")),
+    ];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([rows.join("\n")], { type: "text/csv" }));
+    a.download = `${plural}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setNotice(`Exported ${filtered.length} ${plural}.`);
+  };
+
+  const bulkDelete = async () => {
+    const ids = selectedIds.filter((id) => records.some((r) => r.id === id));
+    if (!ids.length || !window.confirm(`Delete ${ids.length} selected ${plural}? This cannot be undone.`)) return;
+    try {
+      for (const id of ids) await store.remove(id);
+      setRecords((current) => current.filter((r) => !ids.includes(r.id)));
+      setSelectedIds([]);
+      setNotice(`${ids.length} ${plural} deleted.`);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Unable to delete selected records.");
+    }
+  };
+
+  const viewBlocks = (record: T) =>
+    sections.map((section) => ({
+      title: section.title,
+      subtitle: section.subtitle,
+      items: section.fields.map((f) => ({
+        label: f.label,
+        value: f.type === "checkbox" ? (record[f.key] ? "Yes" : "No") : String(record[f.key] ?? ""),
+      })),
+    }));
+
+  const moveButtons = (record: T, size: "sm" | "lg") =>
+    moves.map((move) => (
+      <button
+        key={move.label}
+        type="button"
+        onClick={() => setMoveTarget({ record, move })}
+        className={
+          size === "sm"
+            ? `rounded-md border px-2.5 py-1 text-xs font-medium whitespace-nowrap ${toneClass[move.tone]}`
+            : `inline-flex h-10 items-center rounded-lg border px-4 text-sm font-medium ${toneClass[move.tone]}`
+        }
+      >
+        {move.label}
+      </button>
+    ));
 
   const closeForm = () => {
     setShowForm(false);
@@ -367,7 +510,7 @@ export default function RecordPage<T extends StoredRecord>({
         </div>
       )}
 
-      {!showForm && (
+      {!showForm && !viewRecord && (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
@@ -394,6 +537,56 @@ export default function RecordPage<T extends StoredRecord>({
                 className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800"
               />
             </div>
+            <div className="relative flex flex-wrap items-center gap-2">
+              {filters.length > 0 && (
+                <button type="button" onClick={() => setPanel(panel === "filter" ? null : "filter")} className={toolBtn}>
+                  Filter{filterCount ? ` (${filterCount})` : ""}
+                </button>
+              )}
+              {sorts.length > 0 && (
+                <button type="button" onClick={() => setPanel(panel === "sort" ? null : "sort")} className={toolBtn}>
+                  Sort{sortState ? ` (${sorts[sortState.i].label})` : ""}
+                </button>
+              )}
+              <button type="button" onClick={exportCsv} className={toolBtn}>Export CSV</button>
+              {panel === "filter" && (
+                <div className="absolute end-0 top-12 z-20 w-64 space-y-3 rounded-xl border border-gray-200 bg-white p-4 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark">
+                  {filters.map((f, i) => {
+                    const options = [...new Set(records.map(f.get).filter(Boolean))];
+                    return (
+                      <div key={f.label}>
+                        <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">{f.label}</label>
+                        <select
+                          value={filterValues[i] ?? ""}
+                          onChange={(e) => { setFilterValues((c) => ({ ...c, [i]: e.target.value })); setPage(1); }}
+                          className="h-9 w-full rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                        >
+                          <option value="">All</option>
+                          {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })}
+                  <button type="button" onClick={() => setFilterValues({})} className={`${toolBtn} w-full justify-center`}>Clear filter</button>
+                </div>
+              )}
+              {panel === "sort" && (
+                <div className="absolute end-0 top-12 z-20 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark">
+                  {sorts.map((s, i) => (
+                    <button
+                      key={s.label}
+                      type="button"
+                      onClick={() => setSortState({ i, dir: sortState?.i === i && sortState.dir === "asc" ? "desc" : "asc" })}
+                      className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                    >
+                      <span>{s.label}</span>
+                      <span className="text-brand-500">{sortState?.i === i ? (sortState.dir === "asc" ? "↑" : "↓") : ""}</span>
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setSortState(null)} className="w-full border-t border-gray-200 px-4 py-2.5 text-start text-sm text-gray-500 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/5">Clear sort</button>
+                </div>
+              )}
+            </div>
             <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               Show
               <select
@@ -412,6 +605,15 @@ export default function RecordPage<T extends StoredRecord>({
             </label>
           </div>
 
+          {selectedCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+              <span><b>{selectedCount}</b> selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedIds([])} className={toolBtn}>Clear selection</button>
+                <button type="button" onClick={bulkDelete} className="inline-flex h-10 items-center rounded-lg bg-red-600 px-3 text-sm font-medium text-white hover:bg-red-500">Delete {selectedCount}</button>
+              </div>
+            </div>
+          )}
           <div className="custom-scrollbar max-w-full overflow-x-auto">
             <table className="w-full min-w-[900px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
@@ -450,6 +652,7 @@ export default function RecordPage<T extends StoredRecord>({
                     ))}
                     <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center justify-center gap-1 sm:gap-3">
+                        {moveButtons(record, "sm")}
                         <button type="button" onClick={() => openView(record)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10" aria-label={`View ${recordName(record)}`} title="View">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                             <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
@@ -518,6 +721,23 @@ export default function RecordPage<T extends StoredRecord>({
         </section>
       )}
 
+      {!showForm && viewRecord && (
+        <RecordView
+          singular={singular}
+          plural={plural}
+          name={recordName(viewRecord)}
+          subtitle={`${String(viewRecord.email || "—")}  |  ${String(viewRecord.phone || "—")}`}
+          badge={viewBadge?.(viewRecord)}
+          blocks={viewBlocks(viewRecord)}
+          actions={moveButtons(viewRecord, "lg")}
+          onBack={() => setViewId(null)}
+          onEdit={() => {
+            setViewId(null);
+            openEdit(viewRecord);
+          }}
+        />
+      )}
+
       {showForm && (
         <div className="mx-auto w-full max-w-6xl">
           <div className="flex w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
@@ -534,6 +754,11 @@ export default function RecordPage<T extends StoredRecord>({
                 <button type="button" onClick={closeForm} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
                   Cancel
                 </button>
+                {!viewing && moves.map((move) => (
+                  <button key={move.label} type="button" disabled={busy} onClick={() => saveAndMove(move)} className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50 ${toneClass[move.tone]}`}>
+                    Save &amp; {move.label.toLowerCase()}
+                  </button>
+                ))}
                 {!viewing && (
                   <button type="submit" form="record-form" className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600">
                     Save {singular.toLowerCase()}
@@ -558,6 +783,19 @@ export default function RecordPage<T extends StoredRecord>({
               </div>
               </fieldset>
             </form>
+          </div>
+        </div>
+      )}
+
+      {moveTarget && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-gray-900/40 p-4">
+          <div role="alertdialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-dark">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-white/90">{moveTarget.move.label}</h3>
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{moveTarget.move.confirm(recordName(moveTarget.record))}</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setMoveTarget(null)} className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300">Cancel</button>
+              <button type="button" disabled={busy} onClick={() => runMove(moveTarget.record, moveTarget.move)} className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">{busy ? "Moving..." : "Move"}</button>
+            </div>
           </div>
         </div>
       )}
