@@ -195,3 +195,8 @@ npm run build
 ```
 
 For local development, keep `Frontend/.env` aligned with the backend URL and keep `FRONTEND_ORIGINS` aligned with the browser origin. Update the relevant README section immediately so configuration and behavior are never documented only in source code.
+
+
+
+
+venv\Scripts\activate
