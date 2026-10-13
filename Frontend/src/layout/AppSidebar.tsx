@@ -1,7 +1,8 @@
 import { useSidebar } from "@/context/SidebarContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import {
   ChevronDownIcon,
   ContactsIcon,
@@ -11,6 +12,7 @@ import {
   UsersIcon,
   WorkspaceIcon,
 } from "../icons";
+import { ChevronLeft, MessageSquare, Settings, User } from "lucide-react"
 import { cn } from "../utils";
 
 type NavItem = {
@@ -62,12 +64,12 @@ const navItems: NavItem[] = [
     path: "/contacts",
   },
   {
-    icon: <GridIcon fontSize={24} />,
+    icon: <Settings fontSize={24} />,
     name: "Settings",
     path: "/settings",
   },
   {
-    icon: <GridIcon fontSize={24} />,
+    icon: <User fontSize={24} />,
     name: "Profile",
     path: "/profile",
   },
@@ -78,11 +80,25 @@ const navItems: NavItem[] = [
   },
 ];
 
+const workspaceNavItems: NavItem[] = [
+  {
+    icon: <MessageSquare size={24} />,
+    name: "Engagement",
+    subItems: [
+      { name: "Leads", path: "/leads" },
+      { name: "Customer", path: "/customers" },
+    ],
+  },
+];
+
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, setIsMobileOpen } =
     useSidebar();
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { currentWorkspace, leaveWorkspace } = useWorkspace();
+  const activeNavItems = currentWorkspace ? workspaceNavItems : navItems;
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main" | "others";
     index: number;
@@ -109,7 +125,7 @@ const AppSidebar: React.FC = () => {
   useEffect(() => {
     let matched: { type: "main" | "others"; index: number } | null = null;
 
-    navItems.forEach((nav, index) => {
+    activeNavItems.forEach((nav, index) => {
       if (nav.subItems) {
         nav.subItems.forEach((subItem) => {
           if (isActive(subItem.path)) {
@@ -125,7 +141,7 @@ const AppSidebar: React.FC = () => {
       }
       return matched;
     });
-  }, [location, isActive]);
+  }, [location, isActive, activeNavItems]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
@@ -137,7 +153,7 @@ const AppSidebar: React.FC = () => {
         }));
       }
     }
-  }, [openSubmenu]);
+  }, [openSubmenu, isExpanded, isHovered, isMobileOpen, currentWorkspace]);
 
   const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
     setOpenSubmenu((prevOpenSubmenu) => {
@@ -384,12 +400,41 @@ const AppSidebar: React.FC = () => {
                 }`}
               >
                 {isExpanded || isHovered || isMobileOpen ? (
-                  t("sidebar.groups.menu")
+                  currentWorkspace ? (
+                    "Workspace menu"
+                  ) : (
+                    t("sidebar.groups.menu")
+                  )
                 ) : (
                   <HorizontaLDots className="size-6" />
                 )}
               </h2>
-              {renderMenuItems(navItems, "main")}
+              {currentWorkspace && (
+                <div className="mb-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      leaveWorkspace();
+                      navigate("/workspace");
+                    }}
+                    title="Back to main menu"
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10",
+                      !isExpanded && !isHovered && !isMobileOpen && "xl:justify-center",
+                    )}
+                  >
+                    <ChevronLeft size={20} />
+                    {(isExpanded || isHovered || isMobileOpen) && "Back to main menu"}
+                  </button>
+                  {(isExpanded || isHovered || isMobileOpen) && (
+                    <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold tracking-wide text-brand-500 uppercase dark:bg-white/5 dark:text-brand-400">
+                      <WorkspaceIcon className="size-5 shrink-0" />
+                      <span className="truncate">{currentWorkspace}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {renderMenuItems(activeNavItems, "main")}
             </div>
           </div>
         </nav>

@@ -1,18 +1,36 @@
 import { listOptions } from "@/api/teams";
 import {
-  createLocalContact,
-  deleteLocalContact,
-  listLocalContacts,
-  updateLocalContact,
+  createContact,
+  deleteContact,
+  listContacts,
+  toContactPayload,
+  uploadContactPhoto,
+  updateContact,
   type ContactFields,
+  type Contact,
   type LocalContact,
-} from "@/api/contactsLocalStore";
+} from "@/api/contacts";
+import { addContactToCustomers } from "@/api/customers";
+import { addContactToLeads } from "@/api/leads";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 const emptyForm: ContactFields = {
+  contactOwner: "",
+  secondaryEmail: "",
+  homePhone: "",
+  mobile: "",
+  dateOfBirth: "",
+  emailOptOut: false,
+  description: "",
   firstName: "",
   lastName: "",
   email: "",
@@ -38,16 +56,69 @@ const emptyForm: ContactFields = {
   otherLongitude: "",
 };
 
+type MoveTarget = "leads" | "customers";
 type FieldKey = keyof ContactFields;
+type StringFieldKey = {
+  [Key in keyof ContactFields]-?: ContactFields[Key] extends string
+    ? Key
+    : never;
+}[keyof ContactFields];
 type FieldErrors = Partial<Record<FieldKey, string>>;
+const maxContactPhotoSize = 5 * 1024 * 1024;
 
 const inputClass =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
 const tableHeaderClass =
   "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";
+const defaultLeadSources = [
+  "Website",
+  "Referral",
+  "Social media",
+  "Cold call",
+  "Event",
+];
 
 function contactName(contact: LocalContact): string {
   return `${contact.firstName} ${contact.lastName}`.trim();
+}
+
+function fromApiContact(contact: Contact): LocalContact {
+  return {
+    contactOwner: contact.contact_owner ?? "",
+    secondaryEmail: contact.secondary_email ?? "",
+    homePhone: contact.home_phone ?? "",
+    mobile: contact.mobile ?? "",
+    dateOfBirth: contact.date_of_birth ?? "",
+    emailOptOut: contact.email_opt_out,
+    description: contact.description ?? "",
+    firstName: contact.first_name,
+    lastName: contact.last_name ?? "",
+    email: contact.email,
+    phone: contact.phone,
+    otherPhone: contact.other_phone ?? "",
+    department: contact.department ?? "",
+    leadSource: contact.lead_source,
+    addressLine1: contact.address_line1,
+    addressLine2: contact.address_line2 ?? "",
+    city: contact.city,
+    state: contact.state,
+    country: contact.country,
+    pincode: contact.pincode,
+      latitude: contact.latitude ?? "",
+      longitude: contact.longitude ?? "",
+    otherAddressLine1: contact.other_address_line1 ?? "",
+    otherAddressLine2: contact.other_address_line2 ?? "",
+    otherCity: contact.other_city ?? "",
+    otherState: contact.other_state ?? "",
+    otherCountry: contact.other_country ?? "",
+    otherPincode: contact.other_pincode ?? "",
+    id: contact.id,
+    createdAt: contact.created_at,
+    updatedAt: contact.updated_at,
+    otherLatitude: contact.other_latitude ?? "",
+    otherLongitude: contact.other_longitude ?? "",
+    photoUrl: contact.photo_url ?? "",
+  };
 }
 
 function validateCoordinates(
@@ -69,49 +140,60 @@ function validateCoordinates(
 
 export default function Contacts() {
   const { t } = useTranslation();
-  const [initialContactState] = useState(() => {
-    try {
-      return { contacts: listLocalContacts(), error: "" };
-    } catch (error) {
-      return {
-        contacts: [],
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to load local contacts.",
-      };
-    }
-  });
-  const [contacts, setContacts] = useState<LocalContact[]>(
-    initialContactState.contacts,
-  );
-  const [leadSources, setLeadSources] = useState<string[]>([]);
-  const [leadSourcesLoading, setLeadSourcesLoading] = useState(true);
-  const [leadSourcesError, setLeadSourcesError] = useState("");
+  const [contacts, setContacts] = useState<LocalContact[]>([]);
+  const [leadSources, setLeadSources] = useState<string[]>(defaultLeadSources);
+  const [, setLeadSourcesLoading] = useState(true);
+  const [, setLeadSourcesError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
   const [formValues, setFormValues] = useState<ContactFields>(emptyForm);
   const [formErrors, setFormErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState("");
-  const [pageError, setPageError] = useState(initialContactState.error);
+  const [pageError, setPageError] = useState("");
   const [notice, setNotice] = useState("");
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [moveRequest, setMoveRequest] = useState<{
+    id: string;
+    to: MoveTarget;
+  } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(5);
 
   useEffect(() => {
     let active = true;
+    void listContacts()
+      .then((items) => {
+        if (active) setContacts(items.map(fromApiContact));
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setPageError(
+            error instanceof Error ? error.message : "Unable to load contacts.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     void listOptions("lead_source")
       .then((options) => {
         if (active) {
-          setLeadSources(
-            [...new Set(options.map((option) => option.value.trim()))].filter(
-              Boolean,
-            ),
-          );
+          setLeadSources([
+            ...new Set([
+              ...defaultLeadSources,
+              ...options.map((option) => option.value.trim()),
+            ]),
+          ].filter(Boolean));
         }
       })
       .catch((error: unknown) => {
@@ -177,7 +259,10 @@ export default function Contacts() {
   const openAddForm = () => {
     clearMessages();
     setEditingId(null);
+    setViewing(false);
     setFormValues({ ...emptyForm });
+    setSelectedPhoto(null);
+    setPhotoPreview("");
     setFormErrors({});
     setFormError("");
     setShowForm(true);
@@ -186,7 +271,15 @@ export default function Contacts() {
   const openEditForm = (contact: LocalContact) => {
     clearMessages();
     setEditingId(contact.id);
+    setViewing(false);
     setFormValues({
+      contactOwner: contact.contactOwner,
+      secondaryEmail: contact.secondaryEmail,
+      homePhone: contact.homePhone,
+      mobile: contact.mobile,
+      dateOfBirth: contact.dateOfBirth,
+      emailOptOut: contact.emailOptOut,
+      description: contact.description,
       firstName: contact.firstName,
       lastName: contact.lastName,
       email: contact.email,
@@ -200,33 +293,60 @@ export default function Contacts() {
       state: contact.state,
       country: contact.country,
       pincode: contact.pincode,
-      latitude: contact.latitude,
-      longitude: contact.longitude,
+          latitude: contact.latitude ?? "",
+          longitude: contact.longitude ?? "",
       otherAddressLine1: contact.otherAddressLine1,
       otherAddressLine2: contact.otherAddressLine2,
       otherCity: contact.otherCity,
       otherState: contact.otherState,
       otherCountry: contact.otherCountry,
       otherPincode: contact.otherPincode,
-      otherLatitude: contact.otherLatitude,
-      otherLongitude: contact.otherLongitude,
+      otherLatitude: contact.otherLatitude ?? "",
+      otherLongitude: contact.otherLongitude ?? "",
     });
+    setSelectedPhoto(null);
+    setPhotoPreview(contact.photoUrl);
     setFormErrors({});
     setFormError("");
     setShowForm(true);
   };
 
+  const openViewForm = (contact: LocalContact) => {
+    openEditForm(contact);
+    setViewing(true);
+  };
+
   const closeForm = () => {
     setShowForm(false);
     setEditingId(null);
+    setViewing(false);
     setFormValues({ ...emptyForm });
+    setSelectedPhoto(null);
+    setPhotoPreview("");
     setFormErrors({});
     setFormError("");
   };
 
-  const updateField = (field: FieldKey, value: string) => {
+  const updateField = (field: FieldKey, value: string | boolean) => {
     setFormValues((current) => ({ ...current, [field]: value }));
     setFormErrors((current) => ({ ...current, [field]: undefined }));
+  };
+
+  const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setFormError("Please select an image file.");
+      return;
+    }
+    if (file.size > maxContactPhotoSize) {
+      setFormError("Contact photos must be 5 MB or smaller.");
+      return;
+    }
+    setSelectedPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    setFormError("");
   };
 
   const validateForm = (): FieldErrors => {
@@ -241,18 +361,19 @@ export default function Contacts() {
       ["state", "State"],
       ["country", "Country"],
       ["pincode", "Pincode"],
-      ["latitude", "Latitude"],
-      ["longitude", "Longitude"],
       ["otherAddressLine1", "Address Line 1"],
       ["otherCity", "City"],
       ["otherState", "State"],
       ["otherCountry", "Country"],
       ["otherPincode", "Pincode"],
-      ["otherLatitude", "Latitude"],
-      ["otherLongitude", "Longitude"],
     ];
     for (const [field, label] of requiredFields) {
-      if (!formValues[field].trim()) errors[field] = `${label} is required.`;
+      if (
+        typeof formValues[field] === "string" &&
+        !formValues[field].trim()
+      ) {
+        errors[field] = `${label} is required.`;
+      }
     }
 
     if (
@@ -261,30 +382,18 @@ export default function Contacts() {
     ) {
       errors.email = "Enter a valid email address.";
     }
-    errors.latitude = validateCoordinates(
-      formValues.latitude,
-      -90,
-      90,
-      "Latitude",
-    );
-    errors.longitude = validateCoordinates(
-      formValues.longitude,
-      -180,
-      180,
-      "Longitude",
-    );
-    errors.otherLatitude = validateCoordinates(
-      formValues.otherLatitude,
-      -90,
-      90,
-      "Other latitude",
-    );
-    errors.otherLongitude = validateCoordinates(
-      formValues.otherLongitude,
-      -180,
-      180,
-      "Other longitude",
-    );
+    if (formValues.otherLatitude.trim()) {
+      errors.otherLatitude = validateCoordinates(formValues.otherLatitude, -90, 90, "Other latitude");
+    }
+    if (formValues.otherLongitude.trim()) {
+      errors.otherLongitude = validateCoordinates(formValues.otherLongitude, -180, 180, "Other longitude");
+    }
+    if (formValues.latitude.trim()) {
+      errors.latitude = validateCoordinates(formValues.latitude, -90, 90, "Latitude");
+    }
+    if (formValues.longitude.trim()) {
+      errors.longitude = validateCoordinates(formValues.longitude, -180, 180, "Longitude");
+    }
 
     if (
       formValues.leadSource &&
@@ -301,37 +410,116 @@ export default function Contacts() {
     return errors;
   };
 
-  const handleSave = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  /** Validates and saves the form as a contact. Returns the saved contact, or null. */
+  const saveContact = async (): Promise<LocalContact | null> => {
     const errors = validateForm();
     setFormErrors(errors);
     setFormError("");
-    if (Object.values(errors).some(Boolean)) return;
+    if (Object.values(errors).some(Boolean)) return null;
 
-    setIsSaving(true);
     try {
+      let saved: LocalContact;
       if (editingId) {
-        const updated = updateLocalContact(editingId, formValues);
+        const response = await updateContact(
+          editingId,
+          toContactPayload(formValues),
+        );
+        saved = fromApiContact(response);
+        setContacts((current) =>
+          current.map((contact) => (contact.id === saved.id ? saved : contact)),
+        );
+        setNotice("Contact updated.");
+      } else {
+        const response = await createContact(toContactPayload(formValues));
+        saved = fromApiContact(response);
+        setContacts((current) => [saved, ...current]);
+        setPage(1);
+        // From here on this form edits the contact that was just created.
+        setEditingId(saved.id);
+        setNotice("Contact saved.");
+      }
+      if (selectedPhoto) {
+        const response = await uploadContactPhoto(saved.id, selectedPhoto);
+        const uploaded = fromApiContact(response);
+        saved = uploaded;
         setContacts((current) =>
           current.map((contact) =>
-            contact.id === updated.id ? updated : contact,
+            contact.id === uploaded.id ? uploaded : contact,
           ),
         );
-        setNotice("Contact updated in this browser.");
-      } else {
-        const created = createLocalContact(formValues);
-        setContacts((current) => [created, ...current]);
-        setPage(1);
-        setNotice("Contact saved in this browser.");
       }
       setPageError("");
-      closeForm();
+      return saved;
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Unable to save this contact.",
       );
+      return null;
+    }
+  };
+
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSaving(true);
+    try {
+      if (await saveContact()) closeForm();
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /** Form buttons: save the contact and also add it to Leads / Customers. */
+  const handleSaveAndAdd = async (to: MoveTarget) => {
+    setIsSaving(true);
+    try {
+      const saved = await saveContact();
+      if (!saved) return;
+      try {
+        if (to === "leads") addContactToLeads(saved.id, saved);
+        else addContactToCustomers(saved.id, saved);
+      } catch (error) {
+        setFormError(
+          error instanceof Error
+            ? error.message
+            : `Unable to add this contact to ${to}.`,
+        );
+        return;
+      }
+      setNotice(
+        `${contactName(saved)} saved and added to ${to === "leads" ? "Leads" : "Customers"}.`,
+      );
+      closeForm();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /** Row action: move the contact to Leads / Customers (removed from Contacts). */
+  const confirmMove = async () => {
+    if (!moveRequest) return;
+    const contact = contacts.find((item) => item.id === moveRequest.id);
+    if (!contact) {
+      setMoveRequest(null);
+      return;
+    }
+    setIsSaving(true);
+    try {
+      if (moveRequest.to === "leads") addContactToLeads(contact.id, contact);
+      else addContactToCustomers(contact.id, contact);
+      await deleteContact(contact.id);
+      setContacts((current) => current.filter((item) => item.id !== contact.id));
+      setSelectedIds((current) => current.filter((id) => id !== contact.id));
+      setPageError("");
+      setNotice(
+        `${contactName(contact)} moved to ${moveRequest.to === "leads" ? "Leads" : "Customers"}.`,
+      );
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : "Unable to move this contact.",
+      );
+    } finally {
+      setIsSaving(false);
+      setMoveRequest(null);
     }
   };
 
@@ -361,18 +549,18 @@ export default function Contacts() {
     ]);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteId) return;
     setIsSaving(true);
     try {
-      deleteLocalContact(deleteId);
+      await deleteContact(deleteId);
       setContacts((current) =>
         current.filter((contact) => contact.id !== deleteId),
       );
       setSelectedIds((current) => current.filter((id) => id !== deleteId));
       setDeleteId(null);
       setPageError("");
-      setNotice("Contact deleted from this browser.");
+      setNotice("Contact deleted.");
     } catch (error) {
       setPageError(
         error instanceof Error ? error.message : "Unable to delete this contact.",
@@ -383,7 +571,7 @@ export default function Contacts() {
   };
 
   const renderInput = (
-    field: FieldKey,
+    field: StringFieldKey,
     label: string,
     options: {
       required?: boolean;
@@ -431,17 +619,15 @@ export default function Contacts() {
   const renderAddressFields = (otherAddress = false) => {
     const prefix = otherAddress ? "other" : "";
     const field = (name: string) =>
-      `${prefix}${name}` as FieldKey;
+      `${prefix}${name}` as StringFieldKey;
     return (
       <div className="grid gap-5 md:grid-cols-2">
-        {renderInput(field("AddressLine1"), "Address Line 1", {
+        {renderInput(field("AddressLine1"), "Flat / House no. / Building", {
           required: true,
-          fullWidth: true,
-          placeholder: "Enter address line 1",
+          placeholder: "Enter flat, house number or building",
         })}
-        {renderInput(field("AddressLine2"), "Address Line 2", {
-          fullWidth: true,
-          placeholder: "Enter address line 2",
+        {renderInput(field("AddressLine2"), "Street address", {
+          placeholder: "Enter street address",
         })}
         {renderInput(field("City"), "City", {
           required: true,
@@ -460,14 +646,12 @@ export default function Contacts() {
           placeholder: "Enter pincode",
         })}
         {renderInput(field("Latitude"), "Latitude", {
-          required: true,
           inputMode: "decimal",
-          placeholder: "e.g. 18.5204",
+          placeholder: "e.g. 11.0168",
         })}
         {renderInput(field("Longitude"), "Longitude", {
-          required: true,
           inputMode: "decimal",
-          placeholder: "e.g. 73.8567",
+          placeholder: "e.g. 76.9558",
         })}
       </div>
     );
@@ -480,14 +664,6 @@ export default function Contacts() {
         description="Yatzar Operations contacts"
       />
       <PageBreadcrumb pageTitle={t("sidebar.items.contacts")} />
-
-      <div
-        role="note"
-        className="mb-4 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-400"
-      >
-        Contacts CRUD is not connected to YO Backend yet. Records are saved in
-        this browser only and are not shared with other users or devices.
-      </div>
       {pageError && (
         <div
           role="alert"
@@ -505,7 +681,8 @@ export default function Contacts() {
         </div>
       )}
 
-      <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+      {!showForm && (
+        <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
         <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
           <div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -619,6 +796,50 @@ export default function Contacts() {
                       <div className="flex items-center justify-center gap-1 text-sm font-medium sm:gap-3">
                         <button
                           type="button"
+                          onClick={() => {
+                            clearMessages();
+                            setMoveRequest({ id: contact.id, to: "leads" });
+                          }}
+                          className="rounded-md p-1.5 text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10"
+                          aria-label={`Move ${contactName(contact)} to leads`}
+                          title="Move to lead"
+                        >
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M19 8v6M22 11h-6" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openViewForm(contact)}
+                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/10"
+                          aria-label={`View ${contactName(contact)}`}
+                          title="View"
+                        >
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                            <circle cx="12" cy="12" r="2.5" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearMessages();
+                            setMoveRequest({ id: contact.id, to: "customers" });
+                          }}
+                          className="rounded-md p-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-500/10"
+                          aria-label={`Move ${contactName(contact)} to customers`}
+                          title="Move to customer"
+                        >
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="m16 11 2 2 4-4" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => openEditForm(contact)}
                           className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
                           aria-label={`Edit ${contactName(contact)}`}
@@ -718,15 +939,14 @@ export default function Contacts() {
               : "No contacts match your search."}
           </div>
         )}
-      </section>
+        </section>
+      )}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-3 sm:p-6">
+        <div className="mx-auto w-full max-w-6xl">
           <div
-            role="dialog"
-            aria-modal="true"
             aria-labelledby="contact-form-title"
-            className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-dark"
+            className="flex w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark"
           >
             <div className="flex flex-col gap-4 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
               <div>
@@ -734,32 +954,82 @@ export default function Contacts() {
                   id="contact-form-title"
                   className="text-lg font-semibold text-gray-800 dark:text-white/90"
                 >
-                  {editingId ? "Edit Contact" : "Add Contact"}
+                  {viewing ? "View Contact" : editingId ? "Edit Contact" : "Add Contact"}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Contact details are stored locally in this browser.
+                  Contact details are managed by the backend.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeForm}
-                disabled={isSaving}
-                className="absolute top-4 right-4 rounded-md p-1 text-xl leading-none text-gray-500 hover:bg-gray-100 sm:static sm:text-2xl dark:text-gray-400 dark:hover:bg-white/5"
-                aria-label="Close contact form"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2">
+                {!viewing && <button type="button" onClick={() => handleSaveAndAdd("leads")} disabled={isSaving} className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">
+                  Move to lead
+                </button>}
+                {!viewing && <button type="button" onClick={() => handleSaveAndAdd("customers")} disabled={isSaving} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                  Move to customer
+                </button>}
+                <button type="button" onClick={closeForm} disabled={isSaving} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
+                  Cancel
+                </button>
+                {!viewing && <button type="submit" form="contact-form" disabled={isSaving} className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600">
+                  {isSaving ? "Saving..." : "Save contact"}
+                </button>}
+              </div>
             </div>
 
             <form
+              id="contact-form"
               onSubmit={handleSave}
               noValidate
               className="flex min-h-0 flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
-                <section className="space-y-5">
-                  {renderSectionTitle("Contact Information")}
-                  <div className="grid gap-5 md:grid-cols-2">
+              <fieldset disabled={viewing} className="min-h-0 flex-1">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-gray-50/60 p-4 sm:p-6 dark:bg-gray-950/20">
+                <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-dark">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      {renderSectionTitle("Contact image")}
+                      <label className={`mt-3 inline-flex items-center gap-3 ${viewing ? "" : "cursor-pointer"}`}>
+                        {photoPreview ? (
+                          <img
+                            src={photoPreview}
+                            alt="Contact preview"
+                            className="size-12 rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex size-12 items-center justify-center rounded-full bg-gray-100 text-xl text-gray-400 dark:bg-white/5">
+                            ♙
+                          </span>
+                        )}
+                        <span className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
+                          {photoPreview ? "Change photo" : "Upload photo"}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handlePhotoChange}
+                          disabled={isSaving}
+                        />
+                      </label>
+                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        PNG, JPG, GIF, or WebP up to 5 MB.
+                      </p>
+                    </div>
+                  </div>
+                  {renderSectionTitle("Profile")}
+                  <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Your basic contact information.</p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {renderInput("contactOwner", "Contact owner", { placeholder: "Select contact owner" })}
+                    <div>
+                      <label htmlFor="contact-leadSource" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Lead source <span className="text-red-500">*</span>
+                      </label>
+                      <select id="contact-leadSource" value={formValues.leadSource} onChange={(event) => updateField("leadSource", event.target.value)} className={inputClass}>
+                        <option value="">-None-</option>
+                        {[...new Set([...leadSources, formValues.leadSource])].filter(Boolean).map((source) => <option key={source} value={source}>{source}</option>)}
+                      </select>
+                      {formErrors.leadSource && <p className="mt-1 text-xs text-red-600">{formErrors.leadSource}</p>}
+                    </div>
                     {renderInput("firstName", "First Name", {
                       required: true,
                       placeholder: "Enter first name",
@@ -773,6 +1043,7 @@ export default function Contacts() {
                       inputMode: "email",
                       placeholder: "name@example.com",
                     })}
+                    {renderInput("secondaryEmail", "Secondary email", { type: "email", inputMode: "email", placeholder: "secondary@example.com" })}
                     {renderInput("phone", "Phone", {
                       required: true,
                       type: "tel",
@@ -784,86 +1055,25 @@ export default function Contacts() {
                       inputMode: "tel",
                       placeholder: "Enter alternate phone number",
                     })}
-                    {renderInput("department", "Department", {
-                      placeholder: "Enter department",
-                    })}
-                    <div>
-                      <label
-                        htmlFor="contact-leadSource"
-                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        Lead Source <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        id="contact-leadSource"
-                        value={formValues.leadSource}
-                        onChange={(event) =>
-                          updateField("leadSource", event.target.value)
-                        }
-                        disabled={
-                          leadSourcesLoading ||
-                          (leadSources.length === 0 && !formValues.leadSource)
-                        }
-                        aria-invalid={Boolean(formErrors.leadSource)}
-                        aria-describedby={
-                          formErrors.leadSource
-                            ? "error-leadSource"
-                            : undefined
-                        }
-                        className={inputClass}
-                      >
-                        <option value="">
-                          {leadSourcesLoading
-                            ? "Loading configured lead sources…"
-                            : leadSources.length
-                              ? "Select a lead source"
-                              : "No lead sources configured"}
-                        </option>
-                        {[...new Set([...leadSources, formValues.leadSource])]
-                          .filter(Boolean)
-                          .map((source) => (
-                            <option key={source} value={source}>
-                              {source}
-                            </option>
-                          ))}
-                      </select>
-                      {formErrors.leadSource && (
-                        <p
-                          id="error-leadSource"
-                          className="mt-1 text-xs text-red-600"
-                        >
-                          {formErrors.leadSource}
-                        </p>
-                      )}
-                      {leadSourcesError && (
-                        <p role="alert" className="mt-1 text-xs text-red-600">
-                          Configured lead sources could not be loaded:{" "}
-                          {leadSourcesError}
-                        </p>
-                      )}
-                      {!leadSourcesLoading &&
-                        !leadSourcesError &&
-                        leadSources.length === 0 && (
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Configure lead-source options in the backend before
-                            adding a contact.
-                          </p>
-                        )}
-                    </div>
+                    {renderInput("homePhone", "Home phone", { type: "tel", inputMode: "tel", placeholder: "Enter home phone" })}
+                    {renderInput("mobile", "Mobile", { type: "tel", inputMode: "tel", placeholder: "Enter mobile number" })}
+                    {renderInput("dateOfBirth", "Date of birth", { type: "date" })}
+                    <label className="flex items-center gap-2 self-end pb-2 text-xs text-gray-600 dark:text-gray-300">
+                      <input type="checkbox" checked={formValues.emailOptOut} onChange={(event) => updateField("emailOptOut", event.target.checked)} className="size-4 rounded accent-brand-500" />
+                      Email opt out
+                    </label>
                   </div>
                 </section>
 
-                <section className="space-y-5 border-t border-gray-100 pt-5 dark:border-gray-800">
-                  {renderSectionTitle("Address")}
-                  {renderAddressFields()}
-                </section>
-
-                <section className="space-y-5 border-t border-gray-100 pt-5 dark:border-gray-800">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    {renderSectionTitle("Other Address")}
+                <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-dark">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {renderSectionTitle("Address")}
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Mailing and other address of this contact.</p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={() =>
                         setFormValues((current) => ({
                           ...current,
                           otherAddressLine1: current.addressLine1,
@@ -872,26 +1082,25 @@ export default function Contacts() {
                           otherState: current.state,
                           otherCountry: current.country,
                           otherPincode: current.pincode,
-                          otherLatitude: current.latitude,
-                          otherLongitude: current.longitude,
-                        }));
-                        setFormErrors((current) => ({
-                          ...current,
-                          otherAddressLine1: undefined,
-                          otherCity: undefined,
-                          otherState: undefined,
-                          otherCountry: undefined,
-                          otherPincode: undefined,
-                          otherLatitude: undefined,
-                          otherLongitude: undefined,
-                        }));
-                      }}
-                      className="h-9 shrink-0 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
+                        }))
+                      }
+                      className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
                     >
-                      Copy Current Address
+                      Copy address
                     </button>
                   </div>
-                  {renderAddressFields(true)}
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Mailing address</p>
+                  {renderAddressFields()}
+                  <div className="border-t border-gray-100 pt-4 dark:border-gray-800">
+                    <p className="mb-4 text-xs font-medium text-gray-700 dark:text-gray-300">Other address</p>
+                    {renderAddressFields(true)}
+                  </div>
+                </section>
+                <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-dark">
+                  {renderSectionTitle("Description")}
+                  <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Notes about this contact.</p>
+                  <label htmlFor="contact-description" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                  <textarea id="contact-description" value={formValues.description} onChange={(event) => updateField("description", event.target.value)} placeholder="Add notes about this contact" rows={4} className={inputClass} />
                 </section>
 
                 {formError && (
@@ -901,7 +1110,7 @@ export default function Contacts() {
                 )}
               </div>
 
-              <div className="flex flex-col-reverse gap-2 border-t border-gray-200 p-4 sm:flex-row sm:justify-end sm:p-5 dark:border-gray-800">
+              <div className="hidden flex-col-reverse gap-2 border-t border-gray-200 p-4 sm:flex-row sm:justify-end sm:p-5 dark:border-gray-800">
                 <button
                   type="button"
                   onClick={closeForm}
@@ -910,7 +1119,7 @@ export default function Contacts() {
                 >
                   Cancel
                 </button>
-                <button
+                {!viewing && <button
                   type="submit"
                   disabled={isSaving}
                   className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
@@ -920,9 +1129,52 @@ export default function Contacts() {
                     : editingId
                       ? "Save Contact"
                       : "Save Contact"}
-                </button>
+                </button>}
               </div>
+              </fieldset>
             </form>
+          </div>
+        </div>
+      )}
+
+      {moveRequest && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-gray-900/40 p-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="move-contact-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-dark"
+          >
+            <h3
+              id="move-contact-title"
+              className="text-xl font-semibold text-gray-800 dark:text-white/90"
+            >
+              Move to {moveRequest.to === "leads" ? "Leads" : "Customers"}
+            </h3>
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+              {(() => {
+                const contact = contacts.find((item) => item.id === moveRequest.id);
+                return `${contact ? contactName(contact) : "This contact"} will be added to ${moveRequest.to === "leads" ? "Leads" : "Customers"} and removed from Contacts.`;
+              })()}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMoveRequest(null)}
+                disabled={isSaving}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmMove}
+                disabled={isSaving}
+                className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
+              >
+                {isSaving ? "Moving…" : "Move"}
+              </button>
+            </div>
           </div>
         </div>
       )}

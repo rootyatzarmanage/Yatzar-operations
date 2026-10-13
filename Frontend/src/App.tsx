@@ -4,11 +4,14 @@ import AppLayout from "./layout/AppLayout";
 import Analytics from "./pages/Analytics";
 import AppPermission from "./pages/AppPermission";
 import Contacts from "./pages/Contacts";
+import Customers from "./pages/Customers";
+import Leads from "./pages/Leads";
 import NotFound from "./pages/OtherPage/NotFound";
 import Others from "./pages/Others";
 import Teams from "./pages/Teams";
 import Workspace from "./pages/Workspace";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 import { useAuth } from "./context/AuthContext";
 import { Navigate, useLocation } from "react-router";
 
@@ -41,6 +44,11 @@ export default function App() {
 
             {/* Contacts */}
             <Route path="/contacts" element={<Contacts />} />
+            <Route path="/profile" element={<Profile />} />
+
+            {/* Workspace menu: Engagement */}
+            <Route path="/leads" element={<Leads />} />
+            <Route path="/customers" element={<Customers />} />
           </Route>
 
           {/* Fallback Route */}
