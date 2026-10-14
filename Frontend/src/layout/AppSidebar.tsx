@@ -12,6 +12,7 @@ import {
   UsersIcon,
   WorkspaceIcon,
 } from "../icons";
+import { CalendarDays } from 'lucide-react'
 import { ChevronLeft, MessageSquare, Settings, User } from "lucide-react"
 import { cn } from "../utils";
 
@@ -88,6 +89,15 @@ const workspaceNavItems: NavItem[] = [
       { name: "Contacts", path: "/contacts" },
       { name: "Leads", path: "/leads" },
       { name: "Customer", path: "/customers" },
+    ],
+  },
+  {
+    icon: <CalendarDays size={24} />,
+    name: "Activities",
+    subItems: [
+      { name: "Task", path: "/task" },
+      { name: "Meetings", path: "/meetings" },
+      { name: "Calls", path: "/calls" },
     ],
   },
 ];

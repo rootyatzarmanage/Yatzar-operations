@@ -12,6 +12,7 @@ import Teams from "./pages/Teams";
 import Workspace from "./pages/Workspace";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
+import Task from "./pages/Task";
 import { useAuth } from "./context/AuthContext";
 import { Navigate, useLocation } from "react-router";
 
@@ -49,6 +50,7 @@ export default function App() {
             {/* Workspace menu: Engagement */}
             <Route path="/leads" element={<Leads />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/task" element={<Task />} />
           </Route>
 
           {/* Fallback Route */}

@@ -1,0 +1,616 @@
+import { listContacts, type Contact } from "@/api/contacts";
+import { listTags, type Tag } from "@/api/tags";
+import { createTask, deleteTask, listTasks, updateTask, type TaskApi, type TaskPayload } from "@/api/task";
+import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import PageMeta from "@/components/common/PageMeta";
+import { useAuth } from "@/context/AuthContext";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+
+type TaskStatus = "Not Started" | "Deferred" | "In Progress" | "Waiting for input" | "Completed";
+type TaskPriority = "Highest" | "High" | "Normal" | "Low" | "Lowest";
+type ContactMode = "name" | "tag";
+
+type Task = {
+  id: string;
+  subject: string;
+  dueDate: string; // yyyy-mm-dd
+  status: TaskStatus;
+  priority: TaskPriority;
+  account: string;
+  owner: string;
+  contactMode: ContactMode;
+  contactIds: string[]; // contact ids (name mode) or tag ids (tag mode)
+  contactLabel: string; // text shown in the table
+  reminder: boolean;
+  reminderDate: string;
+  reminderTime: string;
+  reminderNotify: string;
+  repeat: boolean;
+  description: string;
+};
+
+const statuses: TaskStatus[] = ["Not Started", "Deferred", "In Progress", "Waiting for input", "Completed"];
+const priorities: TaskPriority[] = ["Highest", "High", "Normal", "Low", "Lowest"];
+
+const inputClass =
+  "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/3 dark:text-white/90";
+const labelClass = "mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300";
+const thClass =
+  "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";
+
+const statusBadge: Record<TaskStatus, string> = {
+  "Not Started": "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
+  Deferred: "bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400",
+  "In Progress": "bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-400",
+  "Waiting for input": "bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-400",
+  Completed: "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500",
+};
+
+const emptyForm = {
+  subject: "",
+  dueDate: "",
+  status: "Not Started" as TaskStatus,
+  priority: "High" as TaskPriority,
+  account: "",
+  contactMode: "name" as ContactMode,
+  contactIds: [] as string[],
+  reminder: false,
+  reminderDate: "",
+  reminderTime: "",
+  reminderNotify: "Email",
+  repeat: false,
+  description: "",
+};
+
+function formatDate(value: string) {
+  if (!value) return "—";
+  const [y, m, d] = value.split("-");
+  return `${d}/${m}/${y}`;
+}
+function formatTime(value: string) {
+  if (!value) return "";
+  const [h, m] = value.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+function contactFullName(c: Contact) {
+  return `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
+}
+
+function Toggle({
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-disabled={disabled}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-11 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${checked ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-700"}`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition ${checked ? "translate-x-5" : ""}`}
+      />
+    </button>
+  );
+}
+
+export default function Tasks() {
+  const { user } = useAuth();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState<{ subject?: string }>({});
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [page, setPage] = useState(1);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [apiError, setApiError] = useState("");
+
+  const taskOwner = user?.display_name || user?.employee_name || user?.username || "";
+
+  useEffect(() => {
+    void listContacts()
+      .then(setContacts)
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load contacts."));
+    void listTags()
+      .then(setTags)
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tags."));
+    void listTasks()
+      .then((result) => setTasks(result.map((task) => fromApiTask(task, taskOwner))))
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tasks."));
+  }, [taskOwner]);
+
+  const selectionLabel = (mode: ContactMode, ids: string[]) =>
+    mode === "name"
+      ? contacts.filter((c) => ids.includes(c.id)).map(contactFullName).join(", ")
+      : tags.filter((t) => ids.includes(t.id)).map((t) => t.name).join(", ");
+
+  const toTaskPayload = (values: typeof emptyForm): TaskPayload => {
+    const selectedContacts = contacts.filter((contact) => values.contactIds.includes(contact.id));
+    const contactTagIds = [...new Set(selectedContacts.map((contact) => contact.tag_id).filter(Boolean))];
+    const tagId = values.contactMode === "tag"
+      ? values.contactIds[0] ?? null
+      : contactTagIds.length === 1
+        ? contactTagIds[0]
+        : null;
+
+    return {
+      subject: values.subject.trim(),
+      due_date: values.dueDate || null,
+      tag_id: tagId,
+      contact_ids: values.contactMode === "tag" ? [] : values.contactIds,
+      account: values.account.trim() || null,
+      status: values.status,
+      priority: values.priority,
+      reminder_enabled: values.reminder,
+      reminder_at: values.reminder && values.reminderDate && values.reminderTime
+        ? `${values.reminderDate}T${values.reminderTime}:00`
+        : null,
+      reminder_type: values.reminder ? values.reminderNotify : null,
+      repeat_enabled: values.reminder && values.repeat,
+      description: values.description.trim() || null,
+    };
+  };
+
+  function fromApiTask(task: TaskApi, owner: string): Task {
+    return {
+      id: task.id,
+      subject: task.subject,
+      dueDate: task.due_date ?? "",
+      status: task.status as TaskStatus,
+      priority: task.priority as TaskPriority,
+      account: task.account ?? "",
+      owner,
+      contactMode: task.tag_id ? "tag" : "name",
+      contactIds: task.tag_id ? [task.tag_id] : task.contact_ids,
+      contactLabel: "",
+      reminder: task.reminder_enabled,
+      reminderDate: task.reminder_at?.slice(0, 10) ?? "",
+      reminderTime: task.reminder_at?.slice(11, 16) ?? "",
+      reminderNotify: task.reminder_type ?? "Email",
+      repeat: task.repeat_enabled,
+      description: task.description ?? "",
+    };
+  }
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter((t) =>
+      [t.subject, t.account, selectionLabel(t.contactMode, t.contactIds), t.owner, t.status, t.priority].some((v) =>
+        v.toLowerCase().includes(q),
+      ),
+    );
+  }, [contacts, searchTerm, tags, tasks]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / entriesPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * entriesPerPage;
+  const visible = filtered.slice(start, start + entriesPerPage);
+
+  const openAdd = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setErrors({});
+    setShowForm(true);
+  };
+
+  const openEdit = (task: Task) => {
+    setEditingId(task.id);
+    setForm({
+      subject: task.subject,
+      dueDate: task.dueDate,
+      status: task.status,
+      priority: task.priority,
+      account: task.account,
+      contactMode: task.contactMode,
+      contactIds: task.contactIds,
+      reminder: task.reminder,
+      reminderDate: task.reminderDate,
+      reminderTime: task.reminderTime,
+      reminderNotify: task.reminderNotify,
+      repeat: task.repeat,
+      description: task.description,
+    });
+    setErrors({});
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+  };
+
+  const handleSave = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!form.subject.trim()) {
+      setErrors({ subject: "Subject is required." });
+      return;
+    }
+
+    try {
+      setApiError("");
+      const saved = editingId
+        ? await updateTask(editingId, toTaskPayload(form))
+        : await createTask(toTaskPayload(form));
+      const task = fromApiTask(saved, taskOwner);
+      setTasks((current) =>
+        editingId ? current.map((item) => (item.id === editingId ? task : item)) : [task, ...current],
+      );
+      setPage(1);
+      closeForm();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to save task.");
+    }
+  };
+
+  const markComplete = async (id: string) => {
+    try {
+      const updated = await updateTask(id, { status: "Completed" });
+      setTasks((current) => current.map((task) => (task.id === id ? fromApiTask(updated, taskOwner) : task)));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to complete task.");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteTask(deleteId);
+      setTasks((current) => current.filter((task) => task.id !== deleteId));
+      setDeleteId(null);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete task.");
+    }
+  };
+
+    const togglePicked = (id: string) =>
+    setForm((current) => ({
+        ...current,
+        contactIds: current.contactIds.includes(id)
+        ? current.contactIds.filter((x) => x !== id)
+        : [...current.contactIds, id],
+    }));
+
+  const pickerItems =
+    form.contactMode === "name"
+      ? contacts.map((c) => ({ id: c.id, label: contactFullName(c) || c.email || "Unnamed" }))
+      : tags.map((t) => ({ id: t.id, label: t.name }));
+
+  return (
+    <>
+      <PageMeta title="Task | Yatzar Operations" description="Yatzar Operations tasks" />
+      <PageBreadcrumb pageTitle="Task" />
+      {apiError && (
+        <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
+          {apiError}
+        </div>
+      )}
+
+      {!showForm && (
+        <section className="rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+          <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Task information</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Track and manage tasks in one place.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openAdd}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
+            >
+              <span className="text-lg leading-none">+</span>Create Task
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search tasks"
+              className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 sm:max-w-xs dark:border-gray-800 dark:text-white/90"
+            />
+            <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              Show
+              <select
+                value={entriesPerPage}
+                onChange={(e) => {
+                  setEntriesPerPage(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
+              >
+                {[5, 10, 25, 50].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              entries
+            </label>
+          </div>
+
+          <div className="custom-scrollbar overflow-x-auto">
+            <table className="w-full min-w-[900px] text-start">
+              <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
+                <tr>
+                  <th className="w-12 px-5 py-3"><input type="checkbox" className="size-4 accent-brand-500" aria-label="Select all" /></th>
+                  <th className={thClass}>Subject</th>
+                  <th className={thClass}>Due date</th>
+                  <th className={thClass}>Status</th>
+                  <th className={thClass}>Priority</th>
+                  <th className={thClass}>Related to</th>
+                  <th className={thClass}>Contact name</th>
+                  <th className={thClass}>Task owner</th>
+                  <th className={`${thClass} text-center`}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {visible.map((task) => (
+                  <tr key={task.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
+                    <td className="px-5 py-4"><input type="checkbox" className="size-4 accent-brand-500" aria-label={`Select ${task.subject}`} /></td>
+                    <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">{task.subject}</td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{formatDate(task.dueDate)}</td>
+                    <td className="px-3 py-4 sm:px-5">
+                      <span className={`rounded-full px-2.5 py-1 text-xs ${statusBadge[task.status]}`}>{task.status}</span>
+                    </td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.priority}</td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.account || "—"}</td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
+                      {selectionLabel(task.contactMode, task.contactIds) || "—"}
+                    </td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.owner}</td>
+                    <td className="px-3 py-4 sm:px-5">
+                      <div className="flex items-center justify-left gap-1">
+                        {task.status !== "Completed" && (
+                          <button type="button" onClick={() => markComplete(task.id)} title="Mark complete" aria-label="Mark complete" className="rounded-md p-1.5 text-success-600 hover:bg-success-50">
+                            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
+                          </button>
+                        )}
+                        <button type="button" onClick={() => openEdit(task)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" /><path d="m13.5 6.5 4 4" /></svg>
+                        </button>
+                        <button type="button" onClick={() => setDeleteId(task.id)} title="Delete" aria-label="Delete" className="rounded-md p-1.5 text-error-500 hover:bg-error-50">
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M7 7l1 12h8l1-12" /><path d="M10 11v5M14 11v5" /></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {filtered.length === 0 && (
+            <div className="mx-5 my-5 rounded-xl border border-dashed border-gray-200 bg-gray-50 py-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-white/2 dark:text-gray-400">
+              {tasks.length === 0 ? "No tasks yet. Select Create Task to add one." : "No tasks match your search."}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between border-t border-gray-200 p-4 text-sm text-gray-500 sm:p-5 dark:border-gray-800 dark:text-gray-400">
+            <span>Total Records <b className="text-gray-800 dark:text-white/90">{filtered.length}</b></span>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="size-9 rounded-lg border border-gray-200 disabled:opacity-40 dark:border-gray-800">‹</button>
+              <span>{filtered.length === 0 ? 0 : start + 1} to {Math.min(start + entriesPerPage, filtered.length)}</span>
+              <button type="button" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)} className="size-9 rounded-lg border border-gray-200 disabled:opacity-40 dark:border-gray-800">›</button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {showForm && (
+        <form
+          onSubmit={handleSave}
+          noValidate
+          className="mx-auto w-full max-w-6xl rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark"
+        >
+          <div className="flex items-center justify-between border-b border-gray-200 p-5 dark:border-gray-800">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              {editingId ? "Edit task" : "Add task"}
+            </h3>
+            <div className="flex gap-3">
+              <button type="button" onClick={closeForm} className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300">
+                Cancel
+              </button>
+              <button type="submit" className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
+                Save task
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-6 p-5 sm:p-6">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-white/90">Task information</h4>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className={labelClass}>Task owner</label>
+                <input value={taskOwner} readOnly className={`${inputClass} cursor-not-allowed`} />
+              </div>
+              <div>
+                <label htmlFor="task-subject" className={labelClass}>Subject</label>
+                <input
+                  id="task-subject"
+                  value={form.subject}
+                  onChange={(e) => {
+                    setForm({ ...form, subject: e.target.value });
+                    setErrors({});
+                  }}
+                  placeholder="Enter subject"
+                  className={`${inputClass}${errors.subject ? " border-red-500" : ""}`}
+                />
+                {errors.subject && <p className="mt-1 text-xs text-red-600">{errors.subject}</p>}
+              </div>
+              <div>
+                <label htmlFor="task-due" className={labelClass}>Due date</label>
+                <input id="task-due" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className={inputClass} />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>Contact</label>
+              <div className="mb-3 flex gap-5 text-sm text-gray-700 dark:text-gray-300">
+                {(["name", "tag"] as const).map((mode) => (
+                  <label key={mode} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="contact-mode"
+                      checked={form.contactMode === mode}
+                      onChange={() => setForm({ ...form, contactMode: mode, contactIds: [] })}
+                      className="accent-brand-500"
+                    />
+                    {mode === "name" ? "Name" : "Tag"}
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3.5 py-3 text-sm dark:border-gray-800">
+                <span className="text-gray-700 dark:text-gray-300">
+                  {form.contactIds.length === 0
+                    ? form.contactMode === "name" ? "No contacts selected" : "No tags selected"
+                    : selectionLabel(form.contactMode, form.contactIds)}
+                </span>
+                <button
+                    type="button"
+                    onClick={() => setPickerOpen((open) => !open)}
+                    className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
+                    >
+                    {pickerOpen ? "Done" : "Select"}
+                </button>
+              </div>
+              {pickerOpen && (
+                <div className="custom-scrollbar mt-3 max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+                    {pickerItems.length === 0 && (
+                    <p className="px-4 py-3 text-sm text-gray-500">Nothing to select yet.</p>
+                    )}
+                    {pickerItems.map((item) => (
+                    <label
+                        key={item.id}
+                        className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                    >
+                        <input
+                        type="checkbox"
+                        checked={form.contactIds.includes(item.id)}
+                        onChange={() => togglePicked(item.id)}
+                        className="size-4 accent-brand-500"
+                        />
+                        {item.label}
+                    </label>
+                    ))}
+                </div>
+                )}
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label htmlFor="task-account" className={labelClass}>Account</label>
+                <input id="task-account" value={form.account} onChange={(e) => setForm({ ...form, account: e.target.value })} placeholder="Search account" className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="task-status" className={labelClass}>Status</label>
+                <select id="task-status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as TaskStatus })} className={inputClass}>
+                  {statuses.map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="task-priority" className={labelClass}>Priority</label>
+                <select id="task-priority" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as TaskPriority })} className={inputClass}>
+                  {priorities.map((p) => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div className="relative">
+                <label className={labelClass}>Reminder</label>
+                <div className="flex items-center gap-3">
+                <Toggle checked={form.reminder} onChange={(v) => {
+                    setForm({
+                        ...form,
+                        reminder: v,
+                        repeat: v ? form.repeat : false,
+                        reminderDate: v ? new Date().toISOString().slice(0, 10) : "",
+                        reminderTime: v ? new Date().toTimeString().slice(0, 5) : "",
+                    });
+                    setReminderOpen(v);
+                }}/>
+                {form.reminder && !reminderOpen && (
+                    <button
+                        type="button"
+                        onClick={() => setReminderOpen(true)}
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                        title="Edit reminder"
+                    >
+                        On {formatDate(form.reminderDate)} at {formatTime(form.reminderTime)} · {form.reminderNotify}
+                    </button>
+                    )}
+                </div>
+                {reminderOpen && (
+                    <div className="absolute left-0 top-full z-20 mt-3 w-[26rem] max-w-[90vw] space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-800 dark:bg-gray-dark">
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        On
+                        <input type="date" value={form.reminderDate} onChange={(e) => setForm({ ...form, reminderDate: e.target.value })} className={inputClass} />
+                        at
+                        <input type="time" value={form.reminderTime} onChange={(e) => setForm({ ...form, reminderTime: e.target.value })} className={inputClass} />
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-700">
+                        Notify
+                        <select value={form.reminderNotify} onChange={(e) => setForm({ ...form, reminderNotify: e.target.value })} className={inputClass}>
+                        <option>Email</option>
+                        <option>Popup</option>
+                        <option>Email and Popup</option>
+                        </select>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={() => { setReminderOpen(false); setForm({ ...form, reminder: false, repeat: false }); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700">Cancel</button>
+                        <button type="button" onClick={() => setReminderOpen(false)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Done</button>
+                    </div>
+                    </div>
+                )}
+                </div>
+              <div>
+                <label className={labelClass}>Repeat</label>
+                <Toggle
+                  checked={form.repeat}
+                  disabled={!form.reminder}
+                  onChange={(v) => setForm({ ...form, repeat: v })}
+                />
+              </div>
+            </div>
+
+            <h4 className="pt-2 text-sm font-semibold text-gray-800 dark:text-white/90">Description information</h4>
+            <div>
+              <label htmlFor="task-description" className={labelClass}>Description</label>
+              <textarea id="task-description" rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Enter description" className={inputClass} />
+            </div>
+          </div>
+        </form>
+      )}
+
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+          <div role="alertdialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-dark">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-white/90">Confirm delete</h3>
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">This will permanently remove this task.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setDeleteId(null)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 dark:border-gray-800 dark:text-gray-300">Cancel</button>
+              <button type="button" onClick={confirmDelete} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-500">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
