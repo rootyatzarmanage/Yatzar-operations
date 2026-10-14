@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import (BaseModel,ConfigDict,Field,field_validator,model_validator)
+from pydantic import (BaseModel,ConfigDict,Field,field_validator)
 
 
 class MeetingParticipantResponse(BaseModel):
@@ -44,21 +44,7 @@ class MeetingResponse(BaseModel):
     def strip_whitespace(cls, value: str) -> str:
         return value.strip() if value is not None else value
 
-    @model_validator(mode="after")
-    def validate_meeting_timeline(self) -> Self:
-        if self.ends_at <= self.starts_at:
-            raise ValueError(
-                "The 'ends_at' timestamp must be strictly after "
-                "the 'starts_at' timestamp."
-            )
 
-        if self.updated_at and self.updated_at < self.created_at:
-            raise ValueError(
-                "The 'updated_at' timestamp cannot be earlier "
-                "than 'created_at'."
-            )
-
-        return self
 
 
 class MeetingListResponse(BaseModel):

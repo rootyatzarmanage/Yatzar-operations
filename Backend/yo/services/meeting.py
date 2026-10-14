@@ -33,13 +33,7 @@ class MeetingService:
             per_page=per_page,
         )
 
-    @staticmethod
-    def _validate_schedule(starts_at, ends_at):
-        if starts_at is not None and ends_at is not None:
-            if ends_at <= starts_at:
-                raise ValueError(
-                    "Meeting end time must be after start time"
-                )
+
 
     @staticmethod
     def _serialize_participants(participants):
@@ -56,7 +50,6 @@ class MeetingService:
         payload: MeetingCreateRequest,
         user_id: UUID,
     ) -> Meeting:
-        self._validate_schedule(payload.starts_at, payload.ends_at)
 
         values = payload.model_dump()
 
