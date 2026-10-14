@@ -16,6 +16,7 @@ export type ContactFields = {
   otherPhone: string;
   department: string;
   leadSource: string;
+  tagId: string;
   addressLine1: string;
   addressLine2: string;
   city: string;
@@ -57,6 +58,7 @@ export type ContactPayload = {
   other_phone: string | null;
   department: string | null;
   lead_source: string | null;
+  tag_id: string | null;
   mailing_country: string | null;
   mailing_state: string | null;
   mailing_city: string | null;
@@ -112,6 +114,7 @@ export function toContactPayload(fields: ContactFields): ContactPayload {
     other_phone: nullable(fields.otherPhone),
     department: nullable(fields.department),
     lead_source: nullable(fields.leadSource),
+    tag_id: nullable(fields.tagId),
     mailing_country: nullable(fields.country),
     mailing_state: nullable(fields.state),
     mailing_city: nullable(fields.city),

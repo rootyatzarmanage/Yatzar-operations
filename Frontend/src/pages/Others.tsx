@@ -7,6 +7,13 @@ import {
   updateOption,
   type DropdownOption,
 } from "@/api/options";
+import {
+  createTag,
+  deleteTag,
+  listTags,
+  updateTag,
+  type Tag,
+} from "@/api/tags";
 import { EditIcon, TrashIcon } from "@/icons";
 import { useEffect, useState } from "react";
 
@@ -15,8 +22,9 @@ export default function Others() {
   const [reportingManagers, setReportingManagers] = useState<DropdownOption[]>(
     [],
   );
+  const [tags, setTags] = useState<Tag[]>([]);
   const [activeType, setActiveType] = useState<
-    "departments" | "reportingManagers"
+    "departments" | "reportingManagers" | "tag"
   >("departments");
   const [value, setValue] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -24,12 +32,14 @@ export default function Others() {
 
   const refreshOptions = async () => {
     try {
-      const [departmentOptions, managerOptions] = await Promise.all([
+      const [departmentOptions, managerOptions, tagList] = await Promise.all([
         listOptions("department"),
         listOptions("reporting_manager"),
+        listTags(true),
       ]);
       setDepartments(departmentOptions);
       setReportingManagers(managerOptions);
+      setTags(tagList);
       setApiError("");
     } catch (error) {
       setApiError(
@@ -42,12 +52,28 @@ export default function Others() {
     void refreshOptions();
   }, []);
 
-  const values = activeType === "departments" ? departments : reportingManagers;
+  const isTags = activeType === "tag";
+  const typeLabel =
+    activeType === "departments"
+      ? "department"
+      : activeType === "reportingManagers"
+        ? "reporting manager"
+        : "tag";
+  const values: (DropdownOption & { status?: number })[] = isTags
+    ? tags.map((tag) => ({ id: tag.id, value: tag.name, status: tag.status }))
+    : activeType === "departments"
+      ? departments
+      : reportingManagers;
+  const fail = (fallback: string) => (error: unknown) =>
+    setApiError(error instanceof Error ? error.message : fallback);
   const saveValue = async () => {
     const trimmed = value.trim();
     if (!trimmed) return;
     try {
-      if (editingId) await updateOption(editingId, trimmed);
+      if (isTags) {
+        if (editingId) await updateTag(editingId, { name: trimmed });
+        else await createTag(trimmed);
+      } else if (editingId) await updateOption(editingId, trimmed);
       else
         await createOption(
           activeType === "departments" ? "department" : "reporting_manager",
@@ -85,7 +111,7 @@ export default function Others() {
           </p>
         </div>
         <div className="flex gap-6 border-b border-gray-200 px-5 dark:border-gray-800">
-          {(["departments", "reportingManagers"] as const).map((type) => (
+          {(["departments", "reportingManagers", "tag"] as const).map((type) => (
             <button
               key={type}
               type="button"
@@ -96,7 +122,11 @@ export default function Others() {
               }}
               className={`border-b-2 py-4 text-sm font-medium ${activeType === type ? "border-brand-500 text-brand-500" : "border-transparent text-gray-500 dark:text-gray-400"}`}
             >
-              {type === "departments" ? "Department" : "Reporting manager"}
+              {type === "departments"
+                ? "Department"
+                : type === "reportingManagers"
+                  ? "Reporting manager"
+                  : "Tag"}
             </button>
           ))}
         </div>
@@ -106,7 +136,7 @@ export default function Others() {
               value={value}
               onChange={(event) => setValue(event.target.value)}
               className="h-14 min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs sm:h-11 sm:text-sm dark:border-gray-800 dark:text-white/90"
-              placeholder={`Enter ${activeType === "departments" ? "department" : "reporting manager"}`}
+              placeholder={`Enter ${typeLabel}`}
             />
             <button
               type="button"
@@ -126,6 +156,22 @@ export default function Others() {
                   {item.value}
                 </span>
                 <div className="flex items-center gap-1">
+                  {isTags && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void updateTag(item.id, {
+                          status: item.status === 1 ? 0 : 1,
+                        })
+                          .then(refreshOptions)
+                          .catch(fail("Unable to update tag status."))
+                      }
+                      className={`mr-2 rounded-full px-2.5 py-1 text-xs ${item.status === 1 ? "bg-success-50 text-success-600" : "bg-gray-100 text-gray-500"}`}
+                      title="Toggle active / inactive"
+                    >
+                      {item.status === 1 ? "Active" : "Inactive"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -141,7 +187,7 @@ export default function Others() {
                   <button
                     type="button"
                     onClick={() =>
-                      void deleteOption(item.id)
+                      void (isTags ? deleteTag(item.id) : deleteOption(item.id))
                         .then(refreshOptions)
                         .catch((error: unknown) =>
                           setApiError(

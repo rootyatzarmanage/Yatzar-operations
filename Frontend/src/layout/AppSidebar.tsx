@@ -85,6 +85,7 @@ const workspaceNavItems: NavItem[] = [
     icon: <MessageSquare size={24} />,
     name: "Engagement",
     subItems: [
+      { name: "Contacts", path: "/contacts" },
       { name: "Leads", path: "/leads" },
       { name: "Customer", path: "/customers" },
     ],

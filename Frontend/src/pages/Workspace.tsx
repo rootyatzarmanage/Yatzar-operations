@@ -359,7 +359,7 @@ export default function Workspace() {
                               id: workspace.id,
                               name: workspace.name,
                             });
-                            navigate("/leads");
+                            navigate("/contacts");
                           }}
                           className="font-semibold text-brand-500 hover:text-brand-600 hover:underline dark:text-brand-400"
                           title={`Open ${workspace.name}`}

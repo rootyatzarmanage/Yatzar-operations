@@ -1,4 +1,5 @@
 import { listOptions } from "@/api/options";
+import { listTags, type Tag } from "@/api/tags";
 import {
   createContact,
   deleteContact,
@@ -13,6 +14,7 @@ import {
 } from "@/api/contacts";
 import { addContactToCustomers } from "@/api/customers";
 import { listWorkspaces, type Workspace } from "@/api/workspaces"
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { addContactToLeads } from "@/api/leads";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -42,6 +44,7 @@ const emptyForm: ContactFields = {
   otherPhone: "",
   department: "",
   leadSource: "",
+  tagId: "",
   addressLine1: "",
   addressLine2: "",
   city: "",
@@ -103,6 +106,7 @@ function fromApiContact(contact: Contact): LocalContact {
     otherPhone: contact.other_phone ?? "",
     department: contact.department ?? "",
     leadSource: contact.lead_source ?? "",
+    tagId: contact.tag_id ?? "",
     addressLine1: contact.mailing_building ?? "",
     addressLine2: contact.mailing_street ?? "",
     city: contact.mailing_city ?? "",
@@ -145,8 +149,10 @@ function validateCoordinates(
 
 export default function Contacts() {
   const { t } = useTranslation();
+  const { currentWorkspace } = useWorkspace();
   const [contacts, setContacts] = useState<LocalContact[]>([]);
   const [leadSources, setLeadSources] = useState<string[]>(defaultLeadSources);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [, setLeadSourcesLoading] = useState(true);
   const [, setLeadSourcesError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -179,7 +185,14 @@ export default function Contacts() {
     let active = true;
     void listContacts()
       .then((items) => {
-        if (active) setContacts(items.map(fromApiContact));
+        if (!active) return;
+        const all = items.map(fromApiContact);
+        // Inside a workspace, show only that workspace's contacts.
+        setContacts(
+          currentWorkspace
+            ? all.filter((contact) => contact.workspace === currentWorkspace.id)
+            : all,
+        );
       })
       .catch((error: unknown) => {
         if (active) {
@@ -191,6 +204,12 @@ export default function Contacts() {
     return () => {
       active = false;
     };
+  }, [currentWorkspace]);
+
+  useEffect(() => {
+    void listTags()
+      .then(setTags)
+      .catch(() => setTags([]));
   }, []);
 
   useEffect(() => {
@@ -290,7 +309,7 @@ export default function Contacts() {
     clearMessages();
     setEditingId(null);
     setViewing(false);
-    setFormValues({ ...emptyForm });
+    setFormValues({ ...emptyForm, workspace: currentWorkspace?.id ?? "" });
     setSelectedPhoto(null);
     setPhotoPreview("");
     setFormErrors({});
@@ -318,6 +337,7 @@ export default function Contacts() {
       otherPhone: contact.otherPhone,
       department: contact.department,
       leadSource: contact.leadSource,
+      tagId: contact.tagId,
       addressLine1: contact.addressLine1,
       addressLine2: contact.addressLine2,
       city: contact.city,
@@ -351,7 +371,7 @@ export default function Contacts() {
     setShowForm(false);
     setEditingId(null);
     setViewing(false);
-    setFormValues({ ...emptyForm });
+    setFormValues({ ...emptyForm, workspace: currentWorkspace?.id ?? "" });
     setSelectedPhoto(null);
     setPhotoPreview("");
     setFormErrors({});
@@ -990,6 +1010,7 @@ export default function Contacts() {
               { label: "Contact owner", value: formValues.contactOwner },
               { label: "Workspace", value: workspaceNames.get(formValues.workspace) ?? "" },
               { label: "Lead source", value: formValues.leadSource },
+              { label: "Tag", value: tags.find((tag) => tag.id === formValues.tagId)?.name ?? "" },
               { label: "Date of birth", value: formValues.dateOfBirth },
               { label: "First name", value: formValues.firstName },
               { label: "Last name", value: formValues.lastName },
@@ -1133,6 +1154,15 @@ export default function Contacts() {
                         {[...new Set([...leadSources, formValues.leadSource])].filter(Boolean).map((source) => <option key={source} value={source}>{source}</option>)}
                       </select>
                       {formErrors.leadSource && <p className="mt-1 text-xs text-red-600">{formErrors.leadSource}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="contact-tag" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Tag
+                      </label>
+                      <select id="contact-tag" value={formValues.tagId} onChange={(event) => updateField("tagId", event.target.value)} className={inputClass}>
+                        <option value="">-None-</option>
+                        {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+                      </select>
                     </div>
                     {renderInput("firstName", "First Name", {
                       required: true,
