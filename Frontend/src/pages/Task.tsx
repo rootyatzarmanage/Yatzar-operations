@@ -19,7 +19,8 @@ type Task = {
   account: string;
   owner: string;
   contactMode: ContactMode;
-  contactIds: string[]; // contact ids (name mode) or tag ids (tag mode)
+  tagId: string;
+  contactIds: string[];
   contactLabel: string; // text shown in the table
   reminder: boolean;
   reminderDate: string;
@@ -53,6 +54,7 @@ const emptyForm = {
   priority: "High" as TaskPriority,
   account: "",
   contactMode: "name" as ContactMode,
+  tagId: "",
   contactIds: [] as string[],
   reminder: false,
   reminderDate: "",
@@ -134,25 +136,15 @@ export default function Tasks() {
       .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tasks."));
   }, [taskOwner]);
 
-  const selectionLabel = (mode: ContactMode, ids: string[]) =>
-    mode === "name"
-      ? contacts.filter((c) => ids.includes(c.id)).map(contactFullName).join(", ")
-      : tags.filter((t) => ids.includes(t.id)).map((t) => t.name).join(", ");
+  const selectionLabel = (_mode: ContactMode, ids: string[]) =>
+    contacts.filter((c) => ids.includes(c.id)).map(contactFullName).join(", ");
 
   const toTaskPayload = (values: typeof emptyForm): TaskPayload => {
-    const selectedContacts = contacts.filter((contact) => values.contactIds.includes(contact.id));
-    const contactTagIds = [...new Set(selectedContacts.map((contact) => contact.tag_id).filter(Boolean))];
-    const tagId = values.contactMode === "tag"
-      ? values.contactIds[0] ?? null
-      : contactTagIds.length === 1
-        ? contactTagIds[0]
-        : null;
-
     return {
       subject: values.subject.trim(),
       due_date: values.dueDate || null,
-      tag_id: tagId,
-      contact_ids: values.contactMode === "tag" ? [] : values.contactIds,
+      tag_id: values.tagId || null,
+      contact_ids: values.contactIds,
       account: values.account.trim() || null,
       status: values.status,
       priority: values.priority,
@@ -176,7 +168,8 @@ export default function Tasks() {
       account: task.account ?? "",
       owner,
       contactMode: task.tag_id ? "tag" : "name",
-      contactIds: task.tag_id ? [task.tag_id] : task.contact_ids,
+      tagId: task.tag_id ?? "",
+      contactIds: task.contact_ids,
       contactLabel: "",
       reminder: task.reminder_enabled,
       reminderDate: task.reminder_at?.slice(0, 10) ?? "",
@@ -206,6 +199,8 @@ export default function Tasks() {
     setEditingId(null);
     setForm(emptyForm);
     setErrors({});
+    setPickerOpen(false);
+    setReminderOpen(false);
     setShowForm(true);
   };
 
@@ -225,14 +220,19 @@ export default function Tasks() {
       reminderNotify: task.reminderNotify,
       repeat: task.repeat,
       description: task.description,
+      tagId: task.tagId,
     });
     setErrors({});
+    setPickerOpen(false);
+    setReminderOpen(false);
     setShowForm(true);
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditingId(null);
+    setPickerOpen(false);
+    setReminderOpen(false);
   };
 
   const handleSave = async (event: FormEvent) => {
@@ -278,23 +278,38 @@ export default function Tasks() {
     }
   };
 
-    const togglePicked = (id: string) =>
+  const togglePicked = (id: string) =>
     setForm((current) => ({
-        ...current,
-        contactIds: current.contactIds.includes(id)
+      ...current,
+      contactIds: current.contactIds.includes(id)
         ? current.contactIds.filter((x) => x !== id)
         : [...current.contactIds, id],
     }));
 
+  const selectTag = (tagId: string) => {
+    setForm((current) => ({
+      ...current,
+      tagId,
+      contactIds: contacts
+        .filter((contact) => contact.tag_id === tagId)
+        .map((contact) => contact.id),
+    }));
+  };
+
   const pickerItems =
     form.contactMode === "name"
       ? contacts.map((c) => ({ id: c.id, label: contactFullName(c) || c.email || "Unnamed" }))
-      : tags.map((t) => ({ id: t.id, label: t.name }));
+      : contacts
+          .filter((contact) => contact.tag_id === form.tagId)
+          .map((contact) => ({
+            id: contact.id,
+            label: contactFullName(contact) || contact.email || "Unnamed",
+          }));
 
   return (
     <>
       <PageMeta title="Task | Yatzar Operations" description="Yatzar Operations tasks" />
-      <PageBreadcrumb pageTitle="Task" />
+      <PageBreadcrumb pageTitle="Task" parent={{ label: "Activities" }} />
       {apiError && (
         <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
           {apiError}
@@ -463,57 +478,92 @@ export default function Tasks() {
               </div>
             </div>
 
-            <div>
-              <label className={labelClass}>Contact</label>
-              <div className="mb-3 flex gap-5 text-sm text-gray-700 dark:text-gray-300">
-                {(["name", "tag"] as const).map((mode) => (
-                  <label key={mode} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="contact-mode"
-                      checked={form.contactMode === mode}
-                      onChange={() => setForm({ ...form, contactMode: mode, contactIds: [] })}
-                      className="accent-brand-500"
-                    />
-                    {mode === "name" ? "Name" : "Tag"}
-                  </label>
-                ))}
+            {/* Contact: label + radios on the left, tag / summary / list on the right */}
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className={labelClass}>Contact</label>
+                <div className="flex gap-5 text-sm text-gray-700 dark:text-gray-300">
+                  {(["name", "tag"] as const).map((mode) => (
+                    <label key={mode} className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="radio"
+                        name="contact-mode"
+                        checked={form.contactMode === mode}
+                        onChange={() => {
+                          setForm({ ...form, contactMode: mode, tagId: "", contactIds: [] });
+                          setPickerOpen(false);
+                        }}
+                        className="accent-brand-500"
+                      />
+                      {mode === "name" ? "Name" : "Tag"}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3.5 py-3 text-sm dark:border-gray-800">
-                <span className="text-gray-700 dark:text-gray-300">
-                  {form.contactIds.length === 0
-                    ? form.contactMode === "name" ? "No contacts selected" : "No tags selected"
-                    : selectionLabel(form.contactMode, form.contactIds)}
-                </span>
-                <button
+
+              <div className="space-y-3">
+                {form.contactMode === "tag" && (
+                  <select
+                    aria-label="Select tag"
+                    value={form.tagId}
+                    onChange={(event) => {
+                      selectTag(event.target.value);
+                      setPickerOpen(true);
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">Select a tag</option>
+                    {tags.map((tag) => (
+                      <option key={tag.id} value={tag.id}>{tag.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3.5 py-3 text-sm dark:border-gray-800">
+                  <span className="text-gray-700 dark:text-gray-300">
+                    {form.contactMode === "tag"
+                      ? !form.tagId
+                        ? "Select a tag to choose contacts"
+                        : `${form.contactIds.length} of ${pickerItems.length} contacts selected`
+                      : form.contactIds.length === 0
+                        ? "No contacts selected"
+                        : `${form.contactIds.length} contacts selected`}
+                  </span>
+                  <button
                     type="button"
                     onClick={() => setPickerOpen((open) => !open)}
                     className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
-                    >
-                    {pickerOpen ? "Done" : "Select"}
-                </button>
-              </div>
-              {pickerOpen && (
-                <div className="custom-scrollbar mt-3 max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+                  >
+                    {pickerOpen ? "Done" : "Edit"}
+                  </button>
+                </div>
+
+                {pickerOpen && (
+                  <div className="custom-scrollbar max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
                     {pickerItems.length === 0 && (
-                    <p className="px-4 py-3 text-sm text-gray-500">Nothing to select yet.</p>
+                      <p className="px-4 py-3 text-sm text-gray-500">
+                        {form.contactMode === "tag" && !form.tagId
+                          ? "Select a tag first."
+                          : "Nothing to select yet."}
+                      </p>
                     )}
                     {pickerItems.map((item) => (
-                    <label
+                      <label
                         key={item.id}
                         className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
-                    >
+                      >
                         <input
-                        type="checkbox"
-                        checked={form.contactIds.includes(item.id)}
-                        onChange={() => togglePicked(item.id)}
-                        className="size-4 accent-brand-500"
+                          type="checkbox"
+                          checked={form.contactIds.includes(item.id)}
+                          onChange={() => togglePicked(item.id)}
+                          className="size-4 accent-brand-500"
                         />
                         {item.label}
-                    </label>
+                      </label>
                     ))}
-                </div>
+                  </div>
                 )}
+              </div>
             </div>
 
             <div className="grid gap-5 md:grid-cols-2">
@@ -536,50 +586,53 @@ export default function Tasks() {
               <div className="relative">
                 <label className={labelClass}>Reminder</label>
                 <div className="flex items-center gap-3">
-                <Toggle checked={form.reminder} onChange={(v) => {
-                    setForm({
+                  <Toggle
+                    checked={form.reminder}
+                    onChange={(v) => {
+                      setForm({
                         ...form,
                         reminder: v,
                         repeat: v ? form.repeat : false,
                         reminderDate: v ? new Date().toISOString().slice(0, 10) : "",
                         reminderTime: v ? new Date().toTimeString().slice(0, 5) : "",
-                    });
-                    setReminderOpen(v);
-                }}/>
-                {form.reminder && !reminderOpen && (
+                      });
+                      setReminderOpen(v);
+                    }}
+                  />
+                  {form.reminder && !reminderOpen && (
                     <button
-                        type="button"
-                        onClick={() => setReminderOpen(true)}
-                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                        title="Edit reminder"
+                      type="button"
+                      onClick={() => setReminderOpen(true)}
+                      className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                      title="Edit reminder"
                     >
-                        On {formatDate(form.reminderDate)} at {formatTime(form.reminderTime)} · {form.reminderNotify}
+                      On {formatDate(form.reminderDate)} at {formatTime(form.reminderTime)} · {form.reminderNotify}
                     </button>
-                    )}
+                  )}
                 </div>
                 {reminderOpen && (
-                    <div className="absolute left-0 top-full z-20 mt-3 w-[26rem] max-w-[90vw] space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-800 dark:bg-gray-dark">
+                  <div className="absolute left-0 top-full z-20 mt-3 w-[26rem] max-w-[90vw] space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-800 dark:bg-gray-dark">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
-                        On
-                        <input type="date" value={form.reminderDate} onChange={(e) => setForm({ ...form, reminderDate: e.target.value })} className={inputClass} />
-                        at
-                        <input type="time" value={form.reminderTime} onChange={(e) => setForm({ ...form, reminderTime: e.target.value })} className={inputClass} />
+                      On
+                      <input type="date" value={form.reminderDate} onChange={(e) => setForm({ ...form, reminderDate: e.target.value })} className={inputClass} />
+                      at
+                      <input type="time" value={form.reminderTime} onChange={(e) => setForm({ ...form, reminderTime: e.target.value })} className={inputClass} />
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-700">
-                        Notify
-                        <select value={form.reminderNotify} onChange={(e) => setForm({ ...form, reminderNotify: e.target.value })} className={inputClass}>
+                      Notify
+                      <select value={form.reminderNotify} onChange={(e) => setForm({ ...form, reminderNotify: e.target.value })} className={inputClass}>
                         <option>Email</option>
                         <option>Popup</option>
                         <option>Email and Popup</option>
-                        </select>
+                      </select>
                     </div>
                     <div className="flex justify-end gap-3">
-                        <button type="button" onClick={() => { setReminderOpen(false); setForm({ ...form, reminder: false, repeat: false }); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700">Cancel</button>
-                        <button type="button" onClick={() => setReminderOpen(false)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Done</button>
+                      <button type="button" onClick={() => { setReminderOpen(false); setForm({ ...form, reminder: false, repeat: false }); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700">Cancel</button>
+                      <button type="button" onClick={() => setReminderOpen(false)} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">Done</button>
                     </div>
-                    </div>
+                  </div>
                 )}
-                </div>
+              </div>
               <div>
                 <label className={labelClass}>Repeat</label>
                 <Toggle

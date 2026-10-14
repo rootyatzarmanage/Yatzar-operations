@@ -108,12 +108,8 @@ export default function Customers() {
       searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource)]}
       recordName={customerName}
       store={store}
+      showExport={false}
       viewBadge={() => currentWorkspace?.name ?? ""}
-      filters={[{ label: "Lead source", get: (r) => text(r.leadSource) }]}
-      sorts={[
-        { label: "Name", get: customerName },
-        { label: "Customer ID", get: (r) => text(r.customerId) },
-      ]}
     />
   );
 }

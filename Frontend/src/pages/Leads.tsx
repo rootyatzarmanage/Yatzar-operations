@@ -127,6 +127,7 @@ export default function Leads() {
       searchText={(r) => [leadName(r), text(r.company), text(r.email), text(r.phone), text(r.leadSource), text(r.leadOwner)]}
       recordName={leadName}
       store={store}
+      showExport={false}
       viewBadge={() => currentWorkspace?.name ?? ""}
       moves={[
         {
@@ -136,15 +137,6 @@ export default function Leads() {
           done: (n) => `${n} moved to Customers.`,
           run: (r) => addLeadToCustomers(r.id),
         },
-      ]}
-      filters={[
-        { label: "Lead status", get: (r) => text(r.leadStatus) },
-        { label: "Lead source", get: (r) => text(r.leadSource) },
-      ]}
-      sorts={[
-        { label: "Name", get: leadName },
-        { label: "Company", get: (r) => text(r.company) },
-        { label: "Lead status", get: (r) => text(r.leadStatus) },
       ]}
     />
   );

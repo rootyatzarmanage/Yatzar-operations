@@ -66,6 +66,7 @@ type Props<T extends StoredRecord> = {
   searchText: (record: T) => string[];
   recordName: (record: T) => string;
   store: RecordStore<T>;
+  showExport?: boolean;
 };
 
 const inputClass =
@@ -103,6 +104,7 @@ export default function RecordPage<T extends StoredRecord>({
   searchText,
   recordName,
   store,
+  showExport = true,
   moves = [],
   filters = [],
   sorts = [],
@@ -548,7 +550,9 @@ export default function RecordPage<T extends StoredRecord>({
                   Sort{sortState ? ` (${sorts[sortState.i].label})` : ""}
                 </button>
               )}
-              <button type="button" onClick={exportCsv} className={toolBtn}>Export CSV</button>
+              {showExport && (
+                <button type="button" onClick={exportCsv} className={toolBtn}>Export CSV</button>
+              )}
               {panel === "filter" && (
                 <div className="absolute end-0 top-12 z-20 w-64 space-y-3 rounded-xl border border-gray-200 bg-white p-4 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark">
                   {filters.map((f, i) => {
