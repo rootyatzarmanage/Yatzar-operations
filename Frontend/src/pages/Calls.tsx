@@ -1,4 +1,12 @@
 import { listContacts, type Contact } from "@/api/contacts";
+import {
+  createCall,
+  deleteCall,
+  listCalls,
+  updateCall,
+  type CallApi,
+  type CallPayload,
+} from "@/api/calls";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useAuth } from "@/context/AuthContext";
@@ -97,23 +105,11 @@ const emptyForm = {
 
 type FormErrors = { contactId?: string; startTime?: string; duration?: string };
 
-// TODO: replace with data from your API (e.g. listCalls()) once the endpoint exists.
-const seedCalls: Call[] = [
-  { id: "1", kind: "log", subject: "Intro call with new lead", callType: "Outbound", status: "Completed", startTime: "2026-10-12T11:00", durationSeconds: 330, account: "BuildRight Infra", contactId: "", contactName: "Priya Nair", owner: "", voiceRecording: "", reminder: "None", purpose: "Prospecting", agenda: "" },
-  { id: "2", kind: "schedule", subject: "Follow up on proposal", callType: "Outbound", status: "Scheduled", startTime: "2026-10-14T15:00", durationSeconds: null, account: "Greenfield Traders", contactId: "", contactName: "Arjun Menon", owner: "", voiceRecording: "", reminder: "15 minutes before", purpose: "Negotiation", agenda: "" },
-  { id: "3", kind: "log", subject: "Customer support enquiry", callType: "Inbound", status: "Completed", startTime: "2026-10-11T10:00", durationSeconds: 765, account: "Sundaram Textiles", contactId: "", contactName: "Kavya Sharma", owner: "", voiceRecording: "", reminder: "None", purpose: "-None-", agenda: "" },
-  { id: "4", kind: "log", subject: "Missed call from supplier", callType: "Missed", status: "Completed", startTime: "2026-10-12T17:00", durationSeconds: null, account: "Nilgiri Foods", contactId: "", contactName: "Rohan Iyer", owner: "", voiceRecording: "", reminder: "None", purpose: "-None-", agenda: "" },
-  { id: "5", kind: "schedule", subject: "Renewal discussion", callType: "Outbound", status: "Scheduled", startTime: "2026-10-16T12:00", durationSeconds: null, account: "Coastal Logistics", contactId: "", contactName: "Sneha Reddy", owner: "", voiceRecording: "", reminder: "None", purpose: "Negotiation", agenda: "" },
-  { id: "6", kind: "log", subject: "Product demo walkthrough", callType: "Outbound", status: "Completed", startTime: "2026-10-09T14:30", durationSeconds: 1200, account: "BuildRight Infra", contactId: "", contactName: "Priya Nair", owner: "", voiceRecording: "", reminder: "None", purpose: "Demo", agenda: "" },
-  { id: "7", kind: "log", subject: "Pricing clarification", callType: "Inbound", status: "Completed", startTime: "2026-10-08T09:15", durationSeconds: 240, account: "Greenfield Traders", contactId: "", contactName: "Arjun Menon", owner: "", voiceRecording: "", reminder: "None", purpose: "-None-", agenda: "" },
-  { id: "8", kind: "schedule", subject: "Quarterly check-in", callType: "Outbound", status: "Scheduled", startTime: "2026-10-20T11:30", durationSeconds: null, account: "Sundaram Textiles", contactId: "", contactName: "Kavya Sharma", owner: "", voiceRecording: "", reminder: "1 hour before", purpose: "Project", agenda: "" },
-];
-
 export default function Calls() {
   const { user } = useAuth();
   const callOwner = user?.display_name || user?.employee_name || user?.username || "";
 
-  const [calls, setCalls] = useState<Call[]>(seedCalls);
+  const [calls, setCalls] = useState<Call[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [view, setView] = useState<View>("list");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -128,10 +124,40 @@ export default function Calls() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void listContacts()
-      .then(setContacts)
-      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load contacts."));
+    void Promise.all([listContacts(), listCalls({ page: 1, perPage: 100 })])
+      .then(([contactItems, callResult]) => {
+        setContacts(contactItems);
+        setCalls(callResult.items.map((call) => fromApiCall(call, contactItems)));
+      })
+      .catch((error: unknown) =>
+        setApiError(error instanceof Error ? error.message : "Unable to load calls."),
+      );
   }, []);
+
+  function fromApiCall(call: CallApi, availableContacts: Contact[]): Call {
+    const contact = availableContacts.find((item) => item.id === call.contact_id);
+    const durationSeconds =
+      call.duration_minutes === null && call.duration_seconds === null
+        ? null
+        : (call.duration_minutes ?? 0) * 60 + (call.duration_seconds ?? 0);
+    return {
+      id: call.id,
+      kind: call.call_status === "Scheduled" ? "schedule" : "log",
+      subject: call.subject,
+      callType: call.call_type,
+      status: call.call_status,
+      startTime: call.call_start_time.slice(0, 16),
+      durationSeconds,
+      account: call.related_to ?? "",
+      contactId: call.contact_id,
+      contactName: contact ? contactFullName(contact) : "",
+      owner: callOwner,
+      voiceRecording: call.voice_recording ?? "",
+      reminder: call.reminder ?? "None",
+      purpose: call.call_purpose ?? "-None-",
+      agenda: call.call_agenda ?? "",
+    };
+  }
 
   // close the "Create Call" dropdown on outside click / Escape
   useEffect(() => {
@@ -213,7 +239,7 @@ export default function Calls() {
     setErrors({});
   };
 
-  const handleSave = (event: FormEvent) => {
+  const handleSave = async (event: FormEvent) => {
     event.preventDefault();
     const next: FormErrors = {};
     const existing = editingId ? calls.find((c) => c.id === editingId) : undefined;
@@ -241,26 +267,26 @@ export default function Calls() {
       return;
     }
 
-    // TODO: call your API here (createCall / updateCall) and use the saved record.
     try {
       setApiError("");
-      const saved: Call = {
-        id: editingId ?? crypto.randomUUID(),
-        kind: isSchedule ? "schedule" : "log",
+      const payload: CallPayload = {
+        contact_id: form.contactId,
         subject: subjectValue.trim() || defaultSubject(isSchedule ? "schedule" : "log", form.callType, selectedName),
-        callType: isSchedule ? "Outbound" : form.callType,
-        status: isSchedule ? "Scheduled" : form.status,
-        startTime: form.startTime,
-        durationSeconds,
-        account: form.account.trim(),
-        contactId: form.contactId,
-        contactName: selectedName || existing?.contactName || "",
-        owner: callOwner,
-        voiceRecording: isSchedule ? "" : form.voiceRecording.trim(),
+        call_type: isSchedule ? "Outbound" : form.callType,
+        call_status: isSchedule ? "Scheduled" : form.status,
+        call_start_time: form.startTime,
+        duration_minutes: durationSeconds === null ? null : Math.floor(durationSeconds / 60),
+        duration_seconds: durationSeconds === null ? null : durationSeconds % 60,
+        related_to: form.account.trim() || null,
+        voice_recording: isSchedule ? null : form.voiceRecording.trim() || null,
+        call_purpose: isOutbound ? form.purpose : "-None-",
+        call_agenda: isOutbound ? form.agenda.trim() || null : null,
         reminder: isSchedule ? form.reminder : "None",
-        purpose: isOutbound ? form.purpose : "-None-",
-        agenda: isOutbound ? form.agenda.trim() : "",
       };
+      const savedApi = editingId
+        ? await updateCall(editingId, payload)
+        : await createCall(payload);
+      const saved = fromApiCall(savedApi, contacts);
       setCalls((current) =>
         editingId ? current.map((c) => (c.id === editingId ? saved : c)) : [saved, ...current],
       );
@@ -271,11 +297,16 @@ export default function Calls() {
     }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteId) return;
-    // TODO: await deleteCall(deleteId) once the API exists.
-    setCalls((current) => current.filter((c) => c.id !== deleteId));
-    setDeleteId(null);
+    try {
+      setApiError("");
+      await deleteCall(deleteId);
+      setCalls((current) => current.filter((c) => c.id !== deleteId));
+      setDeleteId(null);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete call.");
+    }
   };
 
   const showForm = view !== "list";
