@@ -30,11 +30,6 @@ class MeetingCreateRequest(BaseModel):
             return value.strip()
         return value
 
-    @model_validator(mode="after")
-    def validate_meeting_timeline(self) -> Self:
-        if self.ends_at <= self.starts_at:
-            raise ValueError("The 'ends_at' timestamp must be strictly after the 'starts_at' timestamp.")
-        return self
 
 
 class MeetingUpdateRequest(BaseModel):
@@ -61,11 +56,3 @@ class MeetingUpdateRequest(BaseModel):
         if value is not None:
             return value.strip()
         return value
-
-    @model_validator(mode="after")
-    def validate_partial_timeline(self) -> Self:
-        """Validates timelines for updates, even if only one timestamp is changed."""
-        if self.starts_at is not None and self.ends_at is not None:
-            if self.ends_at <= self.starts_at:
-                raise ValueError("The updated 'ends_at' must be strictly after the updated 'starts_at'.")
-        return self
