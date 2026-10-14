@@ -9,8 +9,8 @@ from yo.repositories.task import TaskRepository
 from yo.schemas.requests.task import (
     TaskCreateRequest,
     TaskUpdateRequest,
-    TaskResponse,
 )
+from yo.schemas.responses.task import TaskResponse
 from yo.services.task import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])

@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import (
     Boolean, Date, DateTime, ForeignKey, String, Text
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID , JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from yo.core.database.base import Base
@@ -20,7 +20,7 @@ class Task(Base):
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     task_owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
-    tag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tags.id"), nullable=True, index=True)
+    contact_selection: Mapped[dict] = mapped_column(JSONB,default=lambda: {"selection_type": "name","tag_id": None,"contact_ids": []},nullable=False)
     account: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="Not Started", nullable=False)
     priority: Mapped[str] = mapped_column(String(20), default="High", nullable=False)
