@@ -1,5 +1,6 @@
 import { listContacts, type Contact } from "@/api/contacts";
 import { listTags, type Tag } from "@/api/tags";
+import { createTask, deleteTask, listTasks, updateTask, type TaskApi, type TaskPayload } from "@/api/task";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useAuth } from "@/context/AuthContext";
@@ -66,7 +67,12 @@ function formatDate(value: string) {
   const [y, m, d] = value.split("-");
   return `${d}/${m}/${y}`;
 }
-
+function formatTime(value: string) {
+  if (!value) return "";
+  const [h, m] = value.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
 function contactFullName(c: Contact) {
   return `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
 }
@@ -112,33 +118,89 @@ export default function Tasks() {
   const [page, setPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [apiError, setApiError] = useState("");
 
   const taskOwner = user?.display_name || user?.employee_name || user?.username || "";
 
   useEffect(() => {
-    void listContacts().then(setContacts).catch(() => setContacts([]));
-    void listTags().then(setTags).catch(() => setTags([]));
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    if (!q) return tasks;
-    return tasks.filter((t) =>
-      [t.subject, t.account, t.contactLabel, t.owner, t.status, t.priority].some((v) =>
-        v.toLowerCase().includes(q),
-      ),
-    );
-  }, [tasks, searchTerm]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / entriesPerPage));
-  const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * entriesPerPage;
-  const visible = filtered.slice(start, start + entriesPerPage);
+    void listContacts()
+      .then(setContacts)
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load contacts."));
+    void listTags()
+      .then(setTags)
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tags."));
+    void listTasks()
+      .then((result) => setTasks(result.map((task) => fromApiTask(task, taskOwner))))
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tasks."));
+  }, [taskOwner]);
 
   const selectionLabel = (mode: ContactMode, ids: string[]) =>
     mode === "name"
       ? contacts.filter((c) => ids.includes(c.id)).map(contactFullName).join(", ")
       : tags.filter((t) => ids.includes(t.id)).map((t) => t.name).join(", ");
+
+  const toTaskPayload = (values: typeof emptyForm): TaskPayload => {
+    const selectedContacts = contacts.filter((contact) => values.contactIds.includes(contact.id));
+    const contactTagIds = [...new Set(selectedContacts.map((contact) => contact.tag_id).filter(Boolean))];
+    const tagId = values.contactMode === "tag"
+      ? values.contactIds[0] ?? null
+      : contactTagIds.length === 1
+        ? contactTagIds[0]
+        : null;
+
+    return {
+      subject: values.subject.trim(),
+      due_date: values.dueDate || null,
+      tag_id: tagId,
+      contact_ids: values.contactMode === "tag" ? [] : values.contactIds,
+      account: values.account.trim() || null,
+      status: values.status,
+      priority: values.priority,
+      reminder_enabled: values.reminder,
+      reminder_at: values.reminder && values.reminderDate && values.reminderTime
+        ? `${values.reminderDate}T${values.reminderTime}:00`
+        : null,
+      reminder_type: values.reminder ? values.reminderNotify : null,
+      repeat_enabled: values.reminder && values.repeat,
+      description: values.description.trim() || null,
+    };
+  };
+
+  function fromApiTask(task: TaskApi, owner: string): Task {
+    return {
+      id: task.id,
+      subject: task.subject,
+      dueDate: task.due_date ?? "",
+      status: task.status as TaskStatus,
+      priority: task.priority as TaskPriority,
+      account: task.account ?? "",
+      owner,
+      contactMode: task.tag_id ? "tag" : "name",
+      contactIds: task.tag_id ? [task.tag_id] : task.contact_ids,
+      contactLabel: "",
+      reminder: task.reminder_enabled,
+      reminderDate: task.reminder_at?.slice(0, 10) ?? "",
+      reminderTime: task.reminder_at?.slice(11, 16) ?? "",
+      reminderNotify: task.reminder_type ?? "Email",
+      repeat: task.repeat_enabled,
+      description: task.description ?? "",
+    };
+  }
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter((t) =>
+      [t.subject, t.account, selectionLabel(t.contactMode, t.contactIds), t.owner, t.status, t.priority].some((v) =>
+        v.toLowerCase().includes(q),
+      ),
+    );
+  }, [contacts, searchTerm, tags, tasks]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / entriesPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * entriesPerPage;
+  const visible = filtered.slice(start, start + entriesPerPage);
 
   const openAdd = () => {
     setEditingId(null);
@@ -173,28 +235,47 @@ export default function Tasks() {
     setEditingId(null);
   };
 
-  const handleSave = (event: FormEvent) => {
+  const handleSave = async (event: FormEvent) => {
     event.preventDefault();
-    const task: Task = {
-      id: editingId ?? crypto.randomUUID(),
-      ...form,
-      subject: form.subject.trim(),
-      owner: taskOwner,
-      contactLabel: selectionLabel(form.contactMode, form.contactIds),
-    };
-    setTasks((current) =>
-      editingId ? current.map((t) => (t.id === editingId ? task : t)) : [task, ...current],
-    );
-    setPage(1);
-    closeForm();
+    if (!form.subject.trim()) {
+      setErrors({ subject: "Subject is required." });
+      return;
+    }
+
+    try {
+      setApiError("");
+      const saved = editingId
+        ? await updateTask(editingId, toTaskPayload(form))
+        : await createTask(toTaskPayload(form));
+      const task = fromApiTask(saved, taskOwner);
+      setTasks((current) =>
+        editingId ? current.map((item) => (item.id === editingId ? task : item)) : [task, ...current],
+      );
+      setPage(1);
+      closeForm();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to save task.");
+    }
   };
 
-  const markComplete = (id: string) =>
-    setTasks((current) => current.map((t) => (t.id === id ? { ...t, status: "Completed" } : t)));
+  const markComplete = async (id: string) => {
+    try {
+      const updated = await updateTask(id, { status: "Completed" });
+      setTasks((current) => current.map((task) => (task.id === id ? fromApiTask(updated, taskOwner) : task)));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to complete task.");
+    }
+  };
 
-  const confirmDelete = () => {
-    setTasks((current) => current.filter((t) => t.id !== deleteId));
-    setDeleteId(null);
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteTask(deleteId);
+      setTasks((current) => current.filter((task) => task.id !== deleteId));
+      setDeleteId(null);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete task.");
+    }
   };
 
     const togglePicked = (id: string) =>
@@ -214,6 +295,11 @@ export default function Tasks() {
     <>
       <PageMeta title="Task | Yatzar Operations" description="Yatzar Operations tasks" />
       <PageBreadcrumb pageTitle="Task" />
+      {apiError && (
+        <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
+          {apiError}
+        </div>
+      )}
 
       {!showForm && (
         <section className="rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
@@ -288,13 +374,17 @@ export default function Tasks() {
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.priority}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.account || "—"}</td>
-                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.contactLabel || "—"}</td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
+                      {selectionLabel(task.contactMode, task.contactIds) || "—"}
+                    </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.owner}</td>
                     <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center justify-left gap-1">
-                        <button type="button" onClick={() => markComplete(task.id)} title="Mark complete" aria-label="Mark complete" className="rounded-md p-1.5 text-success-600 hover:bg-success-50">
-                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
-                        </button>
+                        {task.status !== "Completed" && (
+                          <button type="button" onClick={() => markComplete(task.id)} title="Mark complete" aria-label="Mark complete" className="rounded-md p-1.5 text-success-600 hover:bg-success-50">
+                            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
+                          </button>
+                        )}
                         <button type="button" onClick={() => openEdit(task)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" /><path d="m13.5 6.5 4 4" /></svg>
                         </button>
@@ -445,6 +535,7 @@ export default function Tasks() {
               </div>
               <div className="relative">
                 <label className={labelClass}>Reminder</label>
+                <div className="flex items-center gap-3">
                 <Toggle checked={form.reminder} onChange={(v) => {
                     setForm({
                         ...form,
@@ -455,6 +546,17 @@ export default function Tasks() {
                     });
                     setReminderOpen(v);
                 }}/>
+                {form.reminder && !reminderOpen && (
+                    <button
+                        type="button"
+                        onClick={() => setReminderOpen(true)}
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                        title="Edit reminder"
+                    >
+                        On {formatDate(form.reminderDate)} at {formatTime(form.reminderTime)} · {form.reminderNotify}
+                    </button>
+                    )}
+                </div>
                 {reminderOpen && (
                     <div className="absolute left-0 top-full z-20 mt-3 w-[26rem] max-w-[90vw] space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-800 dark:bg-gray-dark">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
