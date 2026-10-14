@@ -400,63 +400,8 @@ export default function Contacts() {
     setFormError("");
   };
 
-  const validateForm = (): FieldErrors => {
-    const errors: FieldErrors = {};
-    const requiredFields: [FieldKey, string][] = [
-      ["firstName", "First name"],
-      ["email", "Email"],
-      ["phone", "Phone"],
-    ];
-    for (const [field, label] of requiredFields) {
-      if (
-        typeof formValues[field] === "string" &&
-        !formValues[field].trim()
-      ) {
-        errors[field] = `${label} is required.`;
-      }
-    }
-
-    if (
-      formValues.email.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.email.trim())
-    ) {
-      errors.email = "Enter a valid email address.";
-    }
-    if (formValues.otherLatitude.trim()) {
-      errors.otherLatitude = validateCoordinates(formValues.otherLatitude, -90, 90, "Other latitude");
-    }
-    if (formValues.otherLongitude.trim()) {
-      errors.otherLongitude = validateCoordinates(formValues.otherLongitude, -180, 180, "Other longitude");
-    }
-    if (formValues.latitude.trim()) {
-      errors.latitude = validateCoordinates(formValues.latitude, -90, 90, "Latitude");
-    }
-    if (formValues.longitude.trim()) {
-      errors.longitude = validateCoordinates(formValues.longitude, -180, 180, "Longitude");
-    }
-
-    if (
-      formValues.leadSource &&
-      !leadSources.includes(formValues.leadSource) &&
-      !(
-        editingId &&
-        contacts.find((contact) => contact.id === editingId)?.leadSource ===
-          formValues.leadSource
-      )
-    ) {
-      errors.leadSource =
-        "Choose a lead source configured by your administrator.";
-    }
-    return errors;
-  };
-
   /** Validates and saves the form as a contact. Returns the saved contact, or null. */
   const saveContact = async (): Promise<LocalContact | null> => {
-    const errors = validateForm();
-    setFormErrors(errors);
-    setFormError("");
-    if (Object.values(errors).some(Boolean)) return null;
-
     try {
       let saved: LocalContact;
       if (editingId) {
@@ -632,7 +577,6 @@ export default function Contacts() {
         className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
       >
         {label}
-        {options.required && <span className="text-red-500"> *</span>}
       </label>
       <input
         id={`contact-${field}`}
@@ -1147,7 +1091,7 @@ export default function Contacts() {
                     </div>
                     <div>
                       <label htmlFor="contact-leadSource" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Lead source <span className="text-red-500">*</span>
+                        Lead source
                       </label>
                       <select id="contact-leadSource" value={formValues.leadSource} onChange={(event) => updateField("leadSource", event.target.value)} className={inputClass}>
                         <option value="">-None-</option>
