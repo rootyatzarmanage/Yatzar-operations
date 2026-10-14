@@ -652,7 +652,10 @@ export default function Contacts() {
         title="Contacts | Yatzar Operations"
         description="Yatzar Operations contacts"
       />
-      <PageBreadcrumb pageTitle={t("sidebar.items.contacts")} />
+      <PageBreadcrumb
+        pageTitle={t("sidebar.items.contacts")}
+        parent={currentWorkspace ? { label: "Engagement" } : undefined}
+      />
       {pageError && (
         <div
           role="alert"
