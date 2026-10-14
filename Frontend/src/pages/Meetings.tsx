@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 type ParticipantType = "contact" | "lead" | "customer";
 
 type Person = {
-  key: string; // `${type}:${id}`
+  key: string; 
   type: ParticipantType;
   name: string;
   email: string;
@@ -20,7 +20,7 @@ type Meeting = {
   venue: string;
   location: string;
   allDay: boolean;
-  from: string; // yyyy-mm-ddThh:mm (or yyyy-mm-dd when all day)
+  from: string; 
   to: string;
   participants: Person[];
   relatedTo: string;
