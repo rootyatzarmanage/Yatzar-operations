@@ -1,6 +1,14 @@
 import { listContacts } from "@/api/contacts";
 import { listCustomers } from "@/api/customers";
 import { listLeads } from "@/api/leads";
+import {
+  createMeeting,
+  deleteMeeting,
+  listMeetings,
+  updateMeeting,
+  type MeetingApi,
+  type MeetingPayload,
+} from "@/api/meetings";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -105,9 +113,15 @@ function formatDateTime(value: string) {
   return `${d}/${m}/${y} ${h % 12 || 12}:${pad(min)} ${suffix}`;
 }
 
+function toFormDateTime(value: string) {
+  return value ? value.slice(0, 16) : "";
+}
+
+function toApiDateTime(value: string, allDay: boolean) {
+  return allDay ? `${value.slice(0, 10)}T00:00:00` : value;
+}
+
 export default function Meetings() {
-  // NOTE: no meetings API yet, so meetings live in component state.
-  // Replace setMeetings(...) in handleSave / confirmDelete with API calls when available.
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -164,7 +178,41 @@ export default function Meetings() {
       )
       .then((items) => setPeople((cur) => [...cur.filter((p) => p.type !== "customer"), ...items]))
       .catch(fail("customers"));
+
+    void listMeetings({ page: 1, perPage: 100 })
+      .then((result) =>
+        setMeetings(result.items.map((meeting) => fromApiMeeting(meeting, []))),
+      )
+      .catch(fail("meetings"));
   }, []);
+
+  function fromApiMeeting(meeting: MeetingApi, availablePeople: Person[]): Meeting {
+    return {
+      id: meeting.id,
+      title: meeting.title,
+      venue: meeting.venue ?? "",
+      location: meeting.location ?? "",
+      allDay: meeting.all_day,
+      from: toFormDateTime(meeting.starts_at),
+      to: toFormDateTime(meeting.ends_at),
+      participants: meeting.participants.map((participant) => {
+        const key = `${participant.type}:${participant.id}`;
+        const person = availablePeople.find((item) => item.key === key);
+        return person ?? {
+          key,
+          type: participant.type,
+          name: participant.id,
+          email: "",
+        };
+      }),
+      relatedTo: meeting.related_to ?? "",
+      repeat: meeting.repeat_frequency,
+      participantsReminder: meeting.participants_reminder,
+      participantsReminderTime: meeting.reminder_type,
+      reminder: meeting.reminder,
+      description: meeting.description ?? "",
+    };
+  }
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -237,19 +285,55 @@ export default function Meetings() {
     setPickerOpen(false);
   };
 
-  const handleSave = (event: FormEvent) => {
+  const handleSave = async (event: FormEvent) => {
     event.preventDefault();
-    const meeting: Meeting = { id: editingId ?? crypto.randomUUID(), ...form };
-    setMeetings((cur) =>
-      editingId ? cur.map((m) => (m.id === editingId ? meeting : m)) : [meeting, ...cur],
-    );
-    setPage(1);
-    closeForm();
+    const payload: MeetingPayload = {
+      title: form.title.trim(),
+      venue: form.venue || null,
+      location: form.location.trim() || null,
+      all_day: form.allDay,
+      starts_at: toApiDateTime(form.from, form.allDay),
+      ends_at: toApiDateTime(form.to, form.allDay),
+      participants: form.participants.map((person) => ({
+        id: person.key.split(":")[1],
+        type: person.type,
+      })),
+      related_to: form.relatedTo.trim() || null,
+      repeat_frequency: form.repeat,
+      reminder: form.reminder,
+      participants_reminder: form.participantsReminder,
+      reminder_type: form.participantsReminderTime,
+      description: form.description.trim() || null,
+    };
+
+    try {
+      setApiError("");
+      const saved = editingId
+        ? await updateMeeting(editingId, payload)
+        : await createMeeting(payload);
+      const meeting = fromApiMeeting(saved, people);
+      setMeetings((cur) =>
+        editingId
+          ? cur.map((item) => (item.id === editingId ? meeting : item))
+          : [meeting, ...cur],
+      );
+      setPage(1);
+      closeForm();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to save meeting.");
+    }
   };
 
-  const confirmDelete = () => {
-    setMeetings((cur) => cur.filter((m) => m.id !== deleteId));
-    setDeleteId(null);
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      setApiError("");
+      await deleteMeeting(deleteId);
+      setMeetings((cur) => cur.filter((meeting) => meeting.id !== deleteId));
+      setDeleteId(null);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete meeting.");
+    }
   };
 
   const setAllDay = (allDay: boolean) =>
