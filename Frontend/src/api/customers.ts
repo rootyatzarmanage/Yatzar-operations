@@ -16,8 +16,6 @@ const nullable = (values: RecordValues, key: string) => text(values, key) || nul
 
 function toPayload(values: RecordValues): ContactPayload {
   return {
-    company: null,
-    tag_id: null,
     first_name: text(values, "firstName"),
     last_name: nullable(values, "lastName"),
     email: nullable(values, "email"),
