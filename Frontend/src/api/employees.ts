@@ -16,6 +16,10 @@ export function listEmployees() {
   return request<EmployeeRecord[]>("/employees");
 }
 
+export function getEmployee(id: string) {
+  return request<EmployeeRecord>(`/employees/${id}`);
+}
+
 export function createEmployee(payload: Record<string, unknown>) {
   return request<EmployeeRecord>("/employees", {
     method: "POST",

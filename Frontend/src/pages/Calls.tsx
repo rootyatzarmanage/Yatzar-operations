@@ -13,7 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type CallType = "Outbound" | "Inbound" | "Missed";
-type CallStatus = "Completed" | "Scheduled" | "Cancelled";
+type CallStatus = "Completed" | "Scheduled" | "Missed";
 type CallKind = "log" | "schedule";
 type View = "list" | CallKind;
 
@@ -36,7 +36,7 @@ type Call = {
 };
 
 const callTypes: CallType[] = ["Outbound", "Inbound", "Missed"];
-const loggedStatuses: CallStatus[] = ["Completed", "Cancelled"];
+const loggedStatuses: CallStatus[] = ["Completed", "Missed"];
 const reminders = ["None", "At time of call", "5 minutes before", "15 minutes before", "30 minutes before", "1 hour before", "1 day before"];
 const purposes = ["-None-", "Prospecting", "Administrative", "Negotiation", "Demo", "Project", "Desk"];
 
@@ -49,7 +49,7 @@ const thClass =
 const statusBadge: Record<CallStatus, string> = {
   Completed: "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500",
   Scheduled: "bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-400",
-  Cancelled: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
+  Missed: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
 };
 
 // ---------- helpers ----------
@@ -121,6 +121,7 @@ export default function Calls() {
   const [page, setPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [apiError, setApiError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -196,6 +197,19 @@ export default function Calls() {
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * entriesPerPage;
   const visible = filtered.slice(start, start + entriesPerPage);
+  const visibleIds = visible.map((call) => call.id);
+  const allSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const bulkDelete = async () => {
+    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} calls?`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => deleteCall(id)));
+      setCalls((current) => current.filter((call) => !selectedIds.includes(call.id)));
+      setSelectedIds([]);
+    } catch (error: unknown) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete calls.");
+    }
+  };
 
   // ---------- actions ----------
   const openAdd = (kind: CallKind) => {
@@ -242,20 +256,22 @@ export default function Calls() {
   const handleSave = async (event: FormEvent) => {
     event.preventDefault();
     const next: FormErrors = {};
-    const existing = editingId ? calls.find((c) => c.id === editingId) : undefined;
-
-    if (!form.contactId && !existing?.contactName) next.contactId = "Select a contact.";
-    if (!form.startTime) next.startTime = "Start time is required.";
 
     let durationSeconds: number | null = null;
     if (!isSchedule && form.callType !== "Missed") {
-      if (form.minutes === "" && form.seconds === "") {
-        next.duration = "Call duration is required.";
-      } else {
+      if (form.minutes !== "" || form.seconds !== "") {
         const m = Number(form.minutes || 0);
         const s = Number(form.seconds || 0);
-        if (m < 0 || s < 0 || s > 59 || !Number.isInteger(m) || !Number.isInteger(s)) {
-          next.duration = "Enter whole minutes and seconds (0–59).";
+
+        if (
+          m < 0 ||
+          s < 0 ||
+          s > 59 ||
+          !Number.isInteger(m) ||
+          !Number.isInteger(s)
+        ) {
+          next.duration =
+            "Enter whole minutes and seconds (0–59).";
         } else {
           durationSeconds = m * 60 + s;
         }
@@ -385,11 +401,21 @@ export default function Calls() {
             </label>
           </div>
 
+          {selectedIds.length > 0 && (
+            <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+              <span>{selectedIds.length} selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-transparent">Clear selection</button>
+                <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 font-medium text-white">Delete {selectedIds.length}</button>
+              </div>
+            </div>
+          )}
+
           <div className="custom-scrollbar overflow-x-auto">
             <table className="w-full min-w-[1000px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3"><input type="checkbox" className="size-4 accent-brand-500" aria-label="Select all" /></th>
+                  <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>
                   <th className={thClass}>Subject</th>
                   <th className={thClass}>Call type</th>
                   <th className={thClass}>Call start time</th>
@@ -403,7 +429,7 @@ export default function Calls() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {visible.map((call) => (
                   <tr key={call.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
-                    <td className="px-5 py-4"><input type="checkbox" className="size-4 accent-brand-500" aria-label={`Select ${call.subject}`} /></td>
+                    <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(call.id)} onChange={() => setSelectedIds((current) => current.includes(call.id) ? current.filter((id) => id !== call.id) : [...current, call.id])} className="size-4 accent-brand-500" aria-label={`Select ${call.subject}`} /></td>
                     <td className="px-3 py-4 text-sm font-medium whitespace-nowrap text-gray-800 sm:px-5 dark:text-white/90">
                       {call.subject}
                       <span className={`ml-3 rounded-full px-2.5 py-1 text-xs font-normal ${statusBadge[call.status]}`}>{call.status}</span>
@@ -471,7 +497,7 @@ export default function Calls() {
             <div className="grid gap-5 md:grid-cols-2">
               {/* Call for */}
               <div>
-                <label htmlFor="call-for" className={labelClass}>Call for <span className="text-error-500">*</span></label>
+                <label htmlFor="call-for" className={labelClass}>Call for</label>
                 <select
                   id="call-for"
                   value={form.contactId}
@@ -497,7 +523,7 @@ export default function Calls() {
 
               {/* Call type */}
               <div>
-                <label htmlFor="call-type" className={labelClass}>Call type <span className="text-error-500">*</span></label>
+                <label htmlFor="call-type" className={labelClass}>Call type</label>
                 <select
                   id="call-type"
                   value={isSchedule ? "Outbound" : form.callType}
@@ -530,7 +556,7 @@ export default function Calls() {
 
               {/* Call start time */}
               <div>
-                <label htmlFor="call-start" className={labelClass}>Call start time <span className="text-error-500">*</span></label>
+                <label htmlFor="call-start" className={labelClass}>Call start time </label>
                 <input
                   id="call-start"
                   type="datetime-local"
@@ -548,7 +574,7 @@ export default function Calls() {
               {!isSchedule ? (
                 <div>
                   <label className={labelClass}>
-                    Call duration {form.callType !== "Missed" && <span className="text-error-500">*</span>}
+                    Call duration
                   </label>
                   <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input

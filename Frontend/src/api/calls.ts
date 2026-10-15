@@ -1,7 +1,7 @@
 import { request } from "@/api/client";
 
 export type CallType = "Outbound" | "Inbound" | "Missed";
-export type CallStatus = "Completed" | "Scheduled" | "Cancelled";
+export type CallStatus = "Completed" | "Scheduled" | "Missed";
 
 export type CallApi = {
   id: string;

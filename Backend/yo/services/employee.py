@@ -1,6 +1,6 @@
 from typing import Sequence
-from uuid import UUID, uuid4
-
+from uuid import UUID
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,8 +24,29 @@ class EmployeeService:
         if existing and existing.id != current_user_id:
             raise ConflictException("Username or login email is already in use.")
 
-    def _new_code(self) -> str:
-        return f"EMP-{uuid4().hex[:10].upper()}"
+    async def _new_code(self) -> str:
+        current_year = datetime.now().year
+        prefix = f"EMP-{current_year}-"
+
+        result = await self.session.execute(
+            select(Employee.employee_code)
+            .where(
+                Employee.employee_code.like(f"{prefix}%")
+            )
+            .order_by(
+                Employee.employee_code.desc()
+            )
+            .limit(1)
+        )
+
+        last_code = result.scalar_one_or_none()
+        if not last_code:
+            next_number = 1
+        else:
+            last_number = int(last_code.split("-")[-1])
+            next_number = last_number + 1
+
+        return f"{prefix}{next_number:04d}"
 
     async def create(self, request: EmployeeCreateRequest) -> Employee:
         await self._ensure_unique_user(request.username, request.login_email)
@@ -34,7 +55,8 @@ class EmployeeService:
             raise ConflictException(f"Role '{request.role}' does not exist.")
         user = User(username=request.username, email=request.login_email, password_hash=hash_password(request.password), role=role, is_active=request.is_active)
         employee_values = request.model_dump(exclude={"employee_code", "username", "login_email", "password", "role", "is_active"})
-        employee = Employee(user=user, employee_code=request.employee_code or self._new_code(), **employee_values)
+        employee_code = (request.employee_code or await self._new_code())
+        employee = Employee(user=user, employee_code= employee_code , **employee_values)
         return await self.repository.create(employee)
 
     async def get_by_id(self, employee_id: UUID) -> Employee:
