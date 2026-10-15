@@ -121,6 +121,7 @@ export default function Calls() {
   const [page, setPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [apiError, setApiError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -196,6 +197,19 @@ export default function Calls() {
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * entriesPerPage;
   const visible = filtered.slice(start, start + entriesPerPage);
+  const visibleIds = visible.map((call) => call.id);
+  const allSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const bulkDelete = async () => {
+    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} calls?`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => deleteCall(id)));
+      setCalls((current) => current.filter((call) => !selectedIds.includes(call.id)));
+      setSelectedIds([]);
+    } catch (error: unknown) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete calls.");
+    }
+  };
 
   // ---------- actions ----------
   const openAdd = (kind: CallKind) => {
@@ -387,11 +401,21 @@ export default function Calls() {
             </label>
           </div>
 
+          {selectedIds.length > 0 && (
+            <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+              <span>{selectedIds.length} selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-transparent">Clear selection</button>
+                <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 font-medium text-white">Delete {selectedIds.length}</button>
+              </div>
+            </div>
+          )}
+
           <div className="custom-scrollbar overflow-x-auto">
             <table className="w-full min-w-[1000px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3"><input type="checkbox" className="size-4 accent-brand-500" aria-label="Select all" /></th>
+                  <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>
                   <th className={thClass}>Subject</th>
                   <th className={thClass}>Call type</th>
                   <th className={thClass}>Call start time</th>
@@ -405,7 +429,7 @@ export default function Calls() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {visible.map((call) => (
                   <tr key={call.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
-                    <td className="px-5 py-4"><input type="checkbox" className="size-4 accent-brand-500" aria-label={`Select ${call.subject}`} /></td>
+                    <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(call.id)} onChange={() => setSelectedIds((current) => current.includes(call.id) ? current.filter((id) => id !== call.id) : [...current, call.id])} className="size-4 accent-brand-500" aria-label={`Select ${call.subject}`} /></td>
                     <td className="px-3 py-4 text-sm font-medium whitespace-nowrap text-gray-800 sm:px-5 dark:text-white/90">
                       {call.subject}
                       <span className={`ml-3 rounded-full px-2.5 py-1 text-xs font-normal ${statusBadge[call.status]}`}>{call.status}</span>

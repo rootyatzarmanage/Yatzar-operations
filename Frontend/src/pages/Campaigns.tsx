@@ -145,6 +145,7 @@ export default function Campaign() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -213,6 +214,30 @@ export default function Campaign() {
 
   const pageCount = Math.max(1, Math.ceil(total / perPage));
   const filteredCampaigns = useMemo(() => campaigns, [campaigns]);
+  const visibleIds = filteredCampaigns.map((campaign) => campaign.id);
+  const allSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const selectedCount = selectedIds.length;
+
+  const toggleAll = () => {
+    setSelectedIds((current) =>
+      allSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : [...new Set([...current, ...visibleIds])],
+    );
+  };
+
+  const bulkDelete = async () => {
+    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} campaigns?`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => deleteCampaign(id)));
+      setCampaigns((current) => current.filter((campaign) => !selectedIds.includes(campaign.id)));
+      setTotal((current) => Math.max(0, current - selectedIds.length));
+      setSelectedIds([]);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to delete campaigns.");
+    }
+  };
 
   if (showAddCampaign || editingCampaign) {
     return (
@@ -243,6 +268,20 @@ export default function Campaign() {
               Plan and track marketing campaigns.
             </p>
           </div>
+
+          {selectedCount > 0 && (
+            <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+              <span>{selectedCount} selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-transparent">
+                  Clear selection
+                </button>
+                <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
+                  Delete {selectedCount}
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
@@ -312,6 +351,8 @@ export default function Campaign() {
                 <th className="w-12 px-5 py-3">
                   <input
                     type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
                     className="size-4 accent-brand-500"
                     aria-label="Select all campaigns"
                   />
@@ -340,6 +381,14 @@ export default function Campaign() {
                   <td className="px-5 py-4">
                     <input
                       type="checkbox"
+                      checked={selectedIds.includes(campaign.id)}
+                      onChange={() =>
+                        setSelectedIds((current) =>
+                          current.includes(campaign.id)
+                            ? current.filter((id) => id !== campaign.id)
+                            : [...current, campaign.id],
+                        )
+                      }
                       className="size-4 accent-brand-500"
                       aria-label={`Select ${campaign.name}`}
                     />

@@ -142,6 +142,7 @@ export default function EventWebinar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -197,6 +198,30 @@ export default function EventWebinar() {
   const totalPages = Math.max(1, Math.ceil(total / entriesPerPage));
   const currentPage = Math.min(page, totalPages);
   const visibleEvents = filteredEvents;
+  const visibleIds = visibleEvents.map((event) => event.id);
+  const allSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const selectedCount = selectedIds.length;
+
+  const toggleAll = () => {
+    setSelectedIds((current) =>
+      allSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : [...new Set([...current, ...visibleIds])],
+    );
+  };
+
+  const bulkDelete = async () => {
+    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} events?`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => deleteEventWebinar(id)));
+      setEvents((current) => current.filter((event) => !selectedIds.includes(event.id)));
+      setTotal((current) => Math.max(0, current - selectedIds.length));
+      setSelectedIds([]);
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to delete events.");
+    }
+  };
 
   const openAddForm = () => {
     setEditingId(null);
@@ -308,6 +333,20 @@ export default function EventWebinar() {
           </div>
         )}
 
+        {selectedCount > 0 && (
+          <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+            <span>{selectedCount} selected</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-transparent">
+                Clear selection
+              </button>
+              <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
+                Delete {selectedCount}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <span>Home</span>
 
@@ -397,6 +436,8 @@ export default function EventWebinar() {
                 <th className="w-12 px-5 py-3">
                   <input
                     type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
                     className="size-4 accent-brand-500"
                     aria-label="Select all events"
                   />
@@ -439,6 +480,14 @@ export default function EventWebinar() {
                   <td className="px-5 py-4">
                     <input
                       type="checkbox"
+                      checked={selectedIds.includes(event.id)}
+                      onChange={() =>
+                        setSelectedIds((current) =>
+                          current.includes(event.id)
+                            ? current.filter((id) => id !== event.id)
+                            : [...current, event.id],
+                        )
+                      }
                       className="size-4 accent-brand-500"
                       aria-label={`Select ${event.name}`}
                     />

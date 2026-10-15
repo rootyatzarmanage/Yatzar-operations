@@ -121,6 +121,7 @@ export default function Tasks() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [apiError, setApiError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const taskOwner = user?.display_name || user?.employee_name || user?.username || "";
 
@@ -197,6 +198,19 @@ export default function Tasks() {
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * entriesPerPage;
   const visible = filtered.slice(start, start + entriesPerPage);
+  const visibleIds = visible.map((task) => task.id);
+  const allSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const bulkDelete = async () => {
+    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} tasks?`)) return;
+    try {
+      await Promise.all(selectedIds.map((id) => deleteTask(id)));
+      setTasks((current) => current.filter((task) => !selectedIds.includes(task.id)));
+      setSelectedIds([]);
+    } catch (error: unknown) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete tasks.");
+    }
+  };
 
   const openAdd = () => {
     setEditingId(null);
@@ -366,11 +380,21 @@ export default function Tasks() {
             </label>
           </div>
 
+          {selectedIds.length > 0 && (
+            <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+              <span>{selectedIds.length} selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-transparent">Clear selection</button>
+                <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 font-medium text-white">Delete {selectedIds.length}</button>
+              </div>
+            </div>
+          )}
+
           <div className="custom-scrollbar overflow-x-auto">
             <table className="w-full min-w-[900px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3"><input type="checkbox" className="size-4 accent-brand-500" aria-label="Select all" /></th>
+                  <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>
                   <th className={thClass}>Subject</th>
                   <th className={thClass}>Due date</th>
                   <th className={thClass}>Status</th>
@@ -384,7 +408,7 @@ export default function Tasks() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {visible.map((task) => (
                   <tr key={task.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
-                    <td className="px-5 py-4"><input type="checkbox" className="size-4 accent-brand-500" aria-label={`Select ${task.subject}`} /></td>
+                    <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(task.id)} onChange={() => setSelectedIds((current) => current.includes(task.id) ? current.filter((id) => id !== task.id) : [...current, task.id])} className="size-4 accent-brand-500" aria-label={`Select ${task.subject}`} /></td>
                     <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">{task.subject}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{formatDate(task.dueDate)}</td>
                     <td className="px-3 py-4 sm:px-5">
