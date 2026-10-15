@@ -174,7 +174,12 @@ class EmailMarketingRepository:
         now = datetime.now(timezone.utc)
 
         if recipient.last_opened_at is not None:
-            if now - recipient.last_opened_at < timedelta(minutes=2):
+            last_opened = recipient.last_opened_at
+
+            if last_opened.tzinfo is None:
+                last_opened = last_opened.replace(tzinfo=timezone.utc)
+
+            if now - last_opened < timedelta(minutes=2):
                 return False
 
         recipient.open_count += 1

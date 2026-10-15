@@ -7,7 +7,8 @@ from yo.api.v1.endpoints.task import router as task_router
 from yo.api.v1.endpoints.meeting import router as meeting_router
 from yo.api.v1.endpoints.call import router as call_router
 from yo.api.v1.endpoints.campaign import router as campaigns_router
-from yo.api.v1.endpoints.campaign import router as event_webinar_router
+from yo.api.v1.endpoints.event_webinar import router as event_webinar_router
+from yo.api.v1.endpoints.email_marketing import router as email_marketing_router
 
 __all__ = [
     "employee_router", 
@@ -19,5 +20,6 @@ __all__ = [
     "meeting_router",
     "call_router",
     "campaigns_router",
-    "event_webinar_router"
+    "event_webinar_router",
+    "email_marketing_router"
     ]

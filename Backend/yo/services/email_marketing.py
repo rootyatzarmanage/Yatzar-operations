@@ -43,19 +43,23 @@ class EmailMarketingService:
             per_page,
         )
 
-    def generate_signature(self, campaign_id: UUID, user_id: UUID) -> str:
+    def generate_signature(self, campaign_id: UUID, user_id: UUID, original_url: str | None = None) -> str:
         if not self.tracking_secret:
             raise RuntimeError("EMAIL_TRACKING_SECRET is not configured")
 
-        message = f"{campaign_id}:{user_id}".encode()
+        if original_url is None:
+            message = f"open:{campaign_id}:{user_id}".encode()
+        else:
+            message = f"click:{campaign_id}:{user_id}:{original_url}".encode()
+
         return hmac.new(
             self.tracking_secret.encode(),
             message,
             hashlib.sha256,
         ).hexdigest()
 
-    def verify_signature(self, campaign_id: UUID, user_id: UUID, signature: str) -> bool:
-        expected = self.generate_signature(campaign_id, user_id)
+    def verify_signature(self, campaign_id: UUID, user_id: UUID, signature: str, original_url: str | None = None) -> bool:
+        expected = self.generate_signature(campaign_id, user_id, original_url)
         return hmac.compare_digest(expected, signature)
 
     def create_open_tracking_url(self, campaign_id: UUID, user_id: UUID) -> str:
@@ -68,7 +72,7 @@ class EmailMarketingService:
         )
 
     def create_click_tracking_url(self, campaign_id: UUID, user_id: UUID, original_url: str) -> str:
-        signature = self.generate_signature(campaign_id, user_id)
+        signature = self.generate_signature(campaign_id, user_id, original_url)
         encoded_url = quote(original_url, safe="")
         return (
             f"{self.tracking_base_url}/track/click"
@@ -204,8 +208,8 @@ class EmailMarketingService:
             user_id,
         )
 
-    async def track_click(self, campaign_id: UUID, user_id: UUID, signature: str):
-        if not self.verify_signature(campaign_id, user_id, signature):
+    async def track_click(self, campaign_id: UUID, user_id: UUID, signature: str,  url: str)-> bool:
+        if not self.verify_signature(campaign_id, user_id, signature,url):
             raise AppException("Invalid tracking signature", 403)
 
         await self.repository.register_click(
