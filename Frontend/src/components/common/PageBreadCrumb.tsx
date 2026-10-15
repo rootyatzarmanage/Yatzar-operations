@@ -8,6 +8,38 @@ interface BreadcrumbProps {
   };
 }
 
+const BreadcrumbSeparator = ({
+  type,
+}: {
+  type: "chevron" | "slash";
+}) => (
+  <li
+    aria-hidden="true"
+    className="text-gray-400 dark:text-gray-500"
+  >
+    {type === "slash" ? (
+      "/"
+    ) : (
+      <svg
+        className="stroke-current rtl:rotate-180"
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M6 12L10 8L6 4"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )}
+  </li>
+);
+
 const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle, parent }) => {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -18,43 +50,30 @@ const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle, parent }) => {
         {pageTitle}
       </h2>
       <nav>
-        <ol className="flex items-center gap-1.5">
+        <ol className="flex items-center gap-2">
           <li>
             <Link
-              className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
+              className="text-sm text-gray-500 dark:text-gray-400"
               to="/"
             >
               Home
-              <svg
-                className="stroke-current rtl:rotate-180"
-                width="17"
-                height="16"
-                viewBox="0 0 17 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M6.0765 12.667L10.2432 8.50033L6.0765 4.33366"
-                  stroke=""
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
             </Link>
           </li>
+          <BreadcrumbSeparator type="chevron" />
           {parent && (
             <>
               <li className="text-sm text-gray-800 dark:text-white/90">
                 {parent.to ? (
-                  <Link to={parent.to}>{parent.label}</Link>
+                  <Link to={parent.to} className="text-inherit">
+                    {parent.label}
+                  </Link>
                 ) : (
                   parent.label
                 )}
               </li>
+              <BreadcrumbSeparator type="slash" />
             </>
           )}
-          <li className="text-sm text-gray-400 dark:text-gray-500">/</li>
           <li className="text-sm text-gray-800 dark:text-white/90">
             {pageTitle}
           </li>
