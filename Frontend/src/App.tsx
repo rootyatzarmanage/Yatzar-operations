@@ -16,6 +16,7 @@ import Task from "./pages/Task";
 import Meetings from "./pages/Meetings";
 import Calls from "./pages/Calls";
 import EmailMarketing from "./pages/EmailMarketing";
+import Campaign from "./pages/Campaigns";
 import { useAuth } from "./context/AuthContext";
 import { Navigate, useLocation } from "react-router";
 
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/meetings" element={<Meetings />} />
             <Route path="/calls" element={<Calls />} />
             <Route path="/email-marketing" element={<EmailMarketing />} />
+            <Route path="/campaigns" element={<Campaign />} />
           </Route>
 
           {/* Fallback Route */}
