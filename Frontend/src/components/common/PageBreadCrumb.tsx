@@ -2,9 +2,13 @@ import { Link } from "react-router";
 
 interface BreadcrumbProps {
   pageTitle: string;
+  parent?: {
+    label: string;
+    to?: string;
+  };
 }
 
-const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle }) => {
+const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle, parent }) => {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h2
@@ -39,6 +43,18 @@ const PageBreadcrumb: React.FC<BreadcrumbProps> = ({ pageTitle }) => {
               </svg>
             </Link>
           </li>
+          {parent && (
+            <>
+              <li className="text-sm text-gray-800 dark:text-white/90">
+                {parent.to ? (
+                  <Link to={parent.to}>{parent.label}</Link>
+                ) : (
+                  parent.label
+                )}
+              </li>
+            </>
+          )}
+          <li className="text-sm text-gray-400 dark:text-gray-500">/</li>
           <li className="text-sm text-gray-800 dark:text-white/90">
             {pageTitle}
           </li>

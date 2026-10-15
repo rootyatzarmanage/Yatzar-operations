@@ -9,6 +9,6 @@ if not settings.DATABASE_URL.startswith("postgresql+asyncpg://"):
 
 engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo= False ,          #settings.DEBUG,
     future=True,
 )

@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.pyc
 
 # Virtual environments
 venv/
@@ -11,10 +10,21 @@ env/
 
 # Environment files
 .env
+.env.*
+!.env.example
 
 # Local database files
 *.db
+*.sqlite
+*.sqlite3
 storage/
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # IDE & OS
 .vscode/

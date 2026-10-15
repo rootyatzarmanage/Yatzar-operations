@@ -27,6 +27,7 @@ class RoleRepository:
             )
         )
         return result.scalars().first()
+        
 
     async def list_all(self) -> Sequence[Role]:
         result = await self.session.execute(

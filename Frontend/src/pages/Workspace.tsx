@@ -11,7 +11,9 @@ import type {
   WorkspacePayload as WorkspaceRequest,
   WorkspaceStatus,
 } from "@/api/workspaces";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 
 type WorkspaceFormValues = {
@@ -28,6 +30,8 @@ const emptyForm: WorkspaceFormValues = {
 
 export default function Workspace() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { enterWorkspace } = useWorkspace();
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -348,7 +352,20 @@ export default function Workspace() {
                         />
                       </td>
                       <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
-                        {workspace.name}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            enterWorkspace({
+                              id: workspace.id,
+                              name: workspace.name,
+                            });
+                            navigate("/contacts");
+                          }}
+                          className="font-semibold text-brand-500 hover:text-brand-600 hover:underline dark:text-brand-400"
+                          title={`Open ${workspace.name}`}
+                        >
+                          {workspace.name}
+                        </button>
                       </td>
                       <td className="px-3 py-4 sm:px-5">
                         <span

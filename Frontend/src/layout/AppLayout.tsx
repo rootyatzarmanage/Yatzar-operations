@@ -1,4 +1,5 @@
 import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
+import { WorkspaceProvider } from "@/context/WorkspaceContext";
 import { cn } from "@/utils";
 import { Outlet } from "react-router";
 import AppHeader from "./AppHeader";
@@ -31,9 +32,11 @@ const LayoutContent: React.FC = () => {
 
 const AppLayout: React.FC = () => {
   return (
-    <SidebarProvider>
-      <LayoutContent />
-    </SidebarProvider>
+    <WorkspaceProvider>
+      <SidebarProvider>
+        <LayoutContent />
+      </SidebarProvider>
+    </WorkspaceProvider>
   );
 };
 
