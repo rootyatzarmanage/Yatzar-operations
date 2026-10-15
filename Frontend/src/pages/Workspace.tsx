@@ -5,6 +5,7 @@ import {
   deleteWorkspace,
   listWorkspaces,
   updateWorkspace,
+  deleteWorkspaces
 } from "@/api/workspaces";
 import type {
   Workspace as WorkspaceItem,
@@ -229,6 +230,58 @@ export default function Workspace() {
   };
 
   const selectedCount = selectedIds.length;
+  
+const clearSelection = () => {
+  setSelectedIds([]);
+};
+
+const handleBulkDelete = async () => {
+  if (selectedIds.length === 0 || isSaving) return;
+
+  const idsToDelete = [...selectedIds];
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete ${idsToDelete.length} selected workspace(s)?`
+  );
+
+  if (!confirmed) return;
+
+  setApiError("");
+  setIsSaving(true);
+
+  try {
+    await deleteWorkspaces(idsToDelete);
+
+    setWorkspaces((current) =>
+      current.filter((workspace) => !idsToDelete.includes(workspace.id))
+    );
+
+    setSelectedIds([]);
+  } catch (error) {
+    // Some requests might have succeeded before another failed.
+    // Reload the list so the UI matches the backend.
+    try {
+      const latestWorkspaces = await listWorkspaces();
+      setWorkspaces(latestWorkspaces);
+      setSelectedIds((current) =>
+        current.filter((id) =>
+          latestWorkspaces.some((workspace) => workspace.id === id)
+        )
+      );
+    } catch {
+      // Keep the existing list if reloading also fails.
+    }
+
+    setApiError(
+      error instanceof Error
+        ? error.message
+        : "Unable to delete selected workspaces."
+    );
+  } finally {
+    setIsSaving(false);
+  }
+};
+
 
   return (
     <>
@@ -302,6 +355,49 @@ export default function Workspace() {
               </label>
             </div>
           </div>
+          
+{selectedCount > 0 && (
+  <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
+    <p className="text-sm text-gray-700 dark:text-gray-300">
+      <span className="font-semibold">{selectedCount}</span>{" "}
+      {selectedCount === 1 ? "selected" : "selected"}
+    </p>
+
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={clearSelection}
+        disabled={isSaving}
+        className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+      >
+        Clear selection
+      </button>
+
+      <button
+        type="button"
+        onClick={() => void handleBulkDelete()}
+        disabled={isSaving}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          aria-hidden="true"
+        >
+          <path d="M4 7h16" />
+          <path d="M9 7V4h6v3" />
+          <path d="M7 7l1 12h8l1-12" />
+          <path d="M10 11v5M14 11v5" />
+        </svg>
+
+        {isSaving ? "Deleting..." : `Delete ${selectedCount}`}
+      </button>
+    </div>
+  </div>
+)}
 
           <div className="custom-scrollbar max-w-full overflow-x-auto">
             {isLoading ? (

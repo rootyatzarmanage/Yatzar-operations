@@ -11,6 +11,7 @@ import {
   type ContactFields,
   type Contact,
   type LocalContact,
+  bulkDeleteContacts,
 } from "@/api/contacts";
 import { addContactToCustomers } from "@/api/customers";
 import { listWorkspaces, type Workspace } from "@/api/workspaces"
@@ -646,6 +647,52 @@ export default function Contacts() {
     );
   };
 
+  
+
+const clearSelection = () => {
+  setSelectedIds([]);
+};
+
+const handleBulkDelete = async () => {
+  const idsToDelete = selectedIds.filter((id) =>
+    contacts.some((contact) => contact.id === id)
+  );
+
+  if (idsToDelete.length === 0 || isSaving) return;
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete ${idsToDelete.length} selected contact(s)?`
+  );
+
+  if (!confirmed) return;
+
+  setIsSaving(true);
+  setPageError("");
+  setNotice("");
+
+  try {
+    const result = await bulkDeleteContacts(idsToDelete);
+
+    setContacts((current) =>
+      current.filter((contact) => !idsToDelete.includes(contact.id))
+    );
+
+    setSelectedIds((current) =>
+      current.filter((id) => !idsToDelete.includes(id))
+    );
+
+    setNotice(`${result.deleted} contact(s) deleted successfully.`);
+  } catch (error) {
+    setPageError(
+      error instanceof Error
+        ? error.message
+        : "Unable to delete selected contacts."
+    );
+  } finally {
+    setIsSaving(false);
+  }
+};
+
   return (
     <>
       <PageMeta
@@ -730,6 +777,34 @@ export default function Contacts() {
             </label>
           </div>
         </div>
+        
+{selectedCount > 0 && (
+  <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
+    <span className="text-sm text-gray-700 dark:text-gray-300">
+      <strong>{selectedCount}</strong> selected
+    </span>
+
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={clearSelection}
+        disabled={isSaving}
+        className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+      >
+        Clear selection
+      </button>
+
+      <button
+        type="button"
+        onClick={() => void handleBulkDelete()}
+        disabled={isSaving}
+        className="h-10 rounded-lg bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+      >
+        {isSaving ? "Deleting..." : `Delete ${selectedCount}`}
+      </button>
+    </div>
+  </div>
+)}
 
         <div className="custom-scrollbar max-w-full overflow-x-auto">
           <table className="w-full min-w-[900px] text-start">
