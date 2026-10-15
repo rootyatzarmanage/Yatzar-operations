@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import {
   Eye,
   Pencil,
@@ -109,29 +110,7 @@ export default function Campaign() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">
-            Campaigns
-          </h1>
-
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Plan and track marketing campaigns.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <span>Home</span>
-          <ChevronRight size={14} />
-          <span>Marketing</span>
-          <ChevronRight size={14} />
-
-          <span className="text-gray-800 dark:text-white/90">
-            Campaigns
-          </span>
-        </div>
-      </div>
+      <PageBreadcrumb pageTitle="Campaigns" parent={{ label: "Marketing" }} />
 
       {/* Campaign Card */}
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">

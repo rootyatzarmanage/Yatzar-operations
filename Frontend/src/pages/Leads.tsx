@@ -116,6 +116,7 @@ export default function Leads() {
   return (
     <RecordPage<LeadRecord>
       pageTitle="Leads"
+      parent={{ label: "Engagement" }}
       heading="Lead information"
       subtitle="Track and manage leads in one place."
       singular="Lead"

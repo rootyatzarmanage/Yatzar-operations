@@ -55,6 +55,10 @@ type Props<T extends StoredRecord> = {
   sorts?: SortDef<T>[];
   viewBadge?: (record: T) => string;
   pageTitle: string;
+  parent?: {
+    label: string;
+    to?: string;
+  };
   heading: string;
   subtitle: string;
   singular: string;
@@ -93,6 +97,7 @@ export function validateCoordinate(
 
 export default function RecordPage<T extends StoredRecord>({
   pageTitle,
+  parent,
   heading,
   subtitle,
   singular,
@@ -499,7 +504,7 @@ export default function RecordPage<T extends StoredRecord>({
   return (
     <>
       <PageMeta title={`${pageTitle} | Yatzar Operations`} description={`Yatzar Operations ${plural}`} />
-      <PageBreadcrumb pageTitle={pageTitle} />
+      <PageBreadcrumb pageTitle={pageTitle} parent={parent} />
 
       {pageError && (
         <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400">

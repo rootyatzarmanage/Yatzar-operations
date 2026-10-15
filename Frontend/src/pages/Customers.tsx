@@ -97,6 +97,7 @@ export default function Customers() {
   return (
     <RecordPage<CustomerRecord>
       pageTitle="Customers"
+      parent={{ label: "Engagement" }}
       heading="Customer information"
       subtitle="Manage customer records and their information in one place."
       singular="Customer"
