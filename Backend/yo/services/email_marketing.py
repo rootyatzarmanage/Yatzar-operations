@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import logging
 import os
 
 from urllib.parse import quote
@@ -10,6 +11,9 @@ from bs4 import BeautifulSoup
 from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.schemas.requests.email_marketing import EmailMarketingCreateRequest
+
+
+logger = logging.getLogger(__name__)
 
 
 class EmailMarketingService:
@@ -24,8 +28,10 @@ class EmailMarketingService:
 
     async def get_campaign(self, campaign_id: UUID):
         campaign = await self.repository.get_campaign(campaign_id)
+
         if not campaign:
             raise NotFoundException("Email marketing campaign", str(campaign_id))
+
         return campaign
 
     async def list_campaigns(self, search: str | None = None, page: int = 1, per_page: int = 10):
@@ -37,29 +43,35 @@ class EmailMarketingService:
 
     async def list_recipients(self, campaign_id: UUID, page: int, per_page: int):
         await self.get_campaign(campaign_id)
+
         return await self.repository.list_recipients(
             campaign_id,
             page,
             per_page,
         )
 
-    def generate_signature(self, campaign_id: UUID, user_id: UUID) -> str:
+    def generate_signature(self, campaign_id: UUID, user_id: UUID, original_url: str | None = None) -> str:
         if not self.tracking_secret:
             raise RuntimeError("EMAIL_TRACKING_SECRET is not configured")
 
-        message = f"{campaign_id}:{user_id}".encode()
+        if original_url is None:
+            message = f"open:{campaign_id}:{user_id}".encode()
+        else:
+            message = f"click:{campaign_id}:{user_id}:{original_url}".encode()
+
         return hmac.new(
             self.tracking_secret.encode(),
             message,
             hashlib.sha256,
         ).hexdigest()
 
-    def verify_signature(self, campaign_id: UUID, user_id: UUID, signature: str) -> bool:
-        expected = self.generate_signature(campaign_id, user_id)
+    def verify_signature(self, campaign_id: UUID, user_id: UUID, signature: str, original_url: str | None = None) -> bool:
+        expected = self.generate_signature(campaign_id, user_id, original_url)
         return hmac.compare_digest(expected, signature)
 
     def create_open_tracking_url(self, campaign_id: UUID, user_id: UUID) -> str:
         signature = self.generate_signature(campaign_id, user_id)
+
         return (
             f"{self.tracking_base_url}/track/open"
             f"?campaign_id={campaign_id}"
@@ -68,8 +80,9 @@ class EmailMarketingService:
         )
 
     def create_click_tracking_url(self, campaign_id: UUID, user_id: UUID, original_url: str) -> str:
-        signature = self.generate_signature(campaign_id, user_id)
+        signature = self.generate_signature(campaign_id, user_id, original_url)
         encoded_url = quote(original_url, safe="")
+
         return (
             f"{self.tracking_base_url}/track/click"
             f"?campaign_id={campaign_id}"
@@ -87,7 +100,7 @@ class EmailMarketingService:
             if not original_url:
                 continue
 
-            if original_url.startswith(("mailto:", "tel:", "#")):
+            if not original_url.startswith(("http://", "https://")):
                 continue
 
             anchor["href"] = self.create_click_tracking_url(
@@ -97,6 +110,7 @@ class EmailMarketingService:
             )
 
         open_url = self.create_open_tracking_url(campaign_id, user_id)
+
         pixel = soup.new_tag("img")
         pixel["src"] = open_url
         pixel["width"] = "1"
@@ -112,7 +126,12 @@ class EmailMarketingService:
         return str(soup)
 
     async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
-        values = payload.model_dump()
+        mail_type = payload.mail_type.strip().lower()
+
+        values = payload.model_dump(
+            exclude={"selection_mode", "selected_user_ids"}
+        )
+
         values["from_email"] = str(payload.from_email)
 
         if payload.to_email:
@@ -122,12 +141,11 @@ class EmailMarketingService:
         values["updated_by"] = logged_user_id
         values["status"] = "Sending"
 
-        campaign = await self.repository.create_campaign(values)
-        mail_type = payload.mail_type.strip().lower()
-
         if mail_type == "test email":
             if not payload.to_email:
                 raise AppException("Recipient email is required for test email", 400)
+
+            campaign = await self.repository.create_campaign(values)
 
             recipient = await self.repository.create_recipient(
                 campaign_id=campaign.id,
@@ -149,12 +167,44 @@ class EmailMarketingService:
             )
 
             await self.repository.mark_recipient_sent(recipient)
+
             return await self.repository.mark_campaign_sent(campaign, 1)
 
-        recipients_data = await self.repository.get_recipients_by_tag(payload.tag_id)
+        if mail_type != "bulk email":
+            raise AppException("mail_type must be Test Email or Bulk Email", 400)
+
+        if not payload.tag_id:
+            raise AppException("Tag ID is required for bulk email", 400)
+
+        if payload.selection_mode not in ("all", "selected"):
+            raise AppException("selection_mode must be all or selected", 400)
+
+        if payload.selection_mode == "selected" and not payload.selected_user_ids:
+            raise AppException("Select at least one recipient", 400)
+
+        if payload.selection_mode == "all" and payload.selected_user_ids:
+            raise AppException("selected_user_ids must be empty for Select All", 400)
+
+        recipients_data = await self.repository.get_recipients_by_tag(
+            tag_id=payload.tag_id,
+            selection_mode=payload.selection_mode,
+            selected_user_ids=payload.selected_user_ids,
+        )
 
         if not recipients_data:
-            raise AppException("No recipients found for selected tag", 400)
+            raise AppException("No eligible recipients found for selected tag", 400)
+
+        if payload.selection_mode == "selected":
+            found_ids = {recipient["user_id"] for recipient in recipients_data}
+            requested_ids = set(payload.selected_user_ids)
+
+            if found_ids != requested_ids:
+                raise AppException(
+                    "Some selected users do not belong to this tag or are not eligible",
+                    400,
+                )
+
+        campaign = await self.repository.create_campaign(values)
 
         recipients = await self.repository.create_recipients(
             campaign.id,
@@ -168,15 +218,19 @@ class EmailMarketingService:
                 continue
 
             if recipient.user_id is None:
+                logger.warning(
+                    "Skipping recipient without user ID",
+                    extra={"recipient_id": str(recipient.id)},
+                )
                 continue
 
-            html = self.prepare_email_content(
-                payload.content,
-                campaign.id,
-                recipient.user_id,
-            )
-
             try:
+                html = self.prepare_email_content(
+                    payload.content,
+                    campaign.id,
+                    recipient.user_id,
+                )
+
                 await self.send_email(
                     from_email=str(payload.from_email),
                     to_email=recipient.email,
@@ -188,6 +242,10 @@ class EmailMarketingService:
                 sent_count += 1
 
             except Exception:
+                logger.exception(
+                    "Failed to send marketing email",
+                    extra={"recipient_id": str(recipient.id)},
+                )
                 continue
 
         return await self.repository.mark_campaign_sent(campaign, sent_count)
@@ -204,11 +262,11 @@ class EmailMarketingService:
             user_id,
         )
 
-    async def track_click(self, campaign_id: UUID, user_id: UUID, signature: str):
-        if not self.verify_signature(campaign_id, user_id, signature):
+    async def track_click(self, campaign_id: UUID, user_id: UUID, signature: str, url: str) -> bool:
+        if not self.verify_signature(campaign_id, user_id, signature, url):
             raise AppException("Invalid tracking signature", 403)
 
-        await self.repository.register_click(
+        return await self.repository.register_click(
             campaign_id,
             user_id,
         )
