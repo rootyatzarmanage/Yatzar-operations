@@ -268,21 +268,6 @@ export default function Campaign() {
               Plan and track marketing campaigns.
             </p>
           </div>
-
-          {selectedCount > 0 && (
-            <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
-              <span>{selectedCount} selected</span>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-transparent">
-                  Clear selection
-                </button>
-                <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
-                  Delete {selectedCount}
-                </button>
-              </div>
-            </div>
-          )}
-
           <button
             type="button"
             onClick={() => {
@@ -342,7 +327,19 @@ export default function Campaign() {
             entries
           </label>
         </div>
-
+{selectedCount > 0 && (
+            <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+              <span>{selectedCount} selected</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-transparent">
+                  Clear selection
+                </button>
+                <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
+                  Delete {selectedCount}
+                </button>
+              </div>
+            </div>
+          )}
         {/* Table */}
         <div className="custom-scrollbar overflow-x-auto">
           <table className="w-full min-w-[1000px] text-start">
