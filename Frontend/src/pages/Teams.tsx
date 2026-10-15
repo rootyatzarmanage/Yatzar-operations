@@ -3,6 +3,7 @@ import PageMeta from "@/components/common/PageMeta";
 import {
   createEmployee,
   deleteEmployee,
+  getEmployee,
   listEmployees,
   updateEmployee,
   type EmployeeRecord,
@@ -327,6 +328,14 @@ const fieldGroups: {
   },
 ];
 
+function employeeToFormValues(employee: EmployeeRecord): TeamFormValues {
+  return Object.fromEntries(
+    fieldGroups
+      .flatMap((group) => group.fields)
+      .map((field) => [field.name, String(employee[field.name] ?? "")]),
+  );
+}
+
 const inputClass =
   "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
 
@@ -521,10 +530,11 @@ function FieldControl({
       <label className="flex h-11 items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
         <input
           type="checkbox"
-          defaultChecked
+          checked={value === "true"}
+          onChange={(event) => onValueChange(String(event.target.checked))}
           className="size-4 rounded accent-brand-500"
         />
-        Is active
+        {field.label}
       </label>
     );
   if (field.type === "file")
@@ -691,7 +701,7 @@ function FieldControl({
       onChange={(event) => onValueChange(event.target.value)}
       placeholder={
         field.name === "employee_code"
-          ? "Generated after submission"
+          ? "Generated employee ID"
           : `Enter ${field.label.toLowerCase()}`
       }
       className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}
@@ -709,6 +719,10 @@ export default function Teams() {
   const [isLoading, setIsLoading] = useState(true);
   const [formValues, setFormValues] = useState<TeamFormValues>({});
   const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [isLoadingEmployee, setIsLoadingEmployee] = useState(false);
+  const [nextEmployeeCodeNumber, setNextEmployeeCodeNumber] = useState<number | null>(
+    null,
+  );
   const [isDifferentAddress, setIsDifferentAddress] = useState(false);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, boolean>
@@ -741,6 +755,18 @@ export default function Teams() {
     pagedTeams.every((team) => selectedCodes.includes(team.code));
 
   const applyEmployeeRecords = (records: EmployeeRecord[]) => {
+    const currentYear = new Date().getFullYear();
+    const nextNumber = records.reduce((highest, employee) => {
+      const match = employee.employee_code.match(
+        new RegExp(`^EMP-${currentYear}-(\\d+)$`),
+      );
+      return match
+        ? Math.max(highest, Number.parseInt(match[1], 10))
+        : highest;
+    }, 0);
+    setNextEmployeeCodeNumber((current) =>
+      current === null ? nextNumber + 1 : Math.max(current, nextNumber + 1),
+    );
     setTeams(
       records.map((employee) => ({
         id: employee.id,
@@ -890,9 +916,9 @@ export default function Teams() {
         const employee = teams.find((team) => team.code === editingCode);
         if (!employee?.id) throw new Error("Employee id is missing.");
         if (!payload.password) delete payload.password;
+        delete payload.employee_code;
         savedEmployee = await updateEmployee(employee.id, payload);
       } else {
-        delete payload.employee_code;
         savedEmployee = await createEmployee(payload);
       }
       if (!savedEmployee.employee_code) {
@@ -954,7 +980,13 @@ export default function Teams() {
               type="button"
               onClick={() => {
                 setEditingCode(null);
-                setFormValues({});
+                setNextEmployeeCodeNumber((current) => {
+                  const number = current ?? 1;
+                  setFormValues({
+                    employee_code: `EMP-${new Date().getFullYear()}-${String(number).padStart(4, "0")}`,
+                  });
+                  return number + 1;
+                });
                 setIsDifferentAddress(false);
                 setValidationErrors({});
                 setActiveTab(0);
@@ -1145,20 +1177,31 @@ export default function Teams() {
                         <button
                           type="button"
                           onClick={() => {
-                            setEditingCode(team.code);
-                            setValidationErrors({});
-                            setIsDifferentAddress(false);
-                            setFormValues({
-                              employee_code: team.code,
-                              employee_name: team.name,
-                              employee_type: team.type,
-                              department: team.department,
-                              work_location: team.location,
-                              employment_status: team.status,
-                              login_email: team.email,
-                            });
-                            setIsCreating(true);
-                            setActiveTab(0);
+                            void (async () => {
+                              setApiError("");
+                              setIsLoadingEmployee(true);
+                              setIsCreating(true);
+                              setEditingCode(team.code);
+                              setValidationErrors({});
+                              setActiveTab(0);
+                              try {
+                                const employee = await getEmployee(team.id);
+                                setFormValues(employeeToFormValues(employee));
+                                setIsDifferentAddress(
+                                  Boolean(employee.permanent_address_line1),
+                                );
+                              } catch (error) {
+                                setIsCreating(false);
+                                setEditingCode(null);
+                                setApiError(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Unable to load employee details.",
+                                );
+                              } finally {
+                                setIsLoadingEmployee(false);
+                              }
+                            })();
                           }}
                           className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
                           aria-label={`Edit ${team.name}`}
@@ -1247,9 +1290,10 @@ export default function Teams() {
               <button
                 type="button"
                 onClick={handleCreate}
+                disabled={isLoadingEmployee}
                 className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
               >
-                Submit
+                {isLoadingEmployee ? "Loading..." : "Submit"}
               </button>
             </div>
           </div>
