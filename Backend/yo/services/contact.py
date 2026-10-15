@@ -21,8 +21,6 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 
 class ContactService:
 
-
-
     def __init__(self,repository: ContactRepository,):
         self.repository = repository
 
