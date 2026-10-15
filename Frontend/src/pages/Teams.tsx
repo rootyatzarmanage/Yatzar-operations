@@ -690,7 +690,7 @@ function FieldControl({
     <input
       type={field.type || "text"}
       readOnly={field.name === "employee_code"}
-      value={field.name === "employee_code" ? "EMP-2026-0048" : value}
+      value={field.name === "employee_code" ? "EMP-2026-0001" : value}
       onChange={(event) => onValueChange(event.target.value)}
       placeholder={`Enter ${field.label.toLowerCase()}`}
       className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}

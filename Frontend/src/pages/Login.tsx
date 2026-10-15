@@ -47,12 +47,12 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Username or email
-                <input required value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="mt-2 h-12 w-full rounded-lg border border-gray-300 px-4 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-white/5 dark:text-white" autoComplete="username" placeholder="enter username or email"/>
+                <input required value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="mt-2 h-12 w-full rounded-lg border border-gray-300 px-4 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-white/5 dark:text-white" autoComplete="username" placeholder="Enter username or email"/>
               </label>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Password
                 <div className="relative mt-2">
-                  <input required type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 w-full rounded-lg border border-gray-300 px-4 pe-16 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-white/5 dark:text-white" autoComplete="current-password" placeholder="enter password"/>
+                  <input required type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 w-full rounded-lg border border-gray-300 px-4 pe-16 outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-white/5 dark:text-white" autoComplete="current-password" placeholder="Enter password"/>
                   <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-e-0 top-0 h-full px-4 text-xs text-gray-500">{showPassword ? "Hide" : "Show"}</button>
                 </div>
               </label>

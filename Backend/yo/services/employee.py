@@ -41,6 +41,9 @@ class EmployeeService:
         employee = await self.repository.get_by_id(employee_id)
         if not employee:
             raise NotFoundException("Employee", str(employee_id))
+
+
+        
         return employee
 
     async def list_all(self, skip: int = 0, limit: int = 50) -> Sequence[Employee]:
