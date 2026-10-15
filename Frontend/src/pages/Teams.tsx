@@ -22,7 +22,6 @@ import {
   UsersIcon,
   WorkspaceIcon,
 } from "@/icons";
-import { getTeamDropdownOptions } from "@/utils/teamOptions";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -330,8 +329,6 @@ const fieldGroups: {
 
 const inputClass =
   "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
-const fallbackStates = ["Maharashtra", "Karnataka", "Tamil Nadu", "Delhi"];
-const fallbackDistricts = ["Mumbai", "Bengaluru Urban", "Chennai", "New Delhi"];
 
 function SearchableSelect({
   label,
@@ -690,9 +687,13 @@ function FieldControl({
     <input
       type={field.type || "text"}
       readOnly={field.name === "employee_code"}
-      value={field.name === "employee_code" ? "EMP-2026-0048" : value}
+      value={value}
       onChange={(event) => onValueChange(event.target.value)}
-      placeholder={`Enter ${field.label.toLowerCase()}`}
+      placeholder={
+        field.name === "employee_code"
+          ? "Generated after submission"
+          : `Enter ${field.label.toLowerCase()}`
+      }
       className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}
     />
   );
@@ -718,16 +719,12 @@ export default function Teams() {
   const [pageSize, setPageSize] = useState(5);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
-  const [departments, setDepartments] = useState(
-    () => getTeamDropdownOptions().departments,
-  );
-  const [reportingManagers, setReportingManagers] = useState(
-    () => getTeamDropdownOptions().reportingManagers,
-  );
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [reportingManagers, setReportingManagers] = useState<string[]>([]);
   const [roleOptions, setRoleOptions] = useState<string[]>([]);
-  const [countries, setCountries] = useState<string[]>(["India"]);
-  const [states, setStates] = useState<string[]>(fallbackStates);
-  const [districts, setDistricts] = useState<string[]>(fallbackDistricts);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
   const filteredTeams = teams.filter((team) =>
     Object.values(team).some((value) =>
       value.toLowerCase().includes(search.toLowerCase()),
@@ -785,24 +782,24 @@ export default function Teams() {
   useEffect(() => {
     void listCountries()
       .then(setCountries)
-      .catch(() => setCountries(["India"]));
+      .catch(() => setCountries([]));
   }, []);
 
   useEffect(() => {
     const country = formValues.country;
-    if (!country) return setStates(fallbackStates);
+    if (!country) return setStates([]);
     void listStates(country)
       .then(setStates)
-      .catch(() => setStates(fallbackStates));
+      .catch(() => setStates([]));
   }, [formValues.country]);
 
   useEffect(() => {
     const country = formValues.country;
     const state = formValues.state;
-    if (!country || !state) return setDistricts(fallbackDistricts);
+    if (!country || !state) return setDistricts([]);
     void listDistricts(state)
       .then(setDistricts)
-      .catch(() => setDistricts(fallbackDistricts));
+      .catch(() => setDistricts([]));
   }, [formValues.country, formValues.state]);
 
   useEffect(() => {
@@ -815,9 +812,8 @@ export default function Teams() {
         setReportingManagers(managerOptions.map((option) => option.value));
       })
       .catch(() => {
-        const options = getTeamDropdownOptions();
-        setDepartments(options.departments);
-        setReportingManagers(options.reportingManagers);
+        setDepartments([]);
+        setReportingManagers([]);
       });
   }, [isCreating]);
 
@@ -889,13 +885,18 @@ export default function Teams() {
         ...formValues,
         is_active: true,
       };
+      let savedEmployee: EmployeeRecord;
       if (editingCode) {
         const employee = teams.find((team) => team.code === editingCode);
         if (!employee?.id) throw new Error("Employee id is missing.");
         if (!payload.password) delete payload.password;
-        await updateEmployee(employee.id, payload);
+        savedEmployee = await updateEmployee(employee.id, payload);
       } else {
-        await createEmployee(payload);
+        delete payload.employee_code;
+        savedEmployee = await createEmployee(payload);
+      }
+      if (!savedEmployee.employee_code) {
+        throw new Error("The server did not return an employee code.");
       }
       await refreshEmployees();
       setEditingCode(null);
@@ -1148,6 +1149,7 @@ export default function Teams() {
                             setValidationErrors({});
                             setIsDifferentAddress(false);
                             setFormValues({
+                              employee_code: team.code,
                               employee_name: team.name,
                               employee_type: team.type,
                               department: team.department,
@@ -1367,6 +1369,20 @@ export default function Teams() {
                   )}
                 </div>
               ))}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                disabled={activeTab === fieldGroups.length - 1}
+                onClick={() =>
+                  setActiveTab((current) =>
+                    Math.min(fieldGroups.length - 1, current + 1),
+                  )
+                }
+                className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
             </div>
           </div>
         </section>
