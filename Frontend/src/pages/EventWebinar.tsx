@@ -1,6 +1,14 @@
-import { useMemo, useState } from "react";
 import {
-  ChevronDown,
+  createEventWebinar,
+  deleteEventWebinar,
+  listEventWebinars,
+  updateEventWebinar,
+  type EventWebinar as EventWebinarApi,
+  type EventWebinarOwnerOption,
+  type EventWebinarPayload,
+} from "@/api/eventWebinar";
+import { useEffect, useMemo, useState } from "react";
+import {
   ChevronLeft,
   ChevronRight,
   Pencil,
@@ -14,7 +22,7 @@ type EventStatus = "Planning" | "Active" | "Complete";
 type EventType = "Webinar" | "Event" | "Workshop";
 
 type EventWebinar = {
-  id: number;
+  id: string;
   name: string;
   type: EventType;
   schedule: string;
@@ -39,6 +47,49 @@ type EventForm = {
   actualCost: string;
   description: string;
 };
+
+function toEventData(
+  event: EventWebinarApi,
+  owners: EventWebinarOwnerOption[],
+): EventWebinar {
+  return {
+    id: event.id,
+    name: event.campaign_name,
+    type: event.type as EventType,
+    schedule: event.webinar_schedule.slice(0, 16),
+    duration: event.duration,
+    status: (event.status ?? "") as EventStatus,
+    owner:
+      owners.find((owner) => owner.id === event.campaign_owner_id)?.name ??
+      event.campaign_owner_id ??
+      "",
+    expectedRevenue: event.expected_revenue == null ? "" : String(event.expected_revenue),
+    budgetedCost: event.budgeted_cost == null ? "" : String(event.budgeted_cost),
+    actualCost: event.actual_cost == null ? "" : String(event.actual_cost),
+    description: event.description ?? "",
+  };
+}
+
+function toPayload(form: EventForm): EventWebinarPayload {
+  const numberOrNull = (value: string) => {
+    if (!value.trim()) return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  return {
+    webinar_schedule: new Date(form.schedule).toISOString(),
+    duration: form.duration,
+    campaign_owner_id: form.owner || null,
+    type: form.type,
+    campaign_name: form.name.trim(),
+    status: form.status || null,
+    expected_revenue: numberOrNull(form.expectedRevenue),
+    budgeted_cost: numberOrNull(form.budgetedCost),
+    actual_cost: numberOrNull(form.actualCost),
+    description: form.description.trim() || null,
+  };
+}
 
 const emptyForm: EventForm = {
   name: "",
@@ -80,18 +131,44 @@ function getStatusClass(status: EventStatus) {
 
 export default function EventWebinar() {
   const [events, setEvents] = useState<EventWebinar[]>([]);
-
   const [showForm, setShowForm] = useState(false);
-
-  const [editingId, setEditingId] = useState<number | null>(null);
-
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EventForm>(emptyForm);
-
+  const [owners, setOwners] = useState<EventWebinarOwnerOption[]>([]);
   const [search, setSearch] = useState("");
-
   const [entriesPerPage, setEntriesPerPage] = useState(5);
-
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    void listEventWebinars({
+      search,
+      page,
+      perPage: entriesPerPage,
+      includeOptions: page === 1,
+    })
+      .then((response) => {
+        if (!("items" in response.events)) {
+          throw new Error("The server returned an invalid event list.");
+        }
+        if (response.options?.owners) setOwners(response.options.owners);
+        setEvents(
+          response.events.items.map((event) =>
+            toEventData(event, response.options?.owners ?? owners),
+          ),
+        );
+        setTotal(response.events.total);
+        setError("");
+      })
+      .catch((reason: unknown) =>
+        setError(reason instanceof Error ? reason.message : "Unable to load events."),
+      )
+      .finally(() => setLoading(false));
+  }, [search, page, entriesPerPage]);
 
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -117,19 +194,9 @@ export default function EventWebinar() {
     );
   }, [events, search]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredEvents.length / entriesPerPage),
-  );
-
+  const totalPages = Math.max(1, Math.ceil(total / entriesPerPage));
   const currentPage = Math.min(page, totalPages);
-
-  const startIndex = (currentPage - 1) * entriesPerPage;
-
-  const visibleEvents = filteredEvents.slice(
-    startIndex,
-    startIndex + entriesPerPage,
-  );
+  const visibleEvents = filteredEvents;
 
   const openAddForm = () => {
     setEditingId(null);
@@ -175,41 +242,40 @@ export default function EventWebinar() {
     }));
   };
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const newEvent: EventWebinar = {
-      id: editingId ?? Date.now(),
-      name: form.name,
-      type: form.type,
-      schedule: form.schedule,
-      duration: form.duration,
-      status: form.status || "Planning",
-      owner: form.owner,
-      expectedRevenue: form.expectedRevenue,
-      budgetedCost: form.budgetedCost,
-      actualCost: form.actualCost,
-      description: form.description,
-    };
-
-    if (editingId !== null) {
+    setSaving(true);
+    try {
+      const saved = editingId
+        ? await updateEventWebinar(editingId, toPayload(form))
+        : await createEventWebinar(toPayload(form));
+      const mapped = toEventData(saved, owners);
       setEvents((current) =>
-        current.map((event) =>
-          event.id === editingId ? newEvent : event,
-        ),
+        editingId
+          ? current.map((event) => (event.id === mapped.id ? mapped : event))
+          : [mapped, ...current],
       );
-    } else {
-      setEvents((current) => [newEvent, ...current]);
+      setTotal((current) => (editingId ? current : current + 1));
+      setPage(1);
+      closeForm();
+      setError("");
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to save event.");
+    } finally {
+      setSaving(false);
     }
-
-    setPage(1);
-    closeForm();
   };
 
-  const handleDelete = (id: number) => {
-    setEvents((current) =>
-      current.filter((event) => event.id !== id),
-    );
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this event webinar?")) return;
+    try {
+      await deleteEventWebinar(id);
+      setEvents((current) => current.filter((event) => event.id !== id));
+      setTotal((current) => Math.max(0, current - 1));
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to delete event.");
+    }
   };
 
   if (showForm) {
@@ -220,6 +286,8 @@ export default function EventWebinar() {
         onChange={handleChange}
         onCancel={closeForm}
         onSave={handleSave}
+        owners={owners}
+        saving={saving}
       />
     );
   }
@@ -233,6 +301,12 @@ export default function EventWebinar() {
             Event webinar
           </h1>
         </div>
+
+        {error && (
+          <div role="alert" className="rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
+            {error}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <span>Home</span>
@@ -351,7 +425,13 @@ export default function EventWebinar() {
             </thead>
 
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {visibleEvents.map((event) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={11} className="px-5 py-10 text-center text-sm text-gray-500">
+                    Loading events...
+                  </td>
+                </tr>
+              ) : visibleEvents.map((event) => (
                 <tr
                   key={event.id}
                   className="transition hover:bg-gray-50 dark:hover:bg-white/[0.02]"
@@ -459,7 +539,7 @@ export default function EventWebinar() {
           <span>
             Showing{" "}
             <b className="text-gray-800 dark:text-white/90">
-              {filteredEvents.length}
+              {total}
             </b>{" "}
             events
           </span>
@@ -506,19 +586,23 @@ export default function EventWebinar() {
 
 type EventFormProps = {
   form: EventForm;
-  editingId: number | null;
+  editingId: string | null;
+  owners: EventWebinarOwnerOption[];
+  saving: boolean;
   onChange: (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
   ) => void;
   onCancel: () => void;
-  onSave: (e: React.FormEvent<HTMLFormElement>) => void;
+  onSave: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
 };
 
 function EventForm({
   form,
   editingId,
+  owners,
+  saving,
   onChange,
   onCancel,
   onSave,
@@ -570,9 +654,10 @@ function EventForm({
 
             <button
               type="submit"
+              disabled={saving}
               className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
             >
-              Save
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
@@ -601,6 +686,7 @@ function EventForm({
                   value={form.schedule}
                   onChange={onChange}
                   className={inputClass}
+                  required
                 />
               </div>
 
@@ -619,6 +705,7 @@ function EventForm({
                   value={form.duration}
                   onChange={onChange}
                   className={inputClass}
+                  required
                 >
                   <option value="">-None-</option>
                   <option value="45 minutes">45 minutes</option>
@@ -654,9 +741,12 @@ function EventForm({
                   onChange={onChange}
                   className={inputClass}
                 >
-                  <option value="superadmin">
-                    superadmin
-                  </option>
+                  <option value="">Select campaign owner</option>
+                  {owners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -675,6 +765,7 @@ function EventForm({
                   value={form.type}
                   onChange={onChange}
                   className={inputClass}
+                  required
                 >
                   <option value="Webinar">Webinar</option>
                   <option value="Event">Event</option>
@@ -698,6 +789,7 @@ function EventForm({
                   onChange={onChange}
                   placeholder="Enter campaign name"
                   className={inputClass}
+                  required
                 />
               </div>
 
