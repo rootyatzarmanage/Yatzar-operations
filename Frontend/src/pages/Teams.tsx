@@ -720,9 +720,6 @@ export default function Teams() {
   const [formValues, setFormValues] = useState<TeamFormValues>({});
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [isLoadingEmployee, setIsLoadingEmployee] = useState(false);
-  const [nextEmployeeCodeNumber, setNextEmployeeCodeNumber] = useState<number | null>(
-    null,
-  );
   const [isDifferentAddress, setIsDifferentAddress] = useState(false);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, boolean>

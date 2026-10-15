@@ -7,12 +7,10 @@ import { listTags, type Tag } from "@/api/tags";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
-  Eye,
   Mail,
   X,
   Plus,
   Search,
-  Trash2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";

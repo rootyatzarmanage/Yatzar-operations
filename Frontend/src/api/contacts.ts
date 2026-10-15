@@ -1,6 +1,8 @@
 import { API_BASE, request } from "@/api/client";
 
 export type ContactFields = {
+  company?: string | null;
+  tag_id?: string | null;
   contactOwner: string;
   workspace: string;
   secondaryEmail: string;
