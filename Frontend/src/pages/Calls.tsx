@@ -13,7 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type CallType = "Outbound" | "Inbound" | "Missed";
-type CallStatus = "Completed" | "Scheduled" | "Cancelled";
+type CallStatus = "Completed" | "Scheduled" | "Missed";
 type CallKind = "log" | "schedule";
 type View = "list" | CallKind;
 
@@ -36,7 +36,7 @@ type Call = {
 };
 
 const callTypes: CallType[] = ["Outbound", "Inbound", "Missed"];
-const loggedStatuses: CallStatus[] = ["Completed", "Cancelled"];
+const loggedStatuses: CallStatus[] = ["Completed", "Missed"];
 const reminders = ["None", "At time of call", "5 minutes before", "15 minutes before", "30 minutes before", "1 hour before", "1 day before"];
 const purposes = ["-None-", "Prospecting", "Administrative", "Negotiation", "Demo", "Project", "Desk"];
 
@@ -49,7 +49,7 @@ const thClass =
 const statusBadge: Record<CallStatus, string> = {
   Completed: "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500",
   Scheduled: "bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-400",
-  Cancelled: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
+  Missed: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400",
 };
 
 // ---------- helpers ----------
@@ -242,20 +242,22 @@ export default function Calls() {
   const handleSave = async (event: FormEvent) => {
     event.preventDefault();
     const next: FormErrors = {};
-    const existing = editingId ? calls.find((c) => c.id === editingId) : undefined;
-
-    if (!form.contactId && !existing?.contactName) next.contactId = "Select a contact.";
-    if (!form.startTime) next.startTime = "Start time is required.";
 
     let durationSeconds: number | null = null;
     if (!isSchedule && form.callType !== "Missed") {
-      if (form.minutes === "" && form.seconds === "") {
-        next.duration = "Call duration is required.";
-      } else {
+      if (form.minutes !== "" || form.seconds !== "") {
         const m = Number(form.minutes || 0);
         const s = Number(form.seconds || 0);
-        if (m < 0 || s < 0 || s > 59 || !Number.isInteger(m) || !Number.isInteger(s)) {
-          next.duration = "Enter whole minutes and seconds (0–59).";
+
+        if (
+          m < 0 ||
+          s < 0 ||
+          s > 59 ||
+          !Number.isInteger(m) ||
+          !Number.isInteger(s)
+        ) {
+          next.duration =
+            "Enter whole minutes and seconds (0–59).";
         } else {
           durationSeconds = m * 60 + s;
         }
@@ -471,7 +473,7 @@ export default function Calls() {
             <div className="grid gap-5 md:grid-cols-2">
               {/* Call for */}
               <div>
-                <label htmlFor="call-for" className={labelClass}>Call for <span className="text-error-500">*</span></label>
+                <label htmlFor="call-for" className={labelClass}>Call for</label>
                 <select
                   id="call-for"
                   value={form.contactId}
@@ -497,7 +499,7 @@ export default function Calls() {
 
               {/* Call type */}
               <div>
-                <label htmlFor="call-type" className={labelClass}>Call type <span className="text-error-500">*</span></label>
+                <label htmlFor="call-type" className={labelClass}>Call type</label>
                 <select
                   id="call-type"
                   value={isSchedule ? "Outbound" : form.callType}
@@ -530,7 +532,7 @@ export default function Calls() {
 
               {/* Call start time */}
               <div>
-                <label htmlFor="call-start" className={labelClass}>Call start time <span className="text-error-500">*</span></label>
+                <label htmlFor="call-start" className={labelClass}>Call start time </label>
                 <input
                   id="call-start"
                   type="datetime-local"
@@ -548,7 +550,7 @@ export default function Calls() {
               {!isSchedule ? (
                 <div>
                   <label className={labelClass}>
-                    Call duration {form.callType !== "Missed" && <span className="text-error-500">*</span>}
+                    Call duration
                   </label>
                   <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <input
