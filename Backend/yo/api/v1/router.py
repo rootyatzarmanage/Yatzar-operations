@@ -11,6 +11,7 @@ from yo.api.v1.endpoints.task import router as task_router
 from yo.api.v1.endpoints.meeting import router as meeting_router
 from yo.api.v1.endpoints.call import router as call_router
 from yo.api.v1.endpoints.campaign import router as campaigns_router
+from yo.api.v1.endpoints.event_webinar import router as event_webinar_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(employee_router)
@@ -24,3 +25,4 @@ api_v1_router.include_router(task_router)
 api_v1_router.include_router(meeting_router)
 api_v1_router.include_router(call_router)
 api_v1_router.include_router(campaigns_router)
+api_v1_router.include_router(event_webinar_router)
