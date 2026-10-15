@@ -132,7 +132,7 @@ export default function RecordPage<T extends StoredRecord>({
 
   const [records, setRecords] = useState<T[]>([]);
   const [pageError, setPageError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
