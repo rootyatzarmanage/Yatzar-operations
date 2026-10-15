@@ -574,7 +574,7 @@ function AddCampaign({
           <FormSection title="Campaign details">
             <div className="grid gap-5 md:grid-cols-2">
               <FormInput
-                name="campaignSubject"
+                name="subject"
                 label="Campaign Subject"
                 placeholder="Enter campaign"
                 value={form.subject}
