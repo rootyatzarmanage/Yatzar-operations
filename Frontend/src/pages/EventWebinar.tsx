@@ -16,6 +16,7 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
+import { getCurrentUser } from "@/api/auth";
 
 type EventStatus = "Planning" | "Active" | "Complete";
 
@@ -29,6 +30,7 @@ type EventWebinar = {
   duration: string;
   status: EventStatus;
   owner: string;
+  ownerId: string;
   expectedRevenue: string;
   budgetedCost: string;
   actualCost: string;
@@ -59,6 +61,7 @@ function toEventData(
     schedule: event.webinar_schedule.slice(0, 16),
     duration: event.duration,
     status: (event.status ?? "") as EventStatus,
+    ownerId: event.campaign_owner_id ?? "",
     owner:
       owners.find((owner) => owner.id === event.campaign_owner_id)?.name ??
       event.campaign_owner_id ??
@@ -95,7 +98,7 @@ const emptyForm: EventForm = {
   name: "",
   schedule: "",
   duration: "",
-  owner: "superadmin",
+  owner: "",
   type: "Webinar",
   status: "",
   expectedRevenue: "",
@@ -143,6 +146,7 @@ export default function EventWebinar() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -170,6 +174,20 @@ export default function EventWebinar() {
       )
       .finally(() => setLoading(false));
   }, [search, page, entriesPerPage]);
+
+  useEffect(() => {
+  void getCurrentUser()
+    .then((user) => {
+      setCurrentUserId(user.id);
+    })
+    .catch((reason: unknown) => {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Unable to get logged-in user.",
+      );
+    });
+}, []);
 
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -225,7 +243,10 @@ export default function EventWebinar() {
 
   const openAddForm = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({
+        ...emptyForm,
+        owner: currentUserId,
+    });
     setShowForm(true);
   };
 
@@ -236,7 +257,7 @@ export default function EventWebinar() {
       name: event.name,
       schedule: event.schedule,
       duration: event.duration,
-      owner: event.owner,
+      owner: event.ownerId,
       type: event.type,
       status: event.status,
       expectedRevenue: event.expectedRevenue,
