@@ -505,6 +505,7 @@ function AddCampaign({
   saving,
 }: AddCampaignProps) {
   const [form, setForm] = useState<CampaignForm>(initialForm);
+  const [formError, setFormError] = useState("");
 
   const handleChange = (
     event: React.ChangeEvent<
@@ -524,7 +525,12 @@ function AddCampaign({
   ) => {
     event.preventDefault();
 
-    void onSave(form);
+    setFormError("");
+    void onSave(form).catch((reason: unknown) => {
+      setFormError(
+        reason instanceof Error ? reason.message : "Unable to save campaign.",
+      );
+    });
   };
 
   return (
@@ -569,6 +575,15 @@ function AddCampaign({
           </div>
         </div>
 
+        {formError && (
+          <div
+            role="alert"
+            className="mx-5 mt-5 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700"
+          >
+            {formError}
+          </div>
+        )}
+
         <div className="space-y-6 p-5 sm:p-6">
           {/* Campaign Details */}
           <FormSection title="Campaign details">
@@ -576,6 +591,7 @@ function AddCampaign({
               <FormInput
                 name="subject"
                 label="Campaign Subject"
+                required
                 placeholder="Enter campaign"
                 value={form.subject}
                 onChange={handleChange}
@@ -593,6 +609,7 @@ function AddCampaign({
                 name="senderAddress"
                 label="Sender address"
                 required
+                type="email"
                 placeholder="Enter sender address"
                 value={form.senderAddress}
                 onChange={handleChange}
@@ -602,6 +619,7 @@ function AddCampaign({
                 name="replyToAddress"
                 label="Reply-to address"
                 required
+                type="email"
                 placeholder="Enter reply-to address"
                 value={form.replyToAddress}
                 onChange={handleChange}
@@ -735,6 +753,7 @@ function FormInput({
   type = "text",
   value,
   onChange,
+  required = false,
 }: {
   name: string;
   label: string;
@@ -756,6 +775,7 @@ function FormInput({
         name={name}
         type={type}
         value={value}
+        required={required}
         placeholder={placeholder}
         onChange={onChange}
         className={inputClass}
@@ -770,6 +790,7 @@ function FormSelect({
   value,
   onChange,
   children,
+  required = false,
 }: {
   name: string;
   label: string;
@@ -789,6 +810,7 @@ function FormSelect({
       <select
         name={name}
         value={value}
+        required={required}
         onChange={onChange}
         className={inputClass}
       >
