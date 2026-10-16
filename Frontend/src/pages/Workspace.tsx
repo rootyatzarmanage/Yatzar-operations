@@ -13,6 +13,8 @@ import type {
   WorkspaceStatus,
 } from "@/api/workspaces";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
+import { getEmployeeWorkspaceIds } from "@/utils/workspaceAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router";
@@ -60,6 +62,7 @@ const fieldClass =
 export default function Workspace() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { enterWorkspace } = useWorkspace();
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,7 +84,14 @@ export default function Workspace() {
     let active = true;
     void listWorkspaces()
       .then((items) => {
-        if (active) setWorkspaces(items as WorkspaceItem[]);
+        if (active) {
+          const assignedIds = getEmployeeWorkspaceIds(user?.email ?? "");
+          setWorkspaces(
+            (assignedIds
+              ? items.filter((item) => assignedIds.includes(item.id))
+              : items) as WorkspaceItem[],
+          );
+        }
       })
       .catch((error: unknown) => {
         if (active) {
@@ -98,7 +108,7 @@ export default function Workspace() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user?.email]);
 
   const filteredWorkspaces = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
