@@ -155,37 +155,53 @@ export function listRoles(): Promise<{ id: string; name: string }[]> {
 export function listOptions(
   kind: string,
 ): Promise<{ id: string; value: string }[]> {
-  return request(`/options/${encodeURIComponent(kind)}`);
+  return request(`/support/options/${encodeURIComponent(kind)}`);
 }
 
 export function listCountries(): Promise<string[]> {
-  return request("/locations/countries");
+  return request("/support/locations/countries");
 }
 
 export function listStates(country: string): Promise<string[]> {
-  return request(`/locations/states?country=${encodeURIComponent(country)}`);
+  return request(`/support/locations/states?country=${encodeURIComponent(country)}`);
 }
 
 export function listDistricts(state: string): Promise<string[]> {
-  return request(`/locations/districts?state=${encodeURIComponent(state)}`);
+  return request(`/support/locations/districts?state=${encodeURIComponent(state)}`);
 }
 
 export function listEmployeeDrafts(): Promise<EmployeeDraft[]> {
-  return request("/employee-drafts");
+  return request<{ items: Array<Record<string, unknown>> }>("/employees/drafts").then(
+    ({ items }) =>
+      items.map((item) => ({
+        id: String(item.id),
+        data: Object.fromEntries(
+          Object.entries(item)
+            .filter(
+              ([key, value]) =>
+                !["id", "updated_at", "created_at", "status"].includes(key) &&
+                value !== null &&
+                value !== undefined,
+            )
+            .map(([key, value]) => [key, String(value)]),
+        ),
+        updated_at: String(item.updated_at ?? ""),
+      })),
+  );
 }
 
 export function saveEmployeeDraft(
   data: Record<string, string>,
   draftId?: string,
 ): Promise<{ id: string; data: Record<string, string> }> {
-  return request(draftId ? `/employee-drafts/${draftId}` : "/employee-drafts", {
+  return request(draftId ? `/employees/${draftId}` : "/employees/draft", {
     method: draftId ? "PUT" : "POST",
-    body: JSON.stringify({ data }),
+    body: JSON.stringify(data),
   });
 }
 
 export function deleteEmployeeDraft(
   draftId: string,
 ): Promise<{ deleted_id: string }> {
-  return request(`/employee-drafts/${draftId}`, { method: "DELETE" });
+  return request(`/employees/${draftId}`, { method: "DELETE" });
 }

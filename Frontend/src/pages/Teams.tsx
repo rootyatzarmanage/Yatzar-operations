@@ -738,6 +738,7 @@ export default function Teams() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
   const [departments, setDepartments] = useState<string[]>([]);
   const [reportingManagers, setReportingManagers] = useState<string[]>([]);
@@ -763,6 +764,9 @@ export default function Teams() {
   const allVisibleSelected =
     pagedTeams.length > 0 &&
     pagedTeams.every((team) => selectedCodes.includes(team.code));
+  const selectedCount = selectedCodes.filter((code) =>
+    teams.some((team) => team.code === code),
+  ).length;
 
   const applyEmployeeRecords = (records: EmployeeRecord[]) => {
     const currentYear = new Date().getFullYear();
@@ -1024,6 +1028,43 @@ export default function Teams() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    const teamsToDelete = teams.filter((team) =>
+      selectedCodes.includes(team.code),
+    );
+
+    if (teamsToDelete.length === 0 || isDeleting) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${teamsToDelete.length} selected employee(s)?`,
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    setApiError("");
+    try {
+      await Promise.all(
+        teamsToDelete.map((team) => {
+          if (!team.id) throw new Error("Employee id is missing.");
+          return deleteEmployee(team.id);
+        }),
+      );
+      setSelectedCodes([]);
+      await refreshEmployees();
+      setSuccessMessage(
+        `${teamsToDelete.length} employee(s) deleted successfully.`,
+      );
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete selected employees.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <>
       <PageMeta
@@ -1072,9 +1113,9 @@ export default function Teams() {
 
           {drafts.length > 0 && (
             <div className="border-b border-gray-200 p-4 sm:p-5 dark:border-gray-800">
-              <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
+              {/* <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
                 Drafts ({drafts.length})
-              </h4>
+              </h4> */}
               <div className="flex flex-wrap gap-2">
                 {drafts.map((draft) => (
                   <div
@@ -1105,6 +1146,31 @@ export default function Teams() {
             </div>
           )}
 
+          {selectedCount > 0 && (
+            <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                <strong>{selectedCount}</strong> selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCodes([])}
+                  disabled={isDeleting}
+                  className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDelete()}
+                  disabled={isDeleting}
+                  className="h-10 rounded-lg bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting..." : `Delete ${selectedCount}`}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -1337,50 +1403,9 @@ export default function Teams() {
           </div>
           <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
             <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-              <span>{selectedCodes.length} selected</span>
-              {selectedCodes.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCodes([])}
-                  className="text-sm font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
-                >
-                  Clear all
-                </button>
-              )}
+              <span>{selectedCount} selected</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {selectedCodes.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void (async () => {
-                      try {
-                        const selectedTeams = teams.filter((team) =>
-                          selectedCodes.includes(team.code),
-                        );
-
-                        await Promise.all(
-                          selectedTeams.map((team) => deleteEmployee(team.id)),
-                        );
-
-                        setSelectedCodes([]);
-                        await refreshEmployees();
-                        setApiError("");
-                      } catch (error) {
-                        setApiError(
-                          error instanceof Error
-                            ? error.message
-                            : "Unable to delete selected employees.",
-                        );
-                      }
-                    })();
-                  }}
-                  className="h-9 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
-                >
-                  Delete
-                </button>
-              )}
-
               <button
                 type="button"
                 disabled={page === 1}
@@ -1606,7 +1631,7 @@ export default function Teams() {
               >
                 Cancel
               </button>
-              <button
+              {/* <button
                 type="button"
                 onClick={() => {
                   void (async () => {
@@ -1631,7 +1656,7 @@ export default function Teams() {
                 className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
               >
                 Delete
-              </button>
+              </button> */}
             </div>
           </div>
         </div>

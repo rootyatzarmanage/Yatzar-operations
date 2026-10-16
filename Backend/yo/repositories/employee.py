@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import cast, func, or_, select, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -46,7 +46,8 @@ class EmployeeRepository:
     ) -> dict:
         conditions = [Employee.deleted_at.is_(None)]
         if status is not None:
-            conditions.append(Employee.status == status)
+            status_values = ("1", "active") if status == 1 else ("0", "draft")
+            conditions.append(cast(Employee.status, String).in_(status_values))
         if search and search.strip():
             search_term = f"%{search.strip()}%"
             conditions.append(or_(

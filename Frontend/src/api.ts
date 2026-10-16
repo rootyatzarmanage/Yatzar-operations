@@ -182,42 +182,42 @@ export function deleteRole(id: string) {
 }
 
 export function listCountries() {
-  return request<string[]>("/locations/countries");
+  return request<string[]>("/support/locations/countries");
 }
 
 export function listStates(country: string) {
-  return request<string[]>(`/locations/states?country=${encodeURIComponent(country)}`);
+  return request<string[]>(`/support/locations/states?country=${encodeURIComponent(country)}`);
 }
 
 export function listDistricts(state: string) {
-  return request<string[]>(`/locations/districts?state=${encodeURIComponent(state)}`);
+  return request<string[]>(`/support/locations/districts?state=${encodeURIComponent(state)}`);
 }
 
 export function listOptions(kind: "department" | "reporting_manager") {
-  return request<DropdownOption[]>(`/options/${kind}`);
+  return request<DropdownOption[]>(`/support/options/${kind}`);
 }
 
 export function createOption(kind: "department" | "reporting_manager", value: string) {
-  return request<DropdownOption>(`/options/${kind}`, {
+  return request<DropdownOption>(`/support/options/${kind}`, {
     method: "POST",
     body: JSON.stringify({ value }),
   });
 }
 
 export function updateOption(id: string, value: string) {
-  return request<DropdownOption>(`/options/${id}`, {
+  return request<DropdownOption>(`/support/options/${id}`, {
     method: "PUT",
     body: JSON.stringify({ value }),
   });
 }
 
 export function deleteOption(id: string) {
-  return request<{ deleted_id: string }>(`/options/${id}`, { method: "DELETE" });
+  return request<{ deleted_id: string }>(`/support/options/${id}`, { method: "DELETE" });
 }
 
 export function saveEmployeeDraft(data: Record<string, string>) {
-  return request<{ id: string; data: Record<string, string> }>("/employee-drafts", {
+  return request<{ id: string; data: Record<string, string> }>("/employees/draft", {
     method: "POST",
-    body: JSON.stringify({ data }),
+    body: JSON.stringify(data),
   });
 }

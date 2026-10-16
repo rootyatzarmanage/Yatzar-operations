@@ -12,8 +12,28 @@ export type EmployeeRecord = {
   [key: string]: unknown;
 };
 
-export function listEmployees() {
-  return request<EmployeeRecord[]>("/employees");
+type EmployeeListResponse = {
+  items: EmployeeRecord[];
+  total: number;
+  page: number;
+  per_page: number;
+};
+
+export async function listEmployees(): Promise<EmployeeRecord[]> {
+  const records: EmployeeRecord[] = [];
+  let page = 1;
+  const perPage = 100;
+
+  while (true) {
+    const response = await request<EmployeeListResponse>(
+      `/employees?page=${page}&per_page=${perPage}`,
+    );
+    records.push(...response.items);
+    if (records.length >= response.total || response.items.length === 0) {
+      return records;
+    }
+    page += 1;
+  }
 }
 
 export function getEmployee(id: string) {
