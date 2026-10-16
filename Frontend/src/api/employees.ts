@@ -37,7 +37,9 @@ export async function listEmployees(): Promise<EmployeeRecord[]> {
 }
 
 export function getEmployee(id: string) {
-  return request<EmployeeRecord>(`/employees/${id}`);
+  return request<EmployeeRecord>(
+    `/employees?employee_id=${encodeURIComponent(id)}`,
+  );
 }
 
 export function createEmployee(payload: Record<string, unknown>) {

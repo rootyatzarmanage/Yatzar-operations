@@ -13,6 +13,7 @@ import {
   type LocalContact,
   bulkDeleteContacts,
 } from "@/api/contacts";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import { addContactToCustomers } from "@/api/customers";
 import { listWorkspaces, type Workspace } from "@/api/workspaces"
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -178,6 +179,10 @@ export default function Contacts({ embed }: EmbedProps = {}) {
   () => new Map(workspaces.map((workspace) => [workspace.id, workspace.name])),
   [workspaces],
 );
+const [workspaceIds, setWorkspaceIds] = useState<string[]>([])
+const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+const workspaceMenuRef = useRef<HTMLDivElement>(null);
+useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
 
   useEffect(() => {
     let active = true;
@@ -313,6 +318,7 @@ export default function Contacts({ embed }: EmbedProps = {}) {
     setFormErrors({});
     setFormError("");
     setShowForm(true);
+    setWorkspaceIds(currentWorkspace ? [currentWorkspace.id] : []);
   };
 
   const openEditForm = (contact: LocalContact) => {
@@ -354,6 +360,7 @@ export default function Contacts({ embed }: EmbedProps = {}) {
     setFormErrors({});
     setFormError("");
     setShowForm(true);
+    setWorkspaceIds(contact.workspace ? [contact.workspace] : []);
   };
 
   const openViewForm = (contact: LocalContact) => {
@@ -371,6 +378,8 @@ export default function Contacts({ embed }: EmbedProps = {}) {
     setPhotoPreview("");
     setFormErrors({});
     setFormError("");
+    setWorkspaceIds([]);
+    setWorkspaceMenuOpen(false);
   };
 
   const updateField = (field: FieldKey, value: string | boolean) => {
@@ -395,38 +404,52 @@ export default function Contacts({ embed }: EmbedProps = {}) {
     setFormError("");
   };
 
-  /** Validates and saves the form as a contact. Returns the saved contact, or null. */
   const saveContact = async (): Promise<LocalContact | null> => {
     try {
+      let savedAll: LocalContact[] = [];
       let saved: LocalContact;
       if (editingId) {
-        const response = await updateContact(
-          editingId,
-          toContactPayload(formValues),
-        );
-        saved = fromApiContact(response);
-        setContacts((current) =>
-          current.map((contact) => (contact.id === saved.id ? saved : contact)),
-        );
-        setNotice("Contact updated.");
-      } else {
-        const response = await createContact(toContactPayload(formValues));
-        saved = fromApiContact(response);
-        setContacts((current) => [saved, ...current]);
-        setPage(1);
-        // From here on this form edits the contact that was just created.
-        setEditingId(saved.id);
-        setNotice("Contact saved.");
-      }
+  const targets = currentWorkspace ? [currentWorkspace.id] : workspaceIds;
+  // keep the contact's own workspace if still selected, else use the first selected
+  const primary = targets.includes(formValues.workspace)
+    ? formValues.workspace
+    : (targets[0] ?? "");
+
+  const response = await updateContact(
+    editingId,
+    toContactPayload({ ...formValues, workspace: primary }),
+  );
+  const updated = fromApiContact(response);
+  saved = updated;
+
+  // any other ticked workspace gets its own copy
+  const extras: LocalContact[] = [];
+  for (const wsId of targets.filter((id) => id !== primary)) {
+    const copy = await createContact(
+      toContactPayload({ ...formValues, workspace: wsId }),
+    );
+    extras.push(fromApiContact(copy));
+  }
+
+  savedAll = [updated, ...extras];
+  setContacts((current) => [
+    ...extras,
+    ...current.map((contact) => (contact.id === updated.id ? updated : contact)),
+  ]);
+  setNotice(
+    extras.length
+      ? `Contact updated and copied to ${extras.length} more workspace(s).`
+      : "Contact updated.",
+  );
+}     
       if (selectedPhoto) {
-        const response = await uploadContactPhoto(saved.id, selectedPhoto);
-        const uploaded = fromApiContact(response);
-        saved = uploaded;
-        setContacts((current) =>
-          current.map((contact) =>
-            contact.id === uploaded.id ? uploaded : contact,
-          ),
-        );
+        for (const c of savedAll) {
+          const uploaded = fromApiContact(await uploadContactPhoto(c.id, selectedPhoto));
+          setContacts((current) =>
+            current.map((x) => (x.id === uploaded.id ? uploaded : x)),
+          );
+          if (c.id === saved.id) saved = uploaded;
+        }
       }
       setPageError("");
       return saved;
@@ -1145,27 +1168,68 @@ const handleBulkDelete = async () => {
                     <input value={contactOwner} readOnly className={`${inputClass} cursor-not-allowed`} />
                     </label>
                     <div>
-                      <label
-                        htmlFor="contact-workspace"
-                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        Workspace
-                      </label>
-                      <select
-                        id="contact-workspace"
-                        value={formValues.workspace}
-                        onChange={(event) => updateField("workspace", event.target.value)}
-                        className={inputClass}
-                      >
-                        <option value="">Select Workspace</option>
+                        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Workspace
+                        </label>
 
-                        {workspaces.map((workspace) => (
-                          <option key={workspace.id} value={workspace.id}>
-                            {workspace.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                        {currentWorkspace ? (
+                          // Inside a workspace: default value, locked
+                          <input
+                            value={currentWorkspace.name}
+                            readOnly
+                            className={`${inputClass} cursor-not-allowed`}
+                          />
+                        ) : (
+                          // Global contacts (add AND edit): dropdown with checkboxes
+                          <div ref={workspaceMenuRef} className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                              className={`${inputClass} flex items-center justify-between text-left`}
+                              aria-haspopup="listbox"
+                              aria-expanded={workspaceMenuOpen}
+                            >
+                              <span className={workspaceIds.length ? "" : "text-gray-400"}>
+                                {workspaceIds.length
+                                  ? workspaceIds
+                                      .map((id) => workspaceNames.get(id))
+                                      .filter(Boolean)
+                                      .join(", ")
+                                  : "Select workspaces"}
+                              </span>
+                              <span className="ms-2 text-xs text-gray-400">▾</span>
+                            </button>
+
+                            {workspaceMenuOpen && (
+                              <div className="absolute z-20 mt-1 max-h-48 w-full space-y-1 overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-dark">
+                                {workspaces.map((w) => (
+                                  <label
+                                    key={w.id}
+                                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="size-4 rounded accent-brand-500"
+                                      checked={workspaceIds.includes(w.id)}
+                                      onChange={() =>
+                                        setWorkspaceIds((cur) =>
+                                          cur.includes(w.id)
+                                            ? cur.filter((id) => id !== w.id)
+                                            : [...cur, w.id],
+                                        )
+                                      }
+                                    />
+                                    {w.name}
+                                  </label>
+                                ))}
+                                {workspaces.length === 0 && (
+                                  <p className="px-2 py-1.5 text-sm text-gray-400">No workspaces</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     <div>
                       <label htmlFor="contact-leadSource" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Lead source
