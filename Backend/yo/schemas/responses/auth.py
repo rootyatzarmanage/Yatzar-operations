@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from yo.schemas.responses.role import PermissionResponse
+
 
 class AuthWorkspaceResponse(BaseModel):
     id: UUID
@@ -19,3 +21,5 @@ class AuthUserResponse(BaseModel):
     token: str | None = None
 
     workspaces: list[AuthWorkspaceResponse] = Field(default_factory=list)
+
+    permissions: list[PermissionResponse] = Field(default_factory=list)

@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class EmailMarketingResponse(BaseModel):
+    workspace_id: UUID
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -28,6 +30,8 @@ class EmailMarketingResponse(BaseModel):
 
 
 class EmailMarketingListItemResponse(BaseModel):
+    workspace_id: UUID
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

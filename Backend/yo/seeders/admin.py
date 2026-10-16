@@ -16,6 +16,12 @@ MENU_SEEDS = [
     ("App Permission", "appPermission", "/app-permission"),
     ("Workspace", "workspace", "/workspace"),
     ("Contacts", "contacts", "/contacts"),
+    ("Tasks", "tasks", "/tasks"),
+    ("Meetings", "meetings", "/meetings"),
+    ("Calls", "calls", "/calls"),
+    ("Campaigns", "campaigns", "/campaigns"),
+    ("Email Marketing", "emailMarketing", "/email-marketing"),
+    ("Event Webinar", "eventWebinar", "/event-webinars"),
 ]
 
 ROLE_SEEDS = {
@@ -89,12 +95,6 @@ async def seed_default_data(session: AsyncSession) -> None:
             permission = await session.scalar(select(RolePermission).where(RolePermission.role_id == role.id, RolePermission.menu_id == menu.id))
             if not permission:
                 session.add(RolePermission(role=role, menu=menu, can_create=values[0], can_view=values[1], can_update=values[2], can_delete=values[3]))
-            else:
-                permission.deleted_at = None
-                permission.can_create = values[0]
-                permission.can_view = values[1]
-                permission.can_update = values[2]
-                permission.can_delete = values[3]
 
     admin = await session.scalar(select(User).where(User.username == settings.DEFAULT_SUPER_ADMIN_USERNAME))
     if not admin:

@@ -11,6 +11,9 @@ class ContactSelectionRequest(BaseModel):
     contact_ids: list[UUID] = Field(default_factory=list)
 
 class TaskCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: UUID
     subject: str = Field(min_length=1, max_length=255)
     due_date: date | None = None
     contact_selection: ContactSelectionRequest = Field(default_factory=ContactSelectionRequest)
@@ -36,5 +39,3 @@ class TaskUpdateRequest(BaseModel):
     reminder_type: str | None = None
     repeat_enabled: bool | None = None
     description: str | None = None
-
-

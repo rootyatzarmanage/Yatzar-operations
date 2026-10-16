@@ -1,11 +1,10 @@
 """Authorization using the existing system roles and menu permissions."""
 from fastapi import Depends
-from sqlalchemy import select
 
 from yo.core.auth.dependencies import CurrentUser
 from yo.core.database import DatabaseSession
 from yo.core.exceptions import AppException
-from yo.models.permission import Menu, RolePermission
+from yo.services.role import RoleService
 from yo.models.user import User
 
 WORKSPACE_ADMIN_ROLES = ("Super Admin", "Admin")
@@ -30,21 +29,7 @@ def require_permission(menu_key: str, action: str):
         raise ValueError("Unknown permission action")
 
     async def check(session: DatabaseSession, current_user: CurrentUser) -> User:
-        role = current_user.role
-        if role and role.deleted_at is None:
-            if role.is_system and role.name == "Super Admin":
-                return current_user
-            allowed = await session.scalar(
-                select(RolePermission.id).join(Menu).where(
-                    RolePermission.role_id == role.id,
-                    RolePermission.deleted_at.is_(None),
-                    Menu.key == menu_key, Menu.deleted_at.is_(None),
-                    Menu.is_active.is_(True),
-                    getattr(RolePermission, f"can_{action}").is_(True),
-                ).limit(1)
-            )
-            if allowed is not None:
-                return current_user
-        raise AppException("You do not have permission to perform this action.", 403)
+        await RoleService(session).check_permission(current_user, menu_key, action)
+        return current_user
 
     return check

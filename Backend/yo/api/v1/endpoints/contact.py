@@ -1,12 +1,13 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from yo.core.database import DatabaseSession
 from yo.core.exceptions import AppException
 from yo.core.schemas.responses import SuccessResponse
 from yo.core.auth.dependencies import CurrentUser
+from yo.core.auth.permissions import require_permission
 from yo.repositories.contact import ContactRepository
 from yo.schemas.requests.contact import (
     ContactCreateRequest,
@@ -33,6 +34,7 @@ router = APIRouter(
     response_model=SuccessResponse[ContactListResponse],
     status_code=status.HTTP_200_OK,
     summary="Get contacts, leads or customers",
+    dependencies=[Depends(require_permission("contacts", "view"))],
 )
 async def list_contacts(
     session: DatabaseSession,
@@ -97,6 +99,7 @@ async def list_contacts(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Upload contact image",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def upload_contact_image(
     contact_id: UUID,
@@ -136,6 +139,7 @@ async def upload_contact_image(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Create a contact",
+    dependencies=[Depends(require_permission("contacts", "create"))],
 )
 async def create_contact(
     payload: ContactCreateRequest,
@@ -168,6 +172,7 @@ async def create_contact(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Get contact by ID",
+    dependencies=[Depends(require_permission("contacts", "view"))],
 )
 async def get_contact(
     contact_id: UUID,
@@ -203,6 +208,7 @@ async def get_contact(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Update a contact",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def update_contact(
     contact_id: UUID,
@@ -243,6 +249,7 @@ async def update_contact(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Move contact to leads",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def move_to_lead(
     contact_id: UUID,
@@ -279,6 +286,7 @@ async def move_to_lead(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Move contact to customers",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def move_to_customer(
     contact_id: UUID,
@@ -315,6 +323,7 @@ async def move_to_customer(
     response_model=SuccessResponse[dict[str, int]],
     status_code=status.HTTP_200_OK,
     summary="Bulk delete contacts",
+    dependencies=[Depends(require_permission("contacts", "delete"))],
 )
 async def bulk_delete_contacts(
     payload: ContactBulkDeleteRequest,
@@ -350,6 +359,7 @@ async def bulk_delete_contacts(
     response_model=SuccessResponse[dict[str, str]],
     status_code=status.HTTP_200_OK,
     summary="Delete a contact",
+    dependencies=[Depends(require_permission("contacts", "delete"))],
 )
 async def delete_contact(
     contact_id: UUID,

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.workspace import Workspace
@@ -37,6 +37,13 @@ class WorkspaceRepository:
             or_(cls.privileged_user(user_id), Workspace.id.in_(membership)),
         )
 
+    @classmethod
+    def scope_condition(cls, column, user_id: UUID, workspace_id: UUID | None = None):
+        condition = column.in_(cls.accessible_ids(user_id))
+        if workspace_id is not None:
+            condition = and_(condition, column == workspace_id)
+        return condition
+
     async def user_has_workspace(self, user_id: UUID, workspace_id: UUID) -> bool:
         return await self.session.scalar(select(
             self.accessible_ids(user_id).where(Workspace.id == workspace_id).exists()
@@ -55,12 +62,25 @@ class WorkspaceRepository:
         await self.session.refresh(workspace)
         return workspace
 
-    async def get_by_id(self, workspace_id: UUID) -> Workspace | None:
+    async def get_by_id(self, workspace_id: UUID, *, for_update: bool = False) -> Workspace | None:
+        query = select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.deleted_at.is_(None),
+        )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        return await self.session.scalar(query)
+
+    async def get_id_by_image(self, image: str, user_id: UUID) -> UUID | None:
         return await self.session.scalar(
-            select(Workspace).where(
-                Workspace.id == workspace_id,
+            select(Workspace.id).where(
+                Workspace.image == image,
                 Workspace.deleted_at.is_(None),
-            )
+                or_(
+                    Workspace.id.in_(self.accessible_ids(user_id)),
+                    self.privileged_user(user_id),
+                ),
+            ).limit(1)
         )
 
     async def get_active_by_name(self, name: str) -> Workspace | None:
@@ -89,3 +109,26 @@ class WorkspaceRepository:
     async def soft_delete(self, workspace: Workspace) -> None:
         workspace.deleted_at = datetime.now(timezone.utc)
         await self.session.flush()
+
+
+    async def is_privileged(self, user_id: UUID) -> bool:
+        return bool(await self.session.scalar(self.privileged_user(user_id).select()))
+
+    @staticmethod
+    def owner_ids(workspace_id: UUID):
+        members = select(Employee.user_id).join(
+            employee_workspaces, Employee.id == employee_workspaces.c.employee_id,
+        ).where(
+            employee_workspaces.c.workspace_id == workspace_id,
+            Employee.deleted_at.is_(None), Employee.status == 1,
+        )
+        return select(User.id).where(
+            User.deleted_at.is_(None), User.is_active.is_(True),
+            or_(
+                User.id.in_(members),
+                User.role.has(
+                    (Role.deleted_at.is_(None)) & Role.is_system.is_(True)
+                    & Role.name.in_(WORKSPACE_ADMIN_ROLES)
+                ),
+            ),
+        )

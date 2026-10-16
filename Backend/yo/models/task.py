@@ -16,6 +16,12 @@ def utcnow():
 class Task(Base):
     __tablename__ = "tasks"
 
+    # Existing unassigned rows remain hidden until explicitly backfilled.
+    workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.task import Task
@@ -12,13 +12,15 @@ from yo.repositories.workspace import WorkspaceRepository
 
 
 class TaskRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID | None):
         self.session = session
+        self.workspace_id = workspace_id
 
     async def list_tasks(self, user_id: uuid.UUID, search: str | None = None):
-        query = select(Task).where(Task.deleted_at.is_(None), or_(
-            Task.task_owner_id == user_id, WorkspaceRepository.privileged_user(user_id),
-        ))
+        query = select(Task).where(
+            Task.deleted_at.is_(None),
+            WorkspaceRepository.scope_condition(Task.workspace_id, user_id, self.workspace_id),
+        )
 
         if search and search.strip():
             query = query.where(
@@ -34,8 +36,8 @@ class TaskRepository:
         result = await self.session.execute(
             select(Task).where(
                 Task.id == task_id,
-                or_(Task.task_owner_id == user_id, WorkspaceRepository.privileged_user(user_id)),
                 Task.deleted_at.is_(None),
+                Task.workspace_id == self.workspace_id,
             )
         )
         return result.scalar_one_or_none()
@@ -50,7 +52,7 @@ class TaskRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_customers(self, contact_ids: list[uuid.UUID], user_id: uuid.UUID):
+    async def get_customers(self, contact_ids: list[uuid.UUID], user_id: uuid.UUID, workspace_id: uuid.UUID | None = None):
         if not contact_ids:
             return []
 
@@ -58,6 +60,7 @@ class TaskRepository:
             select(Contact).where(
                 Contact.id.in_(contact_ids),
                 ContactRepository.access_condition(user_id),
+                Contact.workspace_id == (workspace_id if workspace_id is not None else self.workspace_id),
                 Contact.deleted_at.is_(None),
             )
         )

@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class CallResponse(BaseModel):
+    workspace_id: UUID
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

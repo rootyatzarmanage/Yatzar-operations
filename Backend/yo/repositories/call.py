@@ -4,20 +4,23 @@ from datetime import datetime, timezone
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yo.repositories.workspace import WorkspaceRepository
+
 from yo.models.call import Call
 from yo.models.contact import Contact
 from yo.repositories.contact import ContactRepository
 
 
 class CallRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID | None):
         self.session = session
+        self.workspace_id = workspace_id
 
-    @staticmethod
-    def access_condition(user_id: uuid.UUID):
+    def access_condition(self, user_id: uuid.UUID):
         return select(Contact.id).where(
             Contact.id == Call.contact_id, Contact.deleted_at.is_(None),
             ContactRepository.access_condition(user_id),
+            Contact.workspace_id == Call.workspace_id,
         ).exists()
 
     async def get_contact(self, contact_id: uuid.UUID, user_id: uuid.UUID):
@@ -25,6 +28,7 @@ class CallRepository:
             select(Contact).where(
                 Contact.id == contact_id,
                 ContactRepository.access_condition(user_id),
+                Contact.workspace_id == self.workspace_id,
                 Contact.deleted_at.is_(None),
             )
         )
@@ -36,6 +40,7 @@ class CallRepository:
                 Call.id == call_id,
                 self.access_condition(user_id),
                 Call.deleted_at.is_(None),
+                Call.workspace_id == self.workspace_id,
             )
         )
         return result.scalar_one_or_none()
@@ -48,7 +53,11 @@ class CallRepository:
         per_page: int = 5,
         call_id: uuid.UUID | None = None,
     ) -> dict:
-        conditions = [Call.deleted_at.is_(None), self.access_condition(user_id)]
+        conditions = [
+            Call.deleted_at.is_(None),
+            WorkspaceRepository.scope_condition(Call.workspace_id, user_id, self.workspace_id),
+            self.access_condition(user_id),
+        ]
 
         if call_id is not None:
             conditions.append(Call.id == call_id)

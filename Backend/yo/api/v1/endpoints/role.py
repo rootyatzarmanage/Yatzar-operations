@@ -17,12 +17,12 @@ router = APIRouter(prefix="/roles", tags=["Roles"], dependencies=[Depends(requir
 def serialize_role(role) -> RoleResponse:
     return RoleResponse(
         id=role.id, name=role.name, description=role.description, is_system=role.is_system,
-        permissions=[{"menu": item.menu.name, "create": item.can_create, "view": item.can_view, "update": item.can_update, "delete": item.can_delete} for item in role.permissions if item.deleted_at is None],
+        permissions=[{"menu": item.menu.name, "create": item.can_create, "view": item.can_view, "update": item.can_update, "delete": item.can_delete} for item in role.permissions if item.deleted_at is None and item.menu.deleted_at is None and item.menu.is_active],
         created_at=role.created_at, created_by=role.created_by, updated_at=role.updated_at, updated_by=role.updated_by,
     )
 
 
-@router.get("", response_model=SuccessResponse[List[RoleResponse]])
+@router.get("", response_model=SuccessResponse[List[RoleResponse]], dependencies=[Depends(require_permission("appPermission", "view"))])
 async def list_roles(session: DatabaseSession) -> SuccessResponse[List[RoleResponse]]:
     roles = await RoleService(session).list_all()
     return SuccessResponse(message="Roles retrieved successfully", data=[serialize_role(role) for role in roles])
@@ -44,3 +44,9 @@ async def update_role(role_id: UUID, request: RoleUpdateRequest, session: Databa
 async def delete_role(role_id: UUID, session: DatabaseSession) -> SuccessResponse[dict[str, str]]:
     await RoleService(session).delete(role_id)
     return SuccessResponse(message="Role deleted successfully", data={"deleted_id": str(role_id)})
+
+
+@router.get("/{role_id}", response_model=SuccessResponse[RoleResponse], dependencies=[Depends(require_permission("appPermission", "view"))])
+async def get_role(role_id: UUID, session: DatabaseSession) -> SuccessResponse[RoleResponse]:
+    role = await RoleService(session).get_by_id(role_id)
+    return SuccessResponse(message="Role retrieved successfully", data=serialize_role(role))

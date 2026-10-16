@@ -6,6 +6,9 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CampaignCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: UUID
     campaign_subject: str = Field(min_length=1, max_length=255)
     sender_name: str | None = Field(default=None, max_length=150)
     sender_address: EmailStr

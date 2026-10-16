@@ -1,5 +1,4 @@
 from uuid import UUID,uuid4
-from pathlib import Path
 from fastapi import  UploadFile
 
 from yo.core.exceptions import (
@@ -7,18 +6,11 @@ from yo.core.exceptions import (
     ConflictException,
     NotFoundException,
 )
+from yo.core.storage import STORAGE_DIR, read_image
 from yo.models.contact import Contact
 from yo.repositories.contact import ContactRepository
 from yo.repositories.workspace import WorkspaceRepository
 from yo.schemas.requests.contact import ContactCreateRequest,ContactUpdateRequest
-
-STORAGE_DIR = Path(__file__).resolve().parents[2] / "storage"
-ALLOWED_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-}
-MAX_FILE_SIZE = 5 * 1024 * 1024
 
 class ContactService:
 
@@ -29,7 +21,7 @@ class ContactService:
         access = WorkspaceRepository(self.repository.session)
         if workspace_id is None:
             # Legacy unassigned contacts are administrative records only.
-            allowed = await access.session.scalar(access.privileged_user(user_id).select())
+            allowed = await access.is_privileged(user_id)
         else:
             allowed = await access.user_has_workspace(user_id, workspace_id)
         if not allowed:
@@ -65,24 +57,7 @@ class ContactService:
         file: UploadFile,
     ) -> str:
         await self.get_by_id(contact_id, user_id)
-        extension = ALLOWED_TYPES.get(file.content_type or "")
-
-        if not extension:
-            raise AppException(
-                "Only JPG, PNG, and WEBP images are allowed.",
-                400,
-            )
-
-        content = await file.read(MAX_FILE_SIZE + 1)
-
-        if not content:
-            raise AppException("Image is empty.", 400)
-
-        if len(content) > MAX_FILE_SIZE:
-            raise AppException(
-                "Image size must not exceed 5 MB.",
-                413,
-            )
+        content, extension = await read_image(file)
 
         user_storage_dir = STORAGE_DIR / str(user_id)
         user_storage_dir.mkdir(parents=True, exist_ok=True)
@@ -93,7 +68,6 @@ class ContactService:
         destination.write_bytes(content)
 
         return f"storage/{user_id}/{filename}"
-
 
 
     async def list_by_stage(self,stage: str, user_id: UUID, search: str | None = None, page: int = 1, per_page: int = 5, workspace_id: UUID | None = None):
@@ -149,4 +123,3 @@ class ContactService:
         for contact_id in set(ids):
             await self.get_by_id(contact_id, user_id)
         return await self.repository.soft_delete_many(ids,user_id)
-

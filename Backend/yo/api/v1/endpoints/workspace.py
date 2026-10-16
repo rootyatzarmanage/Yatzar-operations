@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from yo.core.database import DatabaseSession
 from yo.core.auth.dependencies import CurrentUser
@@ -11,7 +11,7 @@ from yo.schemas.requests.workspace import (
     WorkspaceCreateRequest,
     WorkspaceUpdateRequest,
 )
-from yo.schemas.responses.workspace import WorkspaceResponse
+from yo.schemas.responses.workspace import WorkspaceImageResponse, WorkspaceResponse
 from yo.services.workspace import WorkspaceService
 
 
@@ -34,7 +34,7 @@ async def create_workspace(
     )
 
 
-@router.get("", response_model=SuccessResponse[List[WorkspaceResponse]])
+@router.get("", response_model=SuccessResponse[List[WorkspaceResponse]], dependencies=[Depends(require_permission("workspace", "view"))])
 async def list_workspaces(
     session: DatabaseSession,
     current_user: CurrentUser,
@@ -64,6 +64,80 @@ async def workspace_options(
     return SuccessResponse(
         message="Workspace options retrieved successfully",
         data=[WorkspaceResponse.model_validate(item) for item in workspaces],
+    )
+
+
+@router.get(
+    "/{workspace_id}/image",
+    response_model=SuccessResponse[WorkspaceImageResponse],
+    dependencies=[Depends(require_permission("workspace", "view"))],
+)
+async def get_workspace_image(
+    workspace_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> SuccessResponse[WorkspaceImageResponse]:
+    service = WorkspaceService(session)
+    workspace = await service.get_workspace_image(workspace_id, current_user.id)
+    return SuccessResponse(
+        message="Workspace image retrieved successfully",
+        data=WorkspaceImageResponse(workspace_id=workspace.id, image=workspace.image),
+    )
+
+
+@router.post(
+    "/{workspace_id}/image",
+    response_model=SuccessResponse[WorkspaceImageResponse],
+    dependencies=[Depends(require_permission("workspace", "update"))],
+)
+async def upload_workspace_image(
+    workspace_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+) -> SuccessResponse[WorkspaceImageResponse]:
+    service = WorkspaceService(session)
+    workspace = await service.save_workspace_image(workspace_id, file, current_user.id)
+    return SuccessResponse(
+        message="Workspace image uploaded successfully",
+        data=WorkspaceImageResponse(workspace_id=workspace.id, image=workspace.image),
+    )
+
+
+@router.put(
+    "/{workspace_id}/image",
+    response_model=SuccessResponse[WorkspaceImageResponse],
+    dependencies=[Depends(require_permission("workspace", "update"))],
+)
+async def update_workspace_image(
+    workspace_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+) -> SuccessResponse[WorkspaceImageResponse]:
+    service = WorkspaceService(session)
+    workspace = await service.update_workspace_image(workspace_id, file, current_user.id)
+    return SuccessResponse(
+        message="Workspace image updated successfully",
+        data=WorkspaceImageResponse(workspace_id=workspace.id, image=workspace.image),
+    )
+
+
+@router.delete(
+    "/{workspace_id}/image",
+    response_model=SuccessResponse[None],
+    dependencies=[Depends(require_permission("workspace", "update"))],
+)
+async def delete_workspace_image(
+    workspace_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> SuccessResponse[None]:
+    service = WorkspaceService(session)
+    await service.delete_workspace_image(workspace_id, current_user.id)
+    return SuccessResponse(
+        message="Workspace image deleted successfully",
+        data=None,
     )
 
 

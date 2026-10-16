@@ -6,23 +6,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.campaign import Campaign
 from yo.models.user import User
+from yo.repositories.workspace import WorkspaceRepository
 
 
 class CampaignRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: UUID | None):
         self.session = session
+        self.workspace_id = workspace_id
 
     async def get_campaign(self, campaign_id: UUID):
         result = await self.session.execute(
             select(Campaign).where(
                 Campaign.id == campaign_id,
                 Campaign.deleted_at.is_(None),
+                Campaign.workspace_id == self.workspace_id,
             )
         )
         return result.scalar_one_or_none()
 
-    async def list_campaigns(self,search: str | None = None,page: int = 1,per_page: int = 5):
-        conditions = [Campaign.deleted_at.is_(None)]
+    async def list_campaigns(self, user_id: UUID, search: str | None = None,page: int = 1,per_page: int = 5):
+        conditions = [
+            Campaign.deleted_at.is_(None),
+            WorkspaceRepository.scope_condition(Campaign.workspace_id, user_id, self.workspace_id),
+        ]
         if search and search.strip():
             search_term = f"%{search.strip()}%"
             conditions.append(
@@ -89,6 +95,7 @@ class CampaignRepository:
             select(Campaign).where(
                 Campaign.id.in_(campaign_ids),
                 Campaign.deleted_at.is_(None),
+                Campaign.workspace_id == self.workspace_id,
             )
         )
         campaigns = list(result.scalars().all())
@@ -102,7 +109,9 @@ class CampaignRepository:
 
     async def get_campaign_options(self) -> dict:
         owners_result = await self.session.execute(
-            select(User.id, User.username)
+            select(User.id, User.username).where(
+                User.id.in_(WorkspaceRepository.owner_ids(self.workspace_id)),
+            )
             .order_by(User.username.asc())
         )
 
@@ -115,6 +124,7 @@ class CampaignRepository:
             select(Campaign.sender_address)
             .where(
                 Campaign.deleted_at.is_(None),
+                Campaign.workspace_id == self.workspace_id,
                 Campaign.sender_address.is_not(None),
             )
             .distinct()
@@ -124,6 +134,7 @@ class CampaignRepository:
             select(Campaign.reply_to_address)
             .where(
                 Campaign.deleted_at.is_(None),
+                Campaign.workspace_id == self.workspace_id,
                 Campaign.reply_to_address.is_not(None),
             )
             .distinct()

@@ -1,8 +1,11 @@
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 from typing import Literal
 
 class EmailMarketingCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: UUID
     campaign_name: str = Field(min_length=1, max_length=255)
     platform: str = "Email"
     from_email: EmailStr
