@@ -1,76 +1,104 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class EmployeeResponse(BaseModel):
-    id: UUID
-    user_id: UUID
-    employee_code: str
-    employee_name: str
-    display_name: str | None
-    employee_type: str
-    date_of_birth: date
-    gender: str
-    photo: str | None
-    blood_group: str | None
-    marital_status: str | None
-    mobile_number: str
-    alternate_phone: str | None
-    email: str
-    emergency_contact_name: str | None
-    emergency_contact_number: str | None
-    address_line1: str
-    address_line2: str | None
-    country: str
-    state: str
-    district: str
-    pincode: str
-    permanent_address_line1: str | None
-    permanent_address_line2: str | None
-    permanent_country: str | None
-    permanent_state: str | None
-    permanent_district: str | None
-    permanent_pincode: str | None
-    date_of_joining: date
-    department: str
-    designation: str
-    reporting_manager: str | None
-    work_location: str
-    employment_status: str
-    aadhar_number: str | None
-    pan_number: str | None
-    uan_number: str | None
-    bank_name: str | None
-    account_number: str | None
-    ifsc_code: str | None
-    resume_file: str | None
-    id_proof_file: str | None
-    offer_letter_file: str | None
-    experience: str | None
-    skills: str | None
-    qualifications: str | None
-    remarks: str | None
-    username: str
-    login_email: str
-    role: str
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID | None = None
+    employee_code: str
+    status: Literal[0, 1]
+
+    employee_name: str | None = None
+    display_name: str | None = None
+    employee_type: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = None
+    photo: str | None = None
+    blood_group: str | None = None
+    marital_status: str | None = None
+
+    mobile_number: str | None = None
+    alternate_phone: str | None = None
+    email: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_number: str | None = None
+
+    address_line1: str | None = None
+    address_line2: str | None = None
+    country: str | None = None
+    state: str | None = None
+    district: str | None = None
+    pincode: str | None = None
+
+    permanent_address_line1: str | None = None
+    permanent_address_line2: str | None = None
+    permanent_country: str | None = None
+    permanent_state: str | None = None
+    permanent_district: str | None = None
+    permanent_pincode: str | None = None
+
+    date_of_joining: date | None = None
+    department: str | None = None
+    designation: str | None = None
+    reporting_manager: str | None = None
+    work_location: str | None = None
+    employment_status: str | None = None
+
+    aadhar_number: str | None = None
+    pan_number: str | None = None
+    uan_number: str | None = None
+
+    bank_name: str | None = None
+    account_number: str | None = None
+    ifsc_code: str | None = None
+
+    resume_file: str | None = None
+    id_proof_file: str | None = None
+    offer_letter_file: str | None = None
+
+    experience: str | None = None
+    skills: str | None = None
+    qualifications: str | None = None
+    remarks: str | None = None
+
+    username: str | None = None
+    login_email: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     @model_validator(mode="before")
     @classmethod
     def include_user_fields(cls, value):
-        if hasattr(value, "user"):
-            data = {field: getattr(value, field) for field in cls.model_fields if hasattr(value, field)}
+        if isinstance(value, dict):
+            return value
+        data = {field: getattr(value, field) for field in cls.model_fields if hasattr(value, field)}
+        user = getattr(value, "user", None)
+        if user is not None:
             data.update(
-                username=value.user.username,
-                login_email=value.user.email,
-                role=value.user.role.name if value.user.role else "",
-                is_active=value.user.is_active,
+                username=user.username,
+                login_email=user.email,
+                role=user.role.name if user.role else None,
+                is_active=user.is_active,
             )
-            return data
-        return value
+        return data
+
+
+class EmployeeListResponse(BaseModel):
+    items: list[EmployeeResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+class EmployeeCodeResponse(BaseModel):
+    employee_codes: list[str]
