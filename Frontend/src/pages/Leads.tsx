@@ -14,6 +14,7 @@ import RecordPage, {
   type FormSection,
 } from "@/components/records/RecordPage";
 import { useEffect, useMemo, useState } from "react";
+import type { EmbedProps } from "@/components/records/embed";
 
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
 const text = (value: string | boolean | undefined) => String(value ?? "");
@@ -30,7 +31,7 @@ const columns: Column<LeadRecord>[] = [
   { header: "Lead Owner", render: (r) => text(r.leadOwner) || "—" },
 ];
 
-export default function Leads() {
+export default function Leads({ embed }: EmbedProps = {}) {
   const { currentWorkspace } = useWorkspace();
   const [sources, setSources] = useState<string[]>(fallbackSources);
 
@@ -115,6 +116,7 @@ export default function Leads() {
 
   return (
     <RecordPage<LeadRecord>
+      embed={embed}
       pageTitle="Leads"
       parent={{ label: "Engagement" }}
       heading="Lead information"

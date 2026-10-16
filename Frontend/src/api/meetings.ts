@@ -101,3 +101,13 @@ export function updateMeeting(
 export function deleteMeeting(meetingId: string): Promise<null> {
   return request<null>(`/meetings/${meetingId}`, { method: "DELETE" });
 }
+
+
+export function bulkDeleteMeetings(
+  ids: string[],
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/meetings/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+}

@@ -13,6 +13,7 @@ import RecordPage, {
   type FormSection,
 } from "@/components/records/RecordPage";
 import { useEffect, useMemo, useState } from "react";
+import type { EmbedProps } from "@/components/records/embed";
 
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
 const text = (value: string | boolean | undefined) => String(value ?? "");
@@ -39,7 +40,7 @@ const addressFields = (prefix: "" | "other"): FieldDef[] => {
   ];
 };
 
-export default function Customers() {
+export default function Customers({ embed }: EmbedProps = {}) {
   const { currentWorkspace } = useWorkspace();
   const [sources, setSources] = useState<string[]>(fallbackSources);
 
@@ -96,6 +97,7 @@ export default function Customers() {
 
   return (
     <RecordPage<CustomerRecord>
+      embed={embed}
       pageTitle="Customers"
       parent={{ label: "Engagement" }}
       heading="Customer information"

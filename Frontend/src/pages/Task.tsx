@@ -4,7 +4,8 @@ import { createTask, deleteTask, listTasks, updateTask, type TaskApi, type TaskP
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useAuth } from "@/context/AuthContext";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import type { EmbedProps } from "@/components/records/embed";
 
 type TaskStatus = "Not Started" | "Deferred" | "In Progress" | "Waiting for input" | "Completed";
 type TaskPriority = "Highest" | "High" | "Normal" | "Low" | "Lowest";
@@ -105,7 +106,7 @@ function Toggle({
   );
 }
 
-export default function Tasks() {
+export default function Tasks({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -250,6 +251,7 @@ export default function Tasks() {
     setEditingId(null);
     setPickerOpen(false);
     setReminderOpen(false);
+    embed?.onClose();
   };
 
   const handleSave = async (event: FormEvent) => {
@@ -323,17 +325,32 @@ export default function Tasks() {
             label: contactFullName(contact) || contact.email || "Unnamed",
           }));
 
+  const embedInit = useRef(false);
+  useEffect(() => {
+    if (!embed || embedInit.current) return;
+    if (!embed.editId) {
+      embedInit.current = true;
+      openAdd();
+      return;
+    }
+    const target = tasks.find((x) => x.id === embed.editId);
+    if (target) {
+      embedInit.current = true;
+      openEdit(target);
+    }
+  });
+
   return (
     <>
-      <PageMeta title="Task | Yatzar Operations" description="Yatzar Operations tasks" />
-      <PageBreadcrumb pageTitle="Task" parent={{ label: "Activities" }} />
+      {!embed && <PageMeta title="Task | Yatzar Operations" description="Yatzar Operations tasks" />}
+      {!embed && <PageBreadcrumb pageTitle="Task" parent={{ label: "Activities" }} />}
       {apiError && (
         <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
           {apiError}
         </div>
       )}
 
-      {!showForm && (
+      {!showForm && !embed && (
         <section className="rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>

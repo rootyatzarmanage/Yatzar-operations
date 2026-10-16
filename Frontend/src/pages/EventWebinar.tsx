@@ -353,21 +353,6 @@ export default function EventWebinar() {
             {error}
           </div>
         )}
-
-        {selectedCount > 0 && (
-          <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
-            <span>{selectedCount} selected</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-transparent">
-                Clear selection
-              </button>
-              <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
-                Delete {selectedCount}
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <span>Home</span>
 
@@ -448,7 +433,19 @@ export default function EventWebinar() {
             entries
           </label>
         </div>
-
+        {selectedCount > 0 && (
+          <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
+            <span>{selectedCount} selected</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setSelectedIds([])} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-transparent">
+                Clear selection
+              </button>
+              <button type="button" onClick={() => void bulkDelete()} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
+                Delete {selectedCount}
+              </button>
+            </div>
+          </div>
+        )}
         {/* TABLE */}
         <div className="custom-scrollbar overflow-x-auto">
           <table className="w-full min-w-[1200px] text-start">

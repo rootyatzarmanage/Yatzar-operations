@@ -1228,8 +1228,49 @@ export default function Teams() {
           <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
             <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
               <span>{selectedCodes.length} selected</span>
+              {selectedCodes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCodes([])}
+                  className="text-sm font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                >
+                  Clear all
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {selectedCodes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        const selectedTeams = teams.filter((team) =>
+                          selectedCodes.includes(team.code),
+                        );
+
+                        await Promise.all(
+                          selectedTeams.map((team) => deleteEmployee(team.id)),
+                        );
+
+                        setSelectedCodes([]);
+                        await refreshEmployees();
+                        setApiError("");
+                      } catch (error) {
+                        setApiError(
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to delete selected employees.",
+                        );
+                      }
+                    })();
+                  }}
+                  className="h-9 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
+                >
+                  Delete
+                </button>
+              )}
+
               <button
                 type="button"
                 disabled={page === 1}

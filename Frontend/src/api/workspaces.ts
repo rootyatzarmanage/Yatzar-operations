@@ -93,3 +93,11 @@ export function deleteWorkspace(
 ): Promise<{ deleted_id: string }> {
   return request(`/workspaces/${workspaceId}`, { method: "DELETE" });
 }
+
+export async function deleteWorkspaces(
+  workspaceIds: string[],
+): Promise<void> {
+  await Promise.all(
+    workspaceIds.map((id) => deleteWorkspace(id)),
+  );
+}

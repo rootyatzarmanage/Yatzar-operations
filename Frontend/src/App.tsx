@@ -15,6 +15,7 @@ import Profile from "./pages/Profile";
 import Task from "./pages/Task";
 import Meetings from "./pages/Meetings";
 import Calls from "./pages/Calls";
+import Calendar from "./pages/Calendar";
 import EmailMarketing from "./pages/EmailMarketing";
 import Campaign from "./pages/Campaigns";
 import EventWebinar from "./pages/EventWebinar";
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/task" element={<Task />} />
             <Route path="/meetings" element={<Meetings />} />
             <Route path="/calls" element={<Calls />} />
+            <Route path="/calendar" element={<Calendar />} />
             <Route path="/email-marketing" element={<EmailMarketing />} />
             <Route path="/campaigns" element={<Campaign />} />
             <Route path="/event-webinar" element={<EventWebinar />} />
