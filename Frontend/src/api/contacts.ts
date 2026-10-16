@@ -23,16 +23,12 @@ export type ContactFields = {
   state: string;
   country: string;
   pincode: string;
-  latitude: string;
-  longitude: string;
   otherAddressLine1: string;
   otherAddressLine2: string;
   otherCity: string;
   otherState: string;
   otherCountry: string;
   otherPincode: string;
-  otherLatitude: string;
-  otherLongitude: string;
 };
 
 export type LocalContact = ContactFields & {

@@ -21,6 +21,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
 import type { EmbedProps } from "@/components/records/embed";
+import { useAuth } from "@/context/AuthContext";
 import {
   useEffect,
   useMemo,
@@ -54,16 +55,12 @@ const emptyForm: ContactFields = {
   state: "",
   country: "",
   pincode: "",
-  latitude: "",
-  longitude: "",
   otherAddressLine1: "",
   otherAddressLine2: "",
   otherCity: "",
   otherState: "",
   otherCountry: "",
   otherPincode: "",
-  otherLatitude: "",
-  otherLongitude: "",
 };
 
 type MoveTarget = "leads" | "customers";
@@ -116,8 +113,6 @@ function fromApiContact(contact: Contact): LocalContact {
     state: contact.mailing_state ?? "",
     country: contact.mailing_country ?? "",
     pincode: contact.mailing_zip ?? "",
-    latitude: "",
-    longitude: "",
     otherAddressLine1: contact.other_building ?? "",
     otherAddressLine2: contact.other_street ?? "",
     otherCity: contact.other_city ?? "",
@@ -127,8 +122,6 @@ function fromApiContact(contact: Contact): LocalContact {
     id: contact.id,
     createdAt: contact.created_at,
     updatedAt: contact.updated_at ?? contact.created_at,
-    otherLatitude: "",
-    otherLongitude: "",
     photoUrl: getContactPhotoUrl(contact.photo),
   };
 }
@@ -151,6 +144,7 @@ function validateCoordinates(
 }
 
 export default function Contacts({ embed }: EmbedProps = {}) {
+  const { user } = useAuth();
   const { t } = useTranslation();
   const { currentWorkspace } = useWorkspace();
   const [contacts, setContacts] = useState<LocalContact[]>([]);
@@ -179,6 +173,7 @@ export default function Contacts({ embed }: EmbedProps = {}) {
   const [page, setPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const contactOwner = user?.display_name || user?.employee_name || user?.username || "";
   const workspaceNames = useMemo(
   () => new Map(workspaces.map((workspace) => [workspace.id, workspace.name])),
   [workspaces],
@@ -347,16 +342,12 @@ export default function Contacts({ embed }: EmbedProps = {}) {
       state: contact.state,
       country: contact.country,
       pincode: contact.pincode,
-          latitude: contact.latitude ?? "",
-          longitude: contact.longitude ?? "",
       otherAddressLine1: contact.otherAddressLine1,
       otherAddressLine2: contact.otherAddressLine2,
       otherCity: contact.otherCity,
       otherState: contact.otherState,
       otherCountry: contact.otherCountry,
       otherPincode: contact.otherPincode,
-      otherLatitude: contact.otherLatitude ?? "",
-      otherLongitude: contact.otherLongitude ?? "",
     });
     setSelectedPhoto(null);
     setPhotoPreview(contact.photoUrl);
@@ -637,14 +628,6 @@ export default function Contacts({ embed }: EmbedProps = {}) {
         {renderInput(field("Pincode"), "Pincode", {
           required: true,
           placeholder: "Enter pincode",
-        })}
-        {renderInput(field("Latitude"), "Latitude", {
-          inputMode: "decimal",
-          placeholder: "e.g. 11.0168",
-        })}
-        {renderInput(field("Longitude"), "Longitude", {
-          inputMode: "decimal",
-          placeholder: "e.g. 76.9558",
         })}
       </div>
     );
@@ -1158,7 +1141,9 @@ const handleBulkDelete = async () => {
                   {renderSectionTitle("Profile")}
                   <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">Your basic contact information.</p>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {renderInput("contactOwner", "Contact owner", { placeholder: "Select contact owner" })}
+                    <label htmlFor="contact-owner" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Contact Owner
+                    <input value={contactOwner} readOnly className={`${inputClass} cursor-not-allowed`} />
+                    </label>
                     <div>
                       <label
                         htmlFor="contact-workspace"
