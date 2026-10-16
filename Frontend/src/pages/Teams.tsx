@@ -11,7 +11,12 @@ import {
 import { listRoles } from "@/api/roles";
 import { listOptions } from "@/api/options";
 import { listCountries, listDistricts, listStates } from "@/api/locations";
-import { saveEmployeeDraft } from "@/api/employeeDrafts";
+import {
+  saveEmployeeDraft,
+  listEmployeeDrafts,
+  deleteEmployeeDraft,
+  type EmployeeDraft,
+} from "@/api/employeeDrafts";
 import {
   ChevronDownIcon,
   ContactsIcon,
@@ -716,13 +721,14 @@ export default function Teams() {
   const [search, setSearch] = useState("");
   const [teams, setTeams] = useState<Team[]>([]);
   const [apiError, setApiError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [formValues, setFormValues] = useState<TeamFormValues>({});
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [isLoadingEmployee, setIsLoadingEmployee] = useState(false);
-  const [nextEmployeeCodeNumber, setNextEmployeeCodeNumber] = useState<number | null>(
-    null,
-  );
+  const [nextEmployeeCodeNumber, setNextEmployeeCodeNumber] = useState<
+    number | null
+  >(null);
   const [isDifferentAddress, setIsDifferentAddress] = useState(false);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, boolean>
@@ -739,6 +745,10 @@ export default function Teams() {
   const [countries, setCountries] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
+  // Draft support
+  const [drafts, setDrafts] = useState<EmployeeDraft[]>([]);
+  const [draftId, setDraftId] = useState<string | null>(null);
+
   const filteredTeams = teams.filter((team) =>
     Object.values(team).some((value) =>
       value.toLowerCase().includes(search.toLowerCase()),
@@ -795,8 +805,20 @@ export default function Teams() {
     }
   };
 
+  const refreshDrafts = async () => {
+    try {
+      setDrafts(await listEmployeeDrafts());
+    } catch {
+      setDrafts([]);
+    }
+  };
+
   useEffect(() => {
     void refreshEmployees();
+  }, []);
+
+  useEffect(() => {
+    void refreshDrafts();
   }, []);
 
   useEffect(() => {
@@ -869,6 +891,9 @@ export default function Teams() {
     }
   };
 
+  const nextEmployeeCode = () =>
+    `EMP-${new Date().getFullYear()}-${String(nextEmployeeCodeNumber ?? 1).padStart(4, "0")}`;
+
   const handleCreate = async () => {
     const requiredErrors: Record<string, boolean> = {};
     fieldGroups.forEach((group) => {
@@ -919,19 +944,33 @@ export default function Teams() {
         delete payload.employee_code;
         savedEmployee = await updateEmployee(employee.id, payload);
       } else {
+        delete payload.employee_code;
         savedEmployee = await createEmployee(payload);
+        // The employee is saved, so the draft is no longer needed
+        if (draftId) {
+          await deleteEmployeeDraft(draftId).catch(() => {});
+          setDraftId(null);
+          await refreshDrafts();
+        }
       }
       if (!savedEmployee.employee_code) {
         throw new Error("The server did not return an employee code.");
       }
       await refreshEmployees();
       setEditingCode(null);
+      setDraftId(null);
       setFormValues({});
       setIsDifferentAddress(false);
       setValidationErrors({});
       setIsCreating(false);
       setApiError("");
+      setSuccessMessage(
+        editingCode
+          ? ""
+          : `Employee created with code ${savedEmployee.employee_code}.`,
+      );
     } catch (error) {
+      setSuccessMessage("");
       setApiError(
         error instanceof Error ? error.message : "Unable to save employee.",
       );
@@ -940,15 +979,47 @@ export default function Teams() {
 
   const handleSaveDraft = async () => {
     try {
-      await saveEmployeeDraft(formValues);
+      // Keep the password and the preview employee code out of the draft
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { employee_code, password, ...safeValues } = formValues;
+      await saveEmployeeDraft(safeValues, draftId ?? undefined);
+      await refreshDrafts();
       setFormValues({});
+      setDraftId(null);
       setIsDifferentAddress(false);
       setValidationErrors({});
       setIsCreating(false);
       setApiError("");
+      setSuccessMessage("Draft saved.");
     } catch (error) {
       setApiError(
         error instanceof Error ? error.message : "Unable to save draft.",
+      );
+    }
+  };
+
+  const handleResumeDraft = (draft: EmployeeDraft) => {
+    setEditingCode(null);
+    setDraftId(draft.id);
+    setFormValues({
+      ...draft.data,
+      employee_code: nextEmployeeCode(),
+    });
+    setIsDifferentAddress(Boolean(draft.data.permanent_address_line1));
+    setValidationErrors({});
+    setApiError("");
+    setSuccessMessage("");
+    setActiveTab(0);
+    setIsCreating(true);
+  };
+
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      await deleteEmployeeDraft(id);
+      await refreshDrafts();
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to delete draft.",
       );
     }
   };
@@ -963,6 +1034,11 @@ export default function Teams() {
       {apiError && (
         <p className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600">
           {apiError}
+        </p>
+      )}
+      {successMessage && (
+        <p className="mb-4 rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm text-success-700">
+          {successMessage}
         </p>
       )}
       {!isCreating ? (
@@ -980,15 +1056,11 @@ export default function Teams() {
               type="button"
               onClick={() => {
                 setEditingCode(null);
-                setNextEmployeeCodeNumber((current) => {
-                  const number = current ?? 1;
-                  setFormValues({
-                    employee_code: `EMP-${new Date().getFullYear()}-${String(number).padStart(4, "0")}`,
-                  });
-                  return number + 1;
-                });
+                setDraftId(null);
+                setFormValues({ employee_code: nextEmployeeCode() });
                 setIsDifferentAddress(false);
                 setValidationErrors({});
+                setSuccessMessage("");
                 setActiveTab(0);
                 setIsCreating(true);
               }}
@@ -997,6 +1069,42 @@ export default function Teams() {
               <span className="text-lg leading-none">+</span>Add employee
             </button>
           </div>
+
+          {drafts.length > 0 && (
+            <div className="border-b border-gray-200 p-4 sm:p-5 dark:border-gray-800">
+              <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
+                Drafts ({drafts.length})
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {drafts.map((draft) => (
+                  <div
+                    key={draft.id}
+                    className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-gray-800"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleResumeDraft(draft)}
+                      className="font-medium text-brand-500 hover:text-brand-600"
+                    >
+                      {draft.data.employee_name || "Untitled draft"}
+                    </button>
+                    <span className="text-xs text-gray-400">
+                      {new Date(draft.updated_at).toLocaleDateString()}
+                    </span>
+                    {/* <button
+                      type="button"
+                      onClick={() => void handleDeleteDraft(draft.id)}
+                      className="text-error-500 hover:text-error-600"
+                      aria-label="Delete draft"
+                    >
+                      ×
+                    </button> */}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -1179,6 +1287,8 @@ export default function Teams() {
                           onClick={() => {
                             void (async () => {
                               setApiError("");
+                              setSuccessMessage("");
+                              setDraftId(null);
                               setIsLoadingEmployee(true);
                               setIsCreating(true);
                               setEditingCode(team.code);
@@ -1316,18 +1426,27 @@ export default function Teams() {
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
               <button
                 type="button"
-                onClick={() => setIsCreating(false)}
+                onClick={() => {
+                  setIsCreating(false);
+                  setDraftId(null);
+                  setEditingCode(null);
+                  setFormValues({});
+                  setIsDifferentAddress(false);
+                  setValidationErrors({});
+                }}
                 className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none sm:px-4 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => void handleSaveDraft()}
-                className="h-10 flex-1 rounded-lg border border-brand-200 px-3 text-sm font-medium text-brand-600 hover:bg-brand-50 sm:flex-none sm:px-4 dark:border-brand-500/30 dark:text-brand-400 dark:hover:bg-brand-500/10"
-              >
-                Save as draft
-              </button>
+              {!editingCode && (
+                <button
+                  type="button"
+                  onClick={() => void handleSaveDraft()}
+                  className="h-10 flex-1 rounded-lg border border-brand-200 px-3 text-sm font-medium text-brand-600 hover:bg-brand-50 sm:flex-none sm:px-4 dark:border-brand-500/30 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                >
+                  Save as draft
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleCreate}
@@ -1360,20 +1479,6 @@ export default function Teams() {
             </div>
           </div>
           <div className="p-5 md:p-7">
-            {/* <div className="mb-6 flex items-start gap-3">
-              <div className="rounded-lg bg-brand-50 p-2.5 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400">
-                <UsersIcon className="size-5" />
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-800 dark:text-white/90">
-                  {fieldGroups[activeTab].label}
-                </h4>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Fields marked with <span className="text-error-500">*</span>{" "}
-                  are required.
-                </p>
-              </div>
-            </div> */}
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {activeTab === 2 && (
                 <h4 className="text-sm font-semibold text-gray-800 md:col-span-2 dark:text-white/90">
