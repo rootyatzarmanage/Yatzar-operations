@@ -5,34 +5,64 @@ import {
   deleteWorkspace,
   listWorkspaces,
   updateWorkspace,
-  deleteWorkspaces
+  deleteWorkspaces,
 } from "@/api/workspaces";
 import type {
-  Workspace as WorkspaceItem,
-  WorkspacePayload as WorkspaceRequest,
+  Workspace as BaseWorkspace,
+  WorkspacePayload as BaseWorkspacePayload,
   WorkspaceStatus,
 } from "@/api/workspaces";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
+
+type WorkspaceItem = BaseWorkspace & { image?: string | null };
+type WorkspaceRequest = BaseWorkspacePayload & { image?: string | null };
 
 type WorkspaceFormValues = {
   name: string;
   description: string;
   status: WorkspaceStatus;
+  image: string;
 };
 
 const emptyForm: WorkspaceFormValues = {
   name: "",
   description: "",
   status: "Enabled",
+  image: "",
 };
+
+const IMAGE_WIDTH = 640;
+const IMAGE_HEIGHT = 360;
+
+const LayoutIcon = ({ className = "size-6" }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M3 9h18M9 21V9" />
+  </svg>
+);
+
+const fieldClass =
+  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800 dark:focus:bg-transparent";
 
 export default function Workspace() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { enterWorkspace } = useWorkspace();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -51,7 +81,7 @@ export default function Workspace() {
     let active = true;
     void listWorkspaces()
       .then((items) => {
-        if (active) setWorkspaces(items);
+        if (active) setWorkspaces(items as WorkspaceItem[]);
       })
       .catch((error: unknown) => {
         if (active) {
@@ -95,6 +125,18 @@ export default function Workspace() {
     (_, index) => index + 1,
   );
 
+  // Selection is counted against the currently filtered list (all pages),
+  // so the bulk bar and "Select all" always match what the search shows.
+  const visibleSelectedIds = useMemo(() => {
+    const filteredIds = new Set(filteredWorkspaces.map((item) => item.id));
+    return selectedIds.filter((id) => filteredIds.has(id));
+  }, [filteredWorkspaces, selectedIds]);
+  const selectedCount = visibleSelectedIds.length;
+  const allSelected =
+    filteredWorkspaces.length > 0 &&
+    selectedCount === filteredWorkspaces.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+
   const handleFieldChange = (
     field: keyof WorkspaceFormValues,
     value: string,
@@ -124,10 +166,57 @@ export default function Workspace() {
       name: workspace.name,
       description: workspace.description,
       status: workspace.status,
+      image: workspace.image ?? "",
     });
     setFormError("");
     setApiError("");
     setShowForm(true);
+  };
+
+  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setFormError("Please choose an image file.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Cover-crop to 640x360 so every card image has the same shape.
+        const canvas = document.createElement("canvas");
+        canvas.width = IMAGE_WIDTH;
+        canvas.height = IMAGE_HEIGHT;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setFormError("Unable to process the image.");
+          return;
+        }
+        const scale = Math.max(
+          IMAGE_WIDTH / img.width,
+          IMAGE_HEIGHT / img.height,
+        );
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(
+          img,
+          (IMAGE_WIDTH - w) / 2,
+          (IMAGE_HEIGHT - h) / 2,
+          w,
+          h,
+        );
+        setFormError("");
+        handleFieldChange("image", canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => setFormError("Unable to read the selected image.");
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => setFormError("Unable to read the selected image.");
+    reader.readAsDataURL(file);
   };
 
   const handleSave = async () => {
@@ -146,15 +235,19 @@ export default function Workspace() {
       name: trimmedName,
       description: trimmedDescription,
       status: formValues.status,
+      // image: formValues.image || null,
     };
     try {
       if (editingId !== null) {
-        const saved = await updateWorkspace(editingId, payload);
+        const saved = (await updateWorkspace(
+          editingId,
+          payload,
+        )) as WorkspaceItem;
         setWorkspaces((current) =>
           current.map((item) => (item.id === saved.id ? saved : item)),
         );
       } else {
-        const saved = await createWorkspace(payload);
+        const saved = (await createWorkspace(payload)) as WorkspaceItem;
         setWorkspaces((current) => [saved, ...current]);
         setPage(1);
       }
@@ -203,85 +296,76 @@ export default function Workspace() {
     }
   };
 
+  // Select / unselect every workspace in the current (filtered) result.
   const toggleSelectAll = () => {
-    const allPageSelected =
-      paginatedWorkspaces.length > 0 &&
-      paginatedWorkspaces.every((workspace) =>
-        selectedIds.includes(workspace.id),
-      );
-    if (allPageSelected) {
-      setSelectedIds((current) =>
-        current.filter(
-          (selectedId) =>
-            !paginatedWorkspaces.some(
-              (workspace) => workspace.id === selectedId,
-            ),
-        ),
-      );
+    if (allSelected) {
+      const filteredIds = new Set(filteredWorkspaces.map((item) => item.id));
+      setSelectedIds((current) => current.filter((id) => !filteredIds.has(id)));
       return;
     }
 
     setSelectedIds((current) => [
-      ...new Set([
-        ...current,
-        ...paginatedWorkspaces.map((workspace) => workspace.id),
-      ]),
+      ...new Set([...current, ...filteredWorkspaces.map((item) => item.id)]),
     ]);
   };
 
-  const selectedCount = selectedIds.length;
-  
-const clearSelection = () => {
-  setSelectedIds([]);
-};
-
-const handleBulkDelete = async () => {
-  if (selectedIds.length === 0 || isSaving) return;
-
-  const idsToDelete = [...selectedIds];
-
-  const confirmed = window.confirm(
-    `Are you sure you want to delete ${idsToDelete.length} selected workspace(s)?`
-  );
-
-  if (!confirmed) return;
-
-  setApiError("");
-  setIsSaving(true);
-
-  try {
-    await deleteWorkspaces(idsToDelete);
-
-    setWorkspaces((current) =>
-      current.filter((workspace) => !idsToDelete.includes(workspace.id))
-    );
-
+  const clearSelection = () => {
     setSelectedIds([]);
-  } catch (error) {
-    // Some requests might have succeeded before another failed.
-    // Reload the list so the UI matches the backend.
-    try {
-      const latestWorkspaces = await listWorkspaces();
-      setWorkspaces(latestWorkspaces);
-      setSelectedIds((current) =>
-        current.filter((id) =>
-          latestWorkspaces.some((workspace) => workspace.id === id)
-        )
-      );
-    } catch {
-      // Keep the existing list if reloading also fails.
-    }
+  };
 
-    setApiError(
-      error instanceof Error
-        ? error.message
-        : "Unable to delete selected workspaces."
+  const handleBulkDelete = async () => {
+    if (visibleSelectedIds.length === 0 || isSaving) return;
+
+    const idsToDelete = [...visibleSelectedIds];
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${idsToDelete.length} selected workspace(s)?`,
     );
-  } finally {
-    setIsSaving(false);
-  }
-};
 
+    if (!confirmed) return;
+
+    setApiError("");
+    setIsSaving(true);
+
+    try {
+      await deleteWorkspaces(idsToDelete);
+
+      setWorkspaces((current) =>
+        current.filter((workspace) => !idsToDelete.includes(workspace.id)),
+      );
+
+      setSelectedIds((current) =>
+        current.filter((id) => !idsToDelete.includes(id)),
+      );
+    } catch (error) {
+      // Some requests might have succeeded before another failed.
+      // Reload the list so the UI matches the backend.
+      try {
+        const latestWorkspaces = (await listWorkspaces()) as WorkspaceItem[];
+        setWorkspaces(latestWorkspaces);
+        setSelectedIds((current) =>
+          current.filter((id) =>
+            latestWorkspaces.some((workspace) => workspace.id === id),
+          ),
+        );
+      } catch {
+        // Keep the existing list if reloading also fails.
+      }
+
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete selected workspaces.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openWorkspace = (workspace: WorkspaceItem) => {
+    enterWorkspace({ id: workspace.id, name: workspace.name });
+    navigate("/contacts");
+  };
 
   return (
     <>
@@ -301,13 +385,14 @@ const handleBulkDelete = async () => {
 
       {!showForm ? (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
-          <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
+          {/* Header */}
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
                 Workspace information
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Manage workspace records and access in one place.
+                Select a workspace card to open its menu.
               </p>
             </div>
             <button
@@ -319,7 +404,8 @@ const handleBulkDelete = async () => {
             </button>
           </div>
 
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          {/* Search + page size */}
+          <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5 dark:border-gray-800">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
                 ⌕
@@ -345,7 +431,7 @@ const handleBulkDelete = async () => {
                     setEntriesPerPage(Number(event.target.value));
                     setPage(1);
                   }}
-                  className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                  className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-gray-700 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-300"
                 >
                   <option value={5}>5</option>
                   <option value={10}>10</option>
@@ -355,171 +441,194 @@ const handleBulkDelete = async () => {
               </label>
             </div>
           </div>
-          
-{selectedCount > 0 && (
-  <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
-    <p className="text-sm text-gray-700 dark:text-gray-300">
-      <span className="font-semibold">{selectedCount}</span>{" "}
-      {selectedCount === 1 ? "selected" : "selected"}
-    </p>
 
-    <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={clearSelection}
-        disabled={isSaving}
-        className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-      >
-        Clear selection
-      </button>
+          {/* Bulk action bar */}
+          {selectedCount > 0 && (
+            <div className="flex flex-col gap-3 border-t border-gray-200 bg-blue-50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-gray-800 dark:bg-white/5">
+              <p className="text-gray-700 dark:text-gray-300">
+                <span className="font-semibold">{selectedCount}</span> selected
+              </p>
 
-      <button
-        type="button"
-        onClick={() => void handleBulkDelete()}
-        disabled={isSaving}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="size-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          aria-hidden="true"
-        >
-          <path d="M4 7h16" />
-          <path d="M9 7V4h6v3" />
-          <path d="M7 7l1 12h8l1-12" />
-          <path d="M10 11v5M14 11v5" />
-        </svg>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={isSaving}
+                  className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                >
+                  Clear selection
+                </button>
 
-        {isSaving ? "Deleting..." : `Delete ${selectedCount}`}
-      </button>
-    </div>
-  </div>
-)}
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDelete()}
+                  disabled={isSaving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 7h16" />
+                    <path d="M9 7V4h6v3" />
+                    <path d="M7 7l1 12h8l1-12" />
+                    <path d="M10 11v5M14 11v5" />
+                  </svg>
+                  {isSaving ? "Deleting..." : `Delete ${selectedCount}`}
+                </button>
+              </div>
+            </div>
+          )}
 
-          <div className="custom-scrollbar max-w-full overflow-x-auto">
+          {/* Card grid */}
+          <div className="border-t border-gray-200 px-4 pb-2 sm:px-6 dark:border-gray-800">
             {isLoading ? (
-              <p className="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                 Loading workspaces…
               </p>
             ) : (
-              <table className="w-full min-w-full text-start sm:min-w-165 lg:min-w-full">
-                <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
-                  <tr>
-                    <th className="w-12 px-5 py-3">
-                      <input
-                        type="checkbox"
-                        checked={
-                          paginatedWorkspaces.length > 0 &&
-                          paginatedWorkspaces.every((workspace) =>
-                            selectedIds.includes(workspace.id),
-                          )
-                        }
-                        onChange={toggleSelectAll}
-                        className="size-4 rounded accent-brand-500"
-                        aria-label="Select all workspaces on this page"
-                      />
-                    </th>
-                    <th className="px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
-                      Workspace name
-                    </th>
-                    <th className="px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
-                      Status
-                    </th>
-                    <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {paginatedWorkspaces.map((workspace) => (
-                    <tr
-                      key={workspace.id}
-                      className="transition hover:bg-gray-50 dark:hover:bg-white/2"
-                    >
-                      <td className="px-5 py-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(workspace.id)}
-                          onChange={() => toggleSelected(workspace.id)}
-                          className="size-4 rounded accent-brand-500"
-                        />
-                      </td>
-                      <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            enterWorkspace({
-                              id: workspace.id,
-                              name: workspace.name,
-                            });
-                            navigate("/contacts");
-                          }}
-                          className="font-semibold text-brand-500 hover:text-brand-600 hover:underline dark:text-brand-400"
-                          title={`Open ${workspace.name}`}
-                        >
-                          {workspace.name}
-                        </button>
-                      </td>
-                      <td className="px-3 py-4 sm:px-5">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${workspace.status === "Enabled" ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400" : "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"}`}
-                        >
-                          {workspace.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-4 sm:px-5">
-                        <div className="flex items-center justify-center gap-1 text-sm font-medium sm:gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(workspace)}
-                            className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
-                            aria-label={`Edit ${workspace.name}`}
-                            title="Edit"
+              <>
+                <label className="flex w-fit cursor-pointer items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    onChange={toggleSelectAll}
+                    disabled={filteredWorkspaces.length === 0}
+                    className="size-4 rounded accent-brand-500"
+                    aria-label="Select all workspaces"
+                  />
+                  Select all
+                </label>
+
+                <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {paginatedWorkspaces.map((workspace) => {
+                    const isSelected = selectedIds.includes(workspace.id);
+                    return (
+                      <article
+                        key={workspace.id}
+                        onClick={() => openWorkspace(workspace)}
+                        title={`Open ${workspace.name}`}
+                        className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-white shadow-theme-xs transition hover:border-brand-500 hover:shadow-theme-md dark:bg-gray-dark ${
+                          isSelected
+                            ? "border-brand-500 ring-2 ring-brand-500/30"
+                            : "border-gray-200 dark:border-gray-800"
+                        }`}
+                      >
+                        <div className="relative grid h-40 w-full place-items-center overflow-hidden bg-linear-to-br from-brand-50 to-gray-100 text-brand-500 dark:from-white/5 dark:to-white/2 dark:text-brand-400">
+                          {workspace.image ? (
+                            <img
+                              src={workspace.image}
+                              alt={workspace.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="grid size-14 place-items-center rounded-2xl bg-white/80 dark:bg-gray-900/50">
+                              <LayoutIcon className="size-7" />
+                            </span>
+                          )}
+                          <label
+                            onClick={(event) => event.stopPropagation()}
+                            className="absolute top-3 left-3 grid size-7 cursor-pointer place-items-center rounded-md bg-white/90 shadow dark:bg-gray-900/80"
                           >
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="size-4"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                            >
-                              <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
-                              <path d="m13.5 6.5 4 4" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(workspace.id)}
-                            className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
-                            aria-label={`Delete ${workspace.name}`}
-                            title="Delete"
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="size-4"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                            >
-                              <path d="M4 7h16" />
-                              <path d="M9 7V4h6v3" />
-                              <path d="M7 7l1 12h8l1-12" />
-                              <path d="M10 11v5M14 11v5" />
-                            </svg>
-                          </button>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelected(workspace.id)}
+                              className="size-4 rounded accent-brand-500"
+                              aria-label={`Select ${workspace.name}`}
+                            />
+                          </label>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+                        <div className="flex flex-1 flex-col gap-3 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="truncate text-base font-semibold text-brand-500 group-hover:underline dark:text-brand-400">
+                              {workspace.name}
+                            </h3>
+                            <span
+                              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                                workspace.status === "Enabled"
+                                  ? "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-400"
+                                  : "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400"
+                              }`}
+                            >
+                              {workspace.status}
+                            </span>
+                          </div>
+
+                          <p className="line-clamp-2 flex-1 text-sm text-gray-500 dark:text-gray-400">
+                            {workspace.description || "No description added."}
+                          </p>
+
+                          <div className="flex items-center justify-between border-t border-gray-200 pt-3 dark:border-gray-800">
+                            <span className="text-xs font-medium whitespace-nowrap text-brand-500 dark:text-brand-400">
+                              Open &rarr;
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleEdit(workspace);
+                                }}
+                                className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                                aria-label={`Edit ${workspace.name}`}
+                                title="Edit"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="size-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                >
+                                  <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
+                                  <path d="m13.5 6.5 4 4" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDelete(workspace.id);
+                                }}
+                                className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
+                                aria-label={`Delete ${workspace.name}`}
+                                title="Delete"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="size-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                >
+                                  <path d="M4 7h16" />
+                                  <path d="M9 7V4h6v3" />
+                                  <path d="M7 7l1 12h8l1-12" />
+                                  <path d="M10 11v5M14 11v5" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
+          {/* Footer / pagination */}
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-gray-800">
             <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
               <span>{selectedCount} selected</span>
             </div>
@@ -528,7 +637,7 @@ const handleBulkDelete = async () => {
                 type="button"
                 disabled={currentPage === 1}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
-                className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-transparent dark:text-gray-300"
               >
                 Previous
               </button>
@@ -537,7 +646,7 @@ const handleBulkDelete = async () => {
                   key={pageNumber}
                   type="button"
                   onClick={() => setPage(pageNumber)}
-                  className={`size-9 rounded-lg border text-sm font-medium ${currentPage === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"}`}
+                  className={`size-9 rounded-lg border text-sm font-medium ${currentPage === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"}`}
                   aria-current={currentPage === pageNumber ? "page" : undefined}
                 >
                   {pageNumber}
@@ -549,7 +658,7 @@ const handleBulkDelete = async () => {
                 onClick={() =>
                   setPage((current) => Math.min(totalPages, current + 1))
                 }
-                className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+                className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-transparent dark:text-gray-300"
               >
                 Next
               </button>
@@ -557,25 +666,23 @@ const handleBulkDelete = async () => {
           </div>
 
           {!isLoading && filteredWorkspaces.length === 0 && (
-            <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 py-10 text-center text-sm text-gray-500">
+            <div className="mx-4 mb-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 py-10 text-center text-sm text-gray-500 sm:mx-6 dark:border-gray-800 dark:bg-white/2 dark:text-gray-400">
               No workspace matches your search.
             </div>
           )}
         </section>
       ) : (
         <section className="max-w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
-          <div className="flex flex-col gap-4 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 dark:border-gray-800">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                {editingId !== null ? "Edit workspace" : "Add workspace"}
-              </h3>
-            </div>
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 sm:px-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              {editingId !== null ? "Edit workspace" : "Add workspace"}
+            </h3>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
               <button
                 type="button"
                 onClick={resetForm}
                 disabled={isSaving}
-                className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none sm:px-4 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
+                className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 sm:flex-none sm:px-4 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
               >
                 Cancel
               </button>
@@ -583,7 +690,7 @@ const handleBulkDelete = async () => {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={isSaving}
-                className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
+                className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50 sm:flex-none sm:px-4"
               >
                 {isSaving
                   ? "Saving…"
@@ -594,10 +701,58 @@ const handleBulkDelete = async () => {
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="border-t border-gray-200 p-6 sm:p-7 dark:border-gray-800">
             <div className="grid gap-6 md:grid-cols-2">
+              {/* Workspace image */}
+              <div className="flex items-center gap-4 md:col-span-2">
+                <div className="grid h-24 w-40 shrink-0 place-items-center overflow-hidden rounded-xl bg-gray-100 text-gray-400 dark:bg-white/5">
+                  {formValues.image ? (
+                    <img
+                      src={formValues.image}
+                      alt="Workspace"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <LayoutIcon />
+                  )}
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Workspace image
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="h-9 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
+                    >
+                      {formValues.image ? "Change image" : "Upload image"}
+                    </button>
+                    {formValues.image && (
+                      <button
+                        type="button"
+                        onClick={() => handleFieldChange("image", "")}
+                        className="h-9 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-xs text-gray-400">
+                    Shown at the top of the workspace card.
+                  </p>
+                </div>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </div>
+
               <div className="md:col-span-1">
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Workspace name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -608,12 +763,12 @@ const handleBulkDelete = async () => {
                     handleFieldChange("name", event.target.value)
                   }
                   placeholder="Enter workspace name"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className={fieldClass}
                 />
               </div>
 
               <div className="md:col-span-1">
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Status <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -625,7 +780,7 @@ const handleBulkDelete = async () => {
                       event.target.value as WorkspaceStatus,
                     )
                   }
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className={fieldClass}
                 >
                   <option value="Enabled">Enabled</option>
                   <option value="Disabled">Disabled</option>
@@ -633,7 +788,7 @@ const handleBulkDelete = async () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-gray-700">
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -644,7 +799,7 @@ const handleBulkDelete = async () => {
                   }
                   rows={4}
                   placeholder="Enter description"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className={fieldClass}
                 />
               </div>
             </div>
@@ -658,11 +813,11 @@ const handleBulkDelete = async () => {
 
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-xl font-semibold text-gray-800">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-dark">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-white/90">
               Confirm delete
             </h3>
-            <p className="mt-3 text-sm text-gray-600">
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
               {workspaceToDelete
                 ? `This will remove ${workspaceToDelete.name} from the active workspace list.`
                 : "This will remove the workspace from the active workspace list."}
@@ -672,15 +827,15 @@ const handleBulkDelete = async () => {
               <button
                 type="button"
                 onClick={() => setDeleteId(null)}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={confirmDelete}
+                onClick={() => void confirmDelete()}
                 disabled={isSaving}
-                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-500"
+                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-500 disabled:opacity-50"
               >
                 {isSaving ? "Deleting…" : "Delete"}
               </button>
