@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 
 
 class ContactCreateRequest(BaseModel):
@@ -33,13 +33,6 @@ class ContactCreateRequest(BaseModel):
     other_street: str | None = None
     description: str | None = None
     email_opt_out: bool = False
-
-    @field_validator("email", "secondary_email", mode="before")
-    @classmethod
-    def empty_email_to_none(cls, v):
-        if isinstance(v, str) and v.strip() == "":
-            return None
-        return v
 
 
 class ContactUpdateRequest(BaseModel):
@@ -73,13 +66,6 @@ class ContactUpdateRequest(BaseModel):
     other_street: str | None = None
     description: str | None = None
     email_opt_out: bool | None = None
-
-    @field_validator("email", "secondary_email", mode="before")
-    @classmethod
-    def empty_email_to_none(cls, v):
-        if isinstance(v, str) and v.strip() == "":
-            return None
-        return v
 
 
 class ContactBulkDeleteRequest(BaseModel):
