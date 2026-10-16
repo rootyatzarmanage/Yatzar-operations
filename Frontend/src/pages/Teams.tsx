@@ -10,6 +10,11 @@ import {
 } from "@/api/employees";
 import { listRoles } from "@/api/roles";
 import { listOptions } from "@/api/options";
+import { listWorkspaces, type Workspace } from "@/api/workspaces";
+import {
+  getEmployeeWorkspaceIds,
+  setEmployeeWorkspaceIds,
+} from "@/utils/workspaceAccess";
 import { listCountries, listDistricts, listStates } from "@/api/locations";
 import {
   saveEmployeeDraft,
@@ -40,6 +45,7 @@ type Field = {
   options?: string[];
   description?: string;
 };
+type WorkspaceOption = Pick<Workspace, "id" | "name">;
 type Team = {
   id: string;
   code: string;
@@ -324,6 +330,11 @@ const fieldGroups: {
         ],
       },
       {
+        name: "workspace_ids",
+        label: "Workspace",
+        type: "multi-select",
+      },
+      {
         name: "is_active",
         label: "Active account",
         type: "checkbox",
@@ -334,11 +345,14 @@ const fieldGroups: {
 ];
 
 function employeeToFormValues(employee: EmployeeRecord): TeamFormValues {
-  return Object.fromEntries(
+  const values = Object.fromEntries(
     fieldGroups
       .flatMap((group) => group.fields)
       .map((field) => [field.name, String(employee[field.name] ?? "")]),
   );
+  const workspaceIds = getEmployeeWorkspaceIds(String(employee.login_email ?? ""));
+  if (workspaceIds) values.workspace_ids = workspaceIds.join(",");
+  return values;
 }
 
 const inputClass =
@@ -483,6 +497,7 @@ function FieldControl({
   optionsOverrides,
   addressValues = {},
   onAddressValueChange,
+  workspaceOptions = [],
 }: {
   field: Field;
   value?: string;
@@ -494,9 +509,14 @@ function FieldControl({
   optionsOverrides?: Record<string, string[]>;
   addressValues?: TeamFormValues;
   onAddressValueChange?: (name: string, value: string) => void;
+  workspaceOptions?: WorkspaceOption[];
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [workspaceQuery, setWorkspaceQuery] = useState("");
+  const workspaceWrapperRef = useRef<HTMLDivElement>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const readProfilePhoto = (file: File | undefined) => {
     if (!file) return;
@@ -508,6 +528,101 @@ function FieldControl({
   const fieldClass = hasError
     ? "border-error-500 focus:border-error-500 focus:ring-error-500/10"
     : "";
+
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        !workspaceWrapperRef.current?.contains(target) &&
+        !workspaceMenuRef.current?.contains(target)
+      ) {
+        setIsWorkspaceMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [isWorkspaceMenuOpen]);
+
+  if (field.type === "multi-select") {
+    const selectedIds = new Set(value.split(",").filter(Boolean));
+    const filteredWorkspaces = workspaceOptions.filter((workspace) =>
+      workspace.name.toLowerCase().includes(workspaceQuery.toLowerCase()),
+    );
+    const selectedNames = workspaceOptions
+      .filter((workspace) => selectedIds.has(workspace.id))
+      .map((workspace) => workspace.name);
+
+    return (
+      <div ref={workspaceWrapperRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setIsWorkspaceMenuOpen((current) => !current)}
+          className={`${inputClass} ${fieldClass} flex items-center justify-between text-start`}
+        >
+          <span className={selectedNames.length ? "text-gray-800 dark:text-white/90" : "text-gray-400"}>
+            {selectedNames.length
+              ? selectedNames.length === 1
+                ? selectedNames[0]
+                : `${selectedNames.length} workspaces selected`
+              : "Select workspaces"}
+          </span>
+          <ChevronDownIcon
+            className={`size-4 text-gray-400 transition-transform ${isWorkspaceMenuOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        {isWorkspaceMenuOpen &&
+          createPortal(
+            <div
+              ref={workspaceMenuRef}
+              className="fixed z-9999 w-[min(32rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
+              style={(() => {
+                const rect = workspaceWrapperRef.current?.getBoundingClientRect();
+                return rect
+                  ? { left: rect.left, top: rect.bottom + 4, width: rect.width }
+                  : undefined;
+              })()}
+            >
+              <input
+                value={workspaceQuery}
+                onChange={(event) => setWorkspaceQuery(event.target.value)}
+                className={`${inputClass} h-9`}
+                placeholder="Search workspaces"
+                autoFocus
+              />
+              <div className="mt-1 max-h-52 overflow-y-auto">
+                {filteredWorkspaces.length ? (
+                  filteredWorkspaces.map((workspace) => (
+                    <label
+                      key={workspace.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(workspace.id)}
+                        onChange={(event) => {
+                          const next = new Set(selectedIds);
+                          if (event.target.checked) next.add(workspace.id);
+                          else next.delete(workspace.id);
+                          onValueChange([...next].join(","));
+                        }}
+                        className="size-4 rounded accent-brand-500"
+                      />
+                      {workspace.name}
+                    </label>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-sm text-gray-400">
+                    No workspaces found
+                  </p>
+                )}
+              </div>
+            </div>,
+            document.body,
+          )}
+      </div>
+    );
+  }
 
   if (field.type === "radio")
     return (
@@ -743,6 +858,9 @@ export default function Teams() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [reportingManagers, setReportingManagers] = useState<string[]>([]);
   const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const [workspaceOptions, setWorkspaceOptions] = useState<WorkspaceOption[]>(
+    [],
+  );
   const [countries, setCountries] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
@@ -821,6 +939,12 @@ export default function Teams() {
 
   useEffect(() => {
     void refreshEmployees();
+  }, []);
+
+  useEffect(() => {
+    void listWorkspaces()
+      .then((workspaces) => setWorkspaceOptions(workspaces))
+      .catch(() => setWorkspaceOptions([]));
   }, []);
 
   useEffect(() => {
@@ -957,6 +1081,12 @@ export default function Teams() {
         ...formValues,
         is_active: true,
       };
+      const workspaceIds = (formValues.workspace_ids ?? "")
+        .split(",")
+        .filter(Boolean);
+      const loginEmail = String(formValues.login_email ?? "");
+      setEmployeeWorkspaceIds(loginEmail, workspaceIds);
+      delete payload.workspace_ids;
       let savedEmployee: EmployeeRecord;
       if (editingCode) {
         const employee = teams.find((team) => team.code === editingCode);
@@ -1567,6 +1697,7 @@ export default function Teams() {
                     addressValues={formValues}
                     onAddressValueChange={updateFormValue}
                     hasError={Boolean(validationErrors[field.name])}
+                    workspaceOptions={workspaceOptions}
                     optionsOverride={
                       field.name === "country"
                         ? countries
