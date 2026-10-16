@@ -82,6 +82,10 @@ class EmployeeResponse(BaseModel):
         if isinstance(value, dict):
             return value
         data = {field: getattr(value, field) for field in cls.model_fields if hasattr(value, field)}
+        if data.get("status") in ("active", "saved"):
+            data["status"] = 1
+        elif data.get("status") in ("draft", "incomplete"):
+            data["status"] = 0
         user = getattr(value, "user", None)
         if user is not None:
             data.update(
