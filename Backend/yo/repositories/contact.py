@@ -1,11 +1,10 @@
 import uuid
 
-from sqlalchemy import or_, select, func
+from sqlalchemy import and_, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.contact import Contact
-from yo.models.workspace import Workspace
-from yo.models.user import User
+from yo.repositories.workspace import WorkspaceRepository
 from yo.repositories.base import BaseRepository
 
 
@@ -14,42 +13,45 @@ class ContactRepository(BaseRepository[Contact]):
     def __init__(self, session: AsyncSession):
         super().__init__(Contact, session)
 
+    @staticmethod
+    def access_condition(user_id: uuid.UUID):
+        return or_(
+            Contact.workspace_id.in_(WorkspaceRepository.accessible_ids(user_id)),
+            and_(Contact.workspace_id.is_(None), WorkspaceRepository.privileged_user(user_id)),
+        )
+
     async def get_detail(
         self,
         contact_id: uuid.UUID,
+        user_id: uuid.UUID,
     ) -> Contact | None:
         query = select(Contact).where(
             Contact.id == contact_id,
+            self.access_condition(user_id),
             Contact.deleted_at.is_(None),
         )
 
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def workspace_exists(
-        self,
-        workspace_id: uuid.UUID,
-    ) -> bool:
-        query = select(Workspace.id).where(
-            Workspace.id == workspace_id,
-            Workspace.deleted_at.is_(None),
-        )
-
-        result = await self.session.execute(query)
-        return result.scalar_one_or_none() is not None
-
     async def list_by_stage(
         self,
         *,
+        user_id: uuid.UUID,
         stage: str,
+        workspace_id: uuid.UUID | None = None,
         search: str | None = None,
         page: int = 1,
         per_page: int = 5,
     ) -> dict:
         query = select(Contact).where(
             Contact.stage == stage,
+            self.access_condition(user_id),
             Contact.deleted_at.is_(None),
         )
+
+        if workspace_id is not None:
+            query = query.where(Contact.workspace_id == workspace_id)
 
         if search:
             search_term = f"%{search.strip()}%"
@@ -84,16 +86,6 @@ class ContactRepository(BaseRepository[Contact]):
             "per_page": per_page,
         }
 
-    async def workspace_options(self) -> list[Workspace]:
-        query = (
-            select(Workspace)
-            .where(Workspace.deleted_at.is_(None))
-            .order_by(Workspace.name.asc())
-        )
-
-        result = await self.session.execute(query)
-        return list(result.scalars().all())
-
     async def soft_delete_many(
         self,
         ids: list[uuid.UUID],
@@ -101,6 +93,7 @@ class ContactRepository(BaseRepository[Contact]):
     ) -> int:
         query = select(Contact).where(
             Contact.id.in_(ids),
+            self.access_condition(deleted_by),
             Contact.deleted_at.is_(None),
         )
 

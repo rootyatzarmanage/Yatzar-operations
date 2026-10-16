@@ -104,13 +104,34 @@ class EmployeeService:
             is_active=payload.is_active, created_by=user_id, updated_by=user_id,
         )
 
+    async def _get_workspaces(
+        self,
+        workspace_ids: list[UUID],
+    ):
+        if not workspace_ids:
+            return []
+
+        unique_ids = list(dict.fromkeys(workspace_ids))
+        workspaces = await self.repository.get_workspaces_by_ids(unique_ids)
+
+        if len(workspaces) != len(unique_ids):
+            raise HTTPException(
+                status_code=400,
+                detail="One or more selected workspaces are invalid.",
+            )
+
+        return workspaces
+
     async def create_employee(self, payload: EmployeeCreateRequest, user_id: UUID):
         code = await self._next_employee_code()
         await self._ensure_unique_code(code)
+        workspaces = await self._get_workspaces(payload.workspace_ids)
         user = await self._new_user(payload, user_id)
-        values = payload.model_dump(exclude=self.ACCOUNT_FIELDS | {"employee_code", "status"})
+        values = payload.model_dump(
+            exclude=self.ACCOUNT_FIELDS | {"employee_code", "status", "workspace_ids"},
+        )
         values.update(
-            employee_code=code, status=1, user=user,
+            employee_code=code, status=1, user=user, workspaces=workspaces,
             created_by=user_id, updated_by=user_id,
         )
         return await self._persist(values)
@@ -118,8 +139,14 @@ class EmployeeService:
     async def create_draft(self, payload: EmployeeDraftRequest, user_id: UUID):
         code = await self._next_employee_code()
         await self._ensure_unique_code(code)
-        values = payload.model_dump(exclude_unset=True,  exclude={"status"})
-        values.update(employee_code=code, status=0, created_by=user_id, updated_by=user_id)
+        workspaces = await self._get_workspaces(payload.workspace_ids or [])
+        values = payload.model_dump(
+            exclude_unset=True, exclude=self.ACCOUNT_FIELDS | {"status", "workspace_ids"},
+        )
+        values.update(
+            employee_code=code, status=0, workspaces=workspaces,
+            created_by=user_id, updated_by=user_id,
+        )
         return await self._persist(values)
 
     async def update_employee(
@@ -127,6 +154,9 @@ class EmployeeService:
     ):
         employee = await self.get_employee(employee_id=employee_id)
         values = payload.model_dump(exclude_unset=True)
+        workspace_ids = values.pop("workspace_ids", None)
+        if workspace_ids is not None:
+            values["workspaces"] = await self._get_workspaces(workspace_ids)
         account = {key: values.pop(key) for key in self.ACCOUNT_FIELDS if key in values}
         if employee.status == 1:
             required = {
@@ -169,7 +199,11 @@ class EmployeeService:
         if employee.status == 1:
             raise HTTPException(409, "Employee is already saved.")
         user = await self._new_user(payload, user_id)
-        values = payload.model_dump(exclude=self.ACCOUNT_FIELDS | {"status"})
+        values = payload.model_dump(
+            exclude=self.ACCOUNT_FIELDS | {"status", "workspace_ids"},
+        )
+        if "workspace_ids" in payload.model_fields_set:
+            values["workspaces"] = await self._get_workspaces(payload.workspace_ids)
         values.update(user=user, status=1, updated_by=user_id)
         return await self._persist(values, employee)
 

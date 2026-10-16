@@ -13,7 +13,12 @@ from yo.core.exceptions import AppException
 from yo.core.schemas.responses import ErrorResponse
 from yo.seeders.admin import seed_default_data
 from pathlib import Path
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from yo.core.auth.dependencies import CurrentUser
+from yo.core.database import DatabaseSession
+from yo.models.contact import Contact
+from yo.repositories.contact import ContactRepository
+from sqlalchemy import select
 
 
 @asynccontextmanager
@@ -35,11 +40,19 @@ app = FastAPI(
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-app.mount(
-    "/storage",
-    StaticFiles(directory=STORAGE_DIR),
-    name="storage",
-)
+@app.get("/storage/{file_path:path}", include_in_schema=False)
+async def contact_image(file_path: str, session: DatabaseSession, current_user: CurrentUser):
+    destination = (STORAGE_DIR / file_path).resolve()
+    if not destination.is_relative_to(STORAGE_DIR.resolve()) or not destination.is_file():
+        raise AppException("Image not found.", 404)
+    allowed = await session.scalar(select(Contact.id).where(
+        Contact.photo == f"storage/{file_path}", Contact.deleted_at.is_(None),
+        ContactRepository.access_condition(current_user.id),
+    ).limit(1))
+    if allowed is None:
+        raise AppException("Image not found.", 404)
+    return FileResponse(destination, headers={"Cache-Control": "private, no-store"})
+
 
 app.add_middleware(
     CORSMiddleware,

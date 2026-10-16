@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.support import (
     DropdownOption,
-    Location,
 )
 
 
@@ -15,53 +14,7 @@ class SupportRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_locations(self, kind: str) -> list[str]:
-        result = await self.session.execute(
-            select(Location.name)
-            .where(
-                Location.kind == kind,
-                Location.deleted_at.is_(None),
-            )
-            .order_by(Location.name.asc())
-        )
-
-        return list(result.scalars().all())
-
-    async def get_location_by_name(
-        self,
-        name: str,
-    ) -> Location | None:
-        result = await self.session.execute(
-            select(Location).where(
-                Location.name == name,
-                Location.deleted_at.is_(None),
-            )
-        )
-
-        return result.scalar_one_or_none()
-
-    async def list_child_locations(
-        self,
-        parent_name: str,
-        kind: str,
-    ) -> list[str]:
-        parent = await self.get_location_by_name(parent_name)
-
-        if not parent:
-            return []
-
-        result = await self.session.execute(
-            select(Location.name)
-            .where(
-                Location.parent_id == parent.id,
-                Location.kind == kind,
-                Location.deleted_at.is_(None),
-            )
-            .order_by(Location.name.asc())
-        )
-
-        return list(result.scalars().all())
-
+   
     async def list_options(
         self,
         kind: str,

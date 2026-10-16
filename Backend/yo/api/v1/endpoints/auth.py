@@ -9,6 +9,7 @@ from yo.core.database import DatabaseSession
 from yo.core.exceptions import AppException
 from yo.core.security import decode_session, encode_session, verify_password
 from yo.models.user import User
+from yo.models.employee import Employee
 from yo.schemas.requests.auth import LoginRequest
 from yo.schemas.responses.auth import AuthUserResponse
 from yo.core.schemas.responses import SuccessResponse
@@ -26,6 +27,15 @@ def _user_response(user: User, token: str | None = None) -> AuthUserResponse:
         role=user.role.name if user.role else "",
         photo=user.employee.photo if user.employee else None,
         token=token,
+        workspaces=[
+            {"id": workspace.id, "name": workspace.name}
+            for workspace in (
+                user.employee.workspaces
+                if user.employee and user.employee.deleted_at is None and user.employee.status == 1
+                else []
+            )
+            if workspace.deleted_at is None and workspace.status == "Enabled"
+        ],
     )
 
 
@@ -33,11 +43,12 @@ async def _get_session_user(session: DatabaseSession, session_token: str | None)
     user_id = decode_session(session_token)
     if not user_id:
         raise AppException("Authentication is required.", 401)
-    user = await session.scalar(
+    result = await session.execute(
         select(User)
-        .options(joinedload(User.employee), joinedload(User.role))
+        .options(joinedload(User.employee).joinedload(Employee.workspaces), joinedload(User.role))
         .where(User.id == UUID(user_id), User.is_active.is_(True), User.deleted_at.is_(None))
     )
+    user = result.unique().scalar_one_or_none()
     if not user:
         raise AppException("Authentication is required.", 401)
     return user
@@ -70,15 +81,16 @@ async def require_user(
 async def login(
     request: LoginRequest, response: Response, session: DatabaseSession
 ) -> SuccessResponse[AuthUserResponse]:
-    user = await session.scalar(
+    result = await session.execute(
         select(User)
-        .options(joinedload(User.employee), joinedload(User.role))
+        .options(joinedload(User.employee).joinedload(Employee.workspaces), joinedload(User.role))
         .where(
             or_(User.email == request.identifier.strip().lower(), User.username == request.identifier.strip()),
             User.is_active.is_(True),
             User.deleted_at.is_(None),
         )
     )
+    user = result.unique().scalar_one_or_none()
     if not user or not verify_password(request.password, user.password_hash):
         raise AppException("Invalid username/email or password.", 401)
     session_token = encode_session(str(user.id))

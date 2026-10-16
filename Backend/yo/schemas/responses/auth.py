@@ -1,6 +1,11 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class AuthWorkspaceResponse(BaseModel):
+    id: UUID
+    name: str
 
 
 class AuthUserResponse(BaseModel):
@@ -12,3 +17,5 @@ class AuthUserResponse(BaseModel):
     role: str
     photo: str | None
     token: str | None = None
+
+    workspaces: list[AuthWorkspaceResponse] = Field(default_factory=list)

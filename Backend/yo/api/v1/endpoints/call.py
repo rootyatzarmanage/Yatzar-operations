@@ -54,6 +54,7 @@ async def list_calls(
         result = await CallService(
             CallRepository(session)
         ).list_calls(
+            user_id=current_user.id,
             search=search,
             page=page,
             per_page=per_page,

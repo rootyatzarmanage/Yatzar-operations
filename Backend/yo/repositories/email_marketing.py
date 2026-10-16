@@ -5,6 +5,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.contact import Contact
+from yo.repositories.contact import ContactRepository
 from yo.models.email_marketing import EmailMarketing, EmailMarketingRecipient
 
 
@@ -120,6 +121,7 @@ class EmailMarketingRepository:
         selection_mode: str,
         tag_contact_ids: list[UUID],
         selected_contact_ids: list[UUID] | None = None,
+        *, user_id: UUID,
     ) -> list[dict]:
         """
         Retrieve eligible contacts from the existing contacts table.
@@ -132,10 +134,8 @@ class EmailMarketingRepository:
             "all"      -> all IDs in tag_contact_ids
             "selected" -> selected_contact_ids only
 
-        IMPORTANT:
-            The Contact model has no tag relationship.
-            This method cannot independently validate that
-            tag_contact_ids belong to tag_id.
+        The database validates tag membership and workspace access; supplied IDs
+        never grant access on their own.
         """
         if selection_mode not in ("all", "selected"):
             raise ValueError(
@@ -172,6 +172,8 @@ class EmailMarketingRepository:
             select(Contact.id, Contact.email)
             .where(
                 Contact.id.in_(contact_ids),
+                Contact.tag_id == tag_id,
+                ContactRepository.access_condition(user_id),
                 Contact.deleted_at.is_(None),
                 Contact.email.is_not(None),
                 Contact.email_opt_out.is_(False),

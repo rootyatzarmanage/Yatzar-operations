@@ -32,7 +32,7 @@ async def create_task(payload: TaskCreateRequest,session: DatabaseSession,curren
 async def list_tasks(session: DatabaseSession,current_user: CurrentUser,search: str | None = Query(default=None),):
     tasks = await TaskService(
         TaskRepository(session)
-    ).list_tasks(search)
+    ).list_tasks(current_user.id, search)
 
     return SuccessResponse(
         success=True,
@@ -45,7 +45,7 @@ async def list_tasks(session: DatabaseSession,current_user: CurrentUser,search: 
 async def get_task(task_id: UUID,session: DatabaseSession,current_user: CurrentUser,):
     task = await TaskService(
         TaskRepository(session)
-    ).get_task(task_id)
+    ).get_task(task_id, current_user.id)
 
     return SuccessResponse(
         success=True,

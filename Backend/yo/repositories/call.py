@@ -6,25 +6,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.call import Call
 from yo.models.contact import Contact
+from yo.repositories.contact import ContactRepository
 
 
 class CallRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_contact(self, contact_id: uuid.UUID):
+    @staticmethod
+    def access_condition(user_id: uuid.UUID):
+        return select(Contact.id).where(
+            Contact.id == Call.contact_id, Contact.deleted_at.is_(None),
+            ContactRepository.access_condition(user_id),
+        ).exists()
+
+    async def get_contact(self, contact_id: uuid.UUID, user_id: uuid.UUID):
         result = await self.session.execute(
             select(Contact).where(
                 Contact.id == contact_id,
+                ContactRepository.access_condition(user_id),
                 Contact.deleted_at.is_(None),
             )
         )
         return result.scalar_one_or_none()
 
-    async def get_call(self, call_id: uuid.UUID):
+    async def get_call(self, call_id: uuid.UUID, user_id: uuid.UUID):
         result = await self.session.execute(
             select(Call).where(
                 Call.id == call_id,
+                self.access_condition(user_id),
                 Call.deleted_at.is_(None),
             )
         )
@@ -32,12 +42,13 @@ class CallRepository:
 
     async def list_calls(
         self,
+        user_id: uuid.UUID,
         search: str | None = None,
         page: int = 1,
         per_page: int = 5,
         call_id: uuid.UUID | None = None,
     ) -> dict:
-        conditions = [Call.deleted_at.is_(None)]
+        conditions = [Call.deleted_at.is_(None), self.access_condition(user_id)]
 
         if call_id is not None:
             conditions.append(Call.id == call_id)

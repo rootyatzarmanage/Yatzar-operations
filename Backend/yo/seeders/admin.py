@@ -7,7 +7,7 @@ from yo.core.config import settings
 from yo.core.security import hash_password
 from yo.models.employee import Employee
 from yo.models.permission import Menu, Role, RolePermission
-from yo.models.support import DropdownOption, Location
+from yo.models.support import DropdownOption
 from yo.models.user import User
 
 
@@ -55,21 +55,6 @@ INDIA_LOCATIONS = {
 
 
 async def seed_support_data(session: AsyncSession) -> None:
-    india = await session.scalar(select(Location).where(Location.kind == "country", Location.name == "India"))
-    if not india:
-        india = Location(kind="country", name="India")
-        session.add(india)
-        await session.flush()
-    for state_name, districts in INDIA_LOCATIONS.items():
-        state = await session.scalar(select(Location).where(Location.kind == "state", Location.name == state_name, Location.parent_id == india.id))
-        if not state:
-            state = Location(kind="state", name=state_name, parent=india)
-            session.add(state)
-            await session.flush()
-        for district_name in districts:
-            exists = await session.scalar(select(Location).where(Location.kind == "district", Location.name == district_name, Location.parent_id == state.id))
-            if not exists:
-                session.add(Location(kind="district", name=district_name, parent=state))
     for kind, values in {"department": ["Operations", "Finance", "Technology", "People"], "reporting_manager": ["Musharof Chowdhury", "Aarav Mehta", "Meera Nair"]}.items():
         for value in values:
             exists = await session.scalar(select(DropdownOption).where(DropdownOption.kind == kind, DropdownOption.value == value, DropdownOption.deleted_at.is_(None)))

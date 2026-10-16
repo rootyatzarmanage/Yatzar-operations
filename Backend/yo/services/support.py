@@ -14,29 +14,7 @@ class SupportService:
         self.session = session
         self.repository = SupportRepository(session)
 
-    async def list_countries(self) -> list[str]:
-        return await self.repository.list_locations(
-            kind="country"
-        )
-
-    async def list_states(
-        self,
-        country: str,
-    ) -> list[str]:
-        return await self.repository.list_child_locations(
-            parent_name=country,
-            kind="state",
-        )
-
-    async def list_districts(
-        self,
-        state: str,
-    ) -> list[str]:
-        return await self.repository.list_child_locations(
-            parent_name=state,
-            kind="district",
-        )
-
+   
     async def list_options(
         self,
         kind: str,

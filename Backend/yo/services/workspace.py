@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yo.core.exceptions import ConflictException, NotFoundException
+from yo.core.exceptions import AppException, ConflictException, NotFoundException
 from yo.models.workspace import Workspace
 from yo.repositories.workspace import WorkspaceRepository
 from yo.schemas.requests.workspace import (
@@ -29,6 +29,13 @@ class WorkspaceService:
 
     async def list_all(self, skip: int = 0, limit: int = 50) -> Sequence[Workspace]:
         return await self.repository.list_all(skip, limit)
+
+    async def list_for_user(self, user_id: UUID, skip: int = 0, limit: int = 50):
+        return await self.repository.list_for_user(user_id, skip, limit)
+
+    async def ensure_access(self, user_id: UUID, workspace_id: UUID) -> None:
+        if not await self.repository.user_has_workspace(user_id, workspace_id):
+            raise AppException("You do not have access to the selected workspace.", 403)
 
     async def update(
         self, workspace_id: UUID, request: WorkspaceUpdateRequest

@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import CheckConstraint, Index, String, Text, Uuid, func, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from yo.core.database.base import Base, SoftDeleteMixin, TimestampMixin
 
@@ -27,4 +27,7 @@ class Workspace(Base, TimestampMixin, SoftDeleteMixin):
     )
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    employees: Mapped[list["Employee"]] = relationship(
+        secondary="employee_workspaces", back_populates="workspaces",
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="Enabled")

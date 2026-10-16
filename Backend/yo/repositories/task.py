@@ -1,20 +1,24 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.task import Task
 from yo.models.contact import Contact
 from yo.models.tag import Tag
+from yo.repositories.contact import ContactRepository
+from yo.repositories.workspace import WorkspaceRepository
 
 
 class TaskRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_tasks(self, search: str | None = None):
-        query = select(Task).where(Task.deleted_at.is_(None))
+    async def list_tasks(self, user_id: uuid.UUID, search: str | None = None):
+        query = select(Task).where(Task.deleted_at.is_(None), or_(
+            Task.task_owner_id == user_id, WorkspaceRepository.privileged_user(user_id),
+        ))
 
         if search and search.strip():
             query = query.where(
@@ -26,10 +30,11 @@ class TaskRepository:
         )
         return list(result.scalars().all())
 
-    async def get_by_id(self, task_id: uuid.UUID):
+    async def get_by_id(self, task_id: uuid.UUID, user_id: uuid.UUID):
         result = await self.session.execute(
             select(Task).where(
                 Task.id == task_id,
+                or_(Task.task_owner_id == user_id, WorkspaceRepository.privileged_user(user_id)),
                 Task.deleted_at.is_(None),
             )
         )
@@ -45,13 +50,14 @@ class TaskRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_customers(self, contact_ids: list[uuid.UUID]):
+    async def get_customers(self, contact_ids: list[uuid.UUID], user_id: uuid.UUID):
         if not contact_ids:
             return []
 
         result = await self.session.execute(
             select(Contact).where(
                 Contact.id.in_(contact_ids),
+                ContactRepository.access_condition(user_id),
                 Contact.deleted_at.is_(None),
             )
         )

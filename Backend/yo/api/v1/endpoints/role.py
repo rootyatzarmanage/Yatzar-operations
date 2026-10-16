@@ -9,6 +9,7 @@ from yo.schemas.requests.role import RoleCreateRequest, RoleUpdateRequest
 from yo.schemas.responses.role import RoleResponse
 from yo.services.role import RoleService
 from yo.api.v1.endpoints.auth import require_user
+from yo.core.auth.permissions import require_permission
 
 router = APIRouter(prefix="/roles", tags=["Roles"], dependencies=[Depends(require_user)])
 
@@ -27,19 +28,19 @@ async def list_roles(session: DatabaseSession) -> SuccessResponse[List[RoleRespo
     return SuccessResponse(message="Roles retrieved successfully", data=[serialize_role(role) for role in roles])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=SuccessResponse[RoleResponse])
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=SuccessResponse[RoleResponse], dependencies=[Depends(require_permission("appPermission", "create"))])
 async def create_role(request: RoleCreateRequest, session: DatabaseSession) -> SuccessResponse[RoleResponse]:
     role = await RoleService(session).create(request)
     return SuccessResponse(message="Role created successfully", data=serialize_role(role))
 
 
-@router.put("/{role_id}", response_model=SuccessResponse[RoleResponse])
+@router.put("/{role_id}", response_model=SuccessResponse[RoleResponse], dependencies=[Depends(require_permission("appPermission", "update"))])
 async def update_role(role_id: UUID, request: RoleUpdateRequest, session: DatabaseSession) -> SuccessResponse[RoleResponse]:
     role = await RoleService(session).update(role_id, request)
     return SuccessResponse(message="Role updated successfully", data=serialize_role(role))
 
 
-@router.delete("/{role_id}", response_model=SuccessResponse[dict[str, str]])
+@router.delete("/{role_id}", response_model=SuccessResponse[dict[str, str]], dependencies=[Depends(require_permission("appPermission", "delete"))])
 async def delete_role(role_id: UUID, session: DatabaseSession) -> SuccessResponse[dict[str, str]]:
     await RoleService(session).delete(role_id)
     return SuccessResponse(message="Role deleted successfully", data={"deleted_id": str(role_id)})

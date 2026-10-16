@@ -1,10 +1,30 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, SmallInteger, String, Text, Uuid
+from sqlalchemy import (
+    CheckConstraint, Column, Date, ForeignKey, SmallInteger, String, Table, Text, Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from yo.core.database.base import Base, SoftDeleteMixin, TimestampMixin
+
+
+employee_workspaces = Table(
+    "employee_workspaces",
+    Base.metadata,
+    Column(
+        "employee_id",
+        Uuid(as_uuid=True),
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "workspace_id",
+        Uuid(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class Employee(Base, TimestampMixin, SoftDeleteMixin):
@@ -71,3 +91,7 @@ class Employee(Base, TimestampMixin, SoftDeleteMixin):
     remarks: Mapped[str | None] = mapped_column(Text)
 
     user: Mapped["User | None"] = relationship(back_populates="employee")
+    workspaces: Mapped[list["Workspace"]] = relationship(
+        secondary=employee_workspaces,
+        back_populates="employees",
+    )
