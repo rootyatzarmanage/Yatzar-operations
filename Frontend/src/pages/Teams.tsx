@@ -435,15 +435,15 @@ function SearchableSelect({
           <div
             ref={menuRef}
             style={menuStyle}
-            className="fixed z-9999 overflow-hidden rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
+            className="fixed z-9999 flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
           >
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className={`${inputClass} h-9`}
+              className={`${inputClass} h-9 shrink-0`}
               placeholder={`Search ${label.toLowerCase()}`}
             />
-            <div className="mt-1 max-h-full overflow-y-auto overscroll-contain">
+            <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
               {filteredOptions.length ? (
                 filteredOptions.map((option) => (
                   <button
@@ -746,6 +746,8 @@ export default function Teams() {
   const [countries, setCountries] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
+  const [permStates, setPermStates] = useState<string[]>([]);
+  const [permDistricts, setPermDistricts] = useState<string[]>([]);
   // Draft support
   const [drafts, setDrafts] = useState<EmployeeDraft[]>([]);
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -849,7 +851,7 @@ export default function Teams() {
     const country = formValues.country;
     const state = formValues.state;
     if (!country || !state) return setDistricts([]);
-    void listDistricts(state)
+    void listDistricts(country, state)
       .then(setDistricts)
       .catch(() => setDistricts([]));
   }, [formValues.country, formValues.state]);
@@ -875,16 +877,31 @@ export default function Teams() {
     return () => window.removeEventListener("teams:navigate-list", showList);
   }, []);
 
+  useEffect(() => {
+    const c = formValues.permanent_country;
+    if (!c) return setPermStates([]);
+    void listStates(c).then(setPermStates).catch(() => setPermStates([]));
+  }, [formValues.permanent_country]);
+
+  useEffect(() => {
+    const c = formValues.permanent_country, s = formValues.permanent_state;
+    if (!c || !s) return setPermDistricts([]);
+    void listDistricts(c, s).then(setPermDistricts).catch(() => setPermDistricts([]));
+  }, [formValues.permanent_country, formValues.permanent_state]);
+
   const updateFormValue = (name: string, value: string) => {
     setFormValues((current) => ({
       ...current,
       [name]: value,
       ...(name === "country" ? { state: "", district: "" } : {}),
       ...(name === "state" ? { district: "" } : {}),
+      ...(name === "permanent_country"
+        ? { permanent_state: "", permanent_district: "" }
+        : {}),
+      ...(name === "permanent_state" ? { permanent_district: "" } : {}),
     }));
     setValidationErrors((current) => ({ ...current, [name]: false }));
   };
-
   const handleSort = (key: keyof Team) => {
     setPage(1);
     if (sortKey === key) {
@@ -1145,32 +1162,6 @@ export default function Teams() {
               </div>
             </div>
           )}
-
-          {selectedCount > 0 && (
-            <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                <strong>{selectedCount}</strong> selected
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCodes([])}
-                  disabled={isDeleting}
-                  className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                >
-                  Clear selection
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleBulkDelete()}
-                  disabled={isDeleting}
-                  className="h-10 rounded-lg bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {isDeleting ? "Deleting..." : `Delete ${selectedCount}`}
-                </button>
-              </div>
-            </div>
-          )}
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -1225,6 +1216,31 @@ export default function Teams() {
               </span>
             </div>
           </div>
+          {selectedCount > 0 && (
+            <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                <strong>{selectedCount}</strong> selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCodes([])}
+                  disabled={isDeleting}
+                  className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBulkDelete()}
+                  disabled={isDeleting}
+                  className="h-10 rounded-lg bg-red-600 px-4 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {isDeleting ? "Deleting..." : `Delete ${selectedCount}`}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="custom-scrollbar max-w-full overflow-x-auto">
             <table className="w-full min-w-full text-start sm:min-w-165 lg:min-w-full">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
@@ -1568,8 +1584,8 @@ export default function Teams() {
                     }
                     optionsOverrides={{
                       permanent_country: countries,
-                      permanent_state: states,
-                      permanent_district: districts,
+                      permanent_state: permStates,
+                      permanent_district: permDistricts,
                     }}
                   />
                   {validationErrors[field.name] && (
