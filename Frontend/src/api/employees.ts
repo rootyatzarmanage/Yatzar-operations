@@ -3,12 +3,15 @@ import { request } from "@/api/client";
 export type EmployeeRecord = {
   id: string;
   employee_code: string;
-  employee_name: string;
-  employee_type: string;
-  department: string;
-  work_location: string;
-  employment_status: string;
-  email: string;
+  employee_name: string | null;
+  display_name?: string | null;
+  username?: string | null;
+  login_email?: string | null;
+  employee_type: string | null;
+  department: string | null;
+  work_location: string | null;
+  employment_status: string | null;
+  email: string | null;
   [key: string]: unknown;
 };
 

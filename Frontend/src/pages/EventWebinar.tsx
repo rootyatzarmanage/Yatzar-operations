@@ -8,6 +8,7 @@ import {
   type EventWebinarPayload,
 } from "@/api/eventWebinar";
 import { useEffect, useMemo, useState } from "react";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import {
   ChevronLeft,
   ChevronRight,
@@ -133,6 +134,7 @@ function getStatusClass(status: EventStatus) {
 }
 
 export default function EventWebinar() {
+  const { currentWorkspace } = useWorkspace();
   const [events, setEvents] = useState<EventWebinar[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -149,6 +151,8 @@ export default function EventWebinar() {
   const [currentUserId, setCurrentUserId] = useState("");
 
   useEffect(() => {
+    setEvents([]);
+    setTotal(0);
     setLoading(true);
     void listEventWebinars({
       search,
@@ -173,7 +177,7 @@ export default function EventWebinar() {
         setError(reason instanceof Error ? reason.message : "Unable to load events."),
       )
       .finally(() => setLoading(false));
-  }, [search, page, entriesPerPage]);
+  }, [currentWorkspace?.id, search, page, entriesPerPage]);
 
   useEffect(() => {
   void getCurrentUser()

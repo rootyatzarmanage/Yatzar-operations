@@ -82,7 +82,7 @@ export default function Customers({ embed }: EmbedProps = {}) {
         fields: [
           { key: "firstName", label: "First name", required: true, placeholder: "Enter first name" },
           { key: "lastName", label: "Last name", placeholder: "Enter last name" },
-          { key: "email", label: "Email", type: "email", required: true, placeholder: "name@example.com" },
+          { key: "email", label: "Email", type: "email", placeholder: "name@example.com" },
           { key: "phone", label: "Phone", type: "tel", required: true },
           { key: "otherPhone", label: "Other phone", type: "tel" },
           { key: "department", label: "Department" },

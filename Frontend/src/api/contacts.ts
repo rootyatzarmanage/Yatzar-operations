@@ -105,7 +105,7 @@ export function toContactPayload(fields: ContactFields): ContactPayload {
     first_name: fields.firstName.trim(),
     last_name: nullable(fields.lastName),
     company: null,
-    email: fields.email.trim(),
+    email: nullable(fields.email),
     phone: fields.phone.trim(),
     other_phone: nullable(fields.otherPhone),
     department: nullable(fields.department),

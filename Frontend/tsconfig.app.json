@@ -24,7 +24,7 @@
     "jsx": "react-jsx",
     /* Path Aliases & Resolution */
     "ignoreDeprecations": "5.0",
-    "baseUrl": "http://localhost:5173/",
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"

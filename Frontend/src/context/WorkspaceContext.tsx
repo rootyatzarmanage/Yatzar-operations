@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 
-const storageKey = "yatzar-operations.current-workspace.v1";
+export const workspaceStorageKey = "yatzar-operations.current-workspace.v1";
 type CurrentWorkspace = {
   id: string;
   name: string;
@@ -34,7 +34,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
   const [currentWorkspace, setCurrentWorkspace] =
     useState<CurrentWorkspace | null>(() => {
       try {
-        const stored = window.localStorage.getItem(storageKey);
+        const stored = window.localStorage.getItem(workspaceStorageKey);
         if (!stored) return null;
 
         const parsed: unknown = JSON.parse(stored);
@@ -63,7 +63,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     setCurrentWorkspace(workspace);
 
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(workspace));
+      window.localStorage.setItem(workspaceStorageKey, JSON.stringify(workspace));
     } catch {
       // Storage unavailable: the workspace still opens for this session.
     }
@@ -73,7 +73,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
     setCurrentWorkspace(null);
 
     try {
-      window.localStorage.removeItem(storageKey);
+      window.localStorage.removeItem(workspaceStorageKey);
     } catch {
       // Ignore storage errors.
     }

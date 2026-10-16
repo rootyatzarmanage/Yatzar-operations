@@ -905,12 +905,12 @@ export default function Teams() {
       records.map((employee) => ({
         id: employee.id,
         code: employee.employee_code,
-        name: employee.employee_name,
-        type: employee.employee_type,
-        department: employee.department,
-        location: employee.work_location,
-        status: employee.employment_status,
-        email: String(employee.login_email || employee.email),
+        name: employee.employee_name || employee.display_name || employee.username || "",
+        type: employee.employee_type || "",
+        department: employee.department || "",
+        location: employee.work_location || "",
+        status: employee.employment_status || "",
+        email: employee.login_email || employee.email || "",
       })),
     );
   };
@@ -1079,14 +1079,18 @@ export default function Teams() {
     try {
       const payload: Record<string, unknown> = {
         ...formValues,
-        is_active: true,
+        is_active: formValues.is_active === "true",
       };
       const workspaceIds = (formValues.workspace_ids ?? "")
         .split(",")
+        .map((id) => id.trim())
         .filter(Boolean);
       const loginEmail = String(formValues.login_email ?? "");
       setEmployeeWorkspaceIds(loginEmail, workspaceIds);
-      delete payload.workspace_ids;
+      // These are UI-only fields. The backend accepts workspace_ids as UUIDs,
+      // while permanent_address is represented by the individual address fields.
+      payload.workspace_ids = workspaceIds;
+      delete payload.permanent_address;
       let savedEmployee: EmployeeRecord;
       if (editingCode) {
         const employee = teams.find((team) => team.code === editingCode);
@@ -1162,17 +1166,6 @@ export default function Teams() {
     setSuccessMessage("");
     setActiveTab(0);
     setIsCreating(true);
-  };
-
-  const handleDeleteDraft = async (id: string) => {
-    try {
-      await deleteEmployeeDraft(id);
-      await refreshDrafts();
-    } catch (error) {
-      setApiError(
-        error instanceof Error ? error.message : "Unable to delete draft.",
-      );
-    }
   };
 
   const handleBulkDelete = async () => {
@@ -1774,36 +1767,47 @@ export default function Teams() {
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
                 className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
               >
                 Cancel
               </button>
-              {/* <button
+              <button
                 type="button"
                 onClick={() => {
+                  if (isDeleting) return;
                   void (async () => {
+                    setIsDeleting(true);
+                    setApiError("");
+                    setSuccessMessage("");
                     try {
                       if (!deleteTarget.id)
                         throw new Error("Employee id is missing.");
                       await deleteEmployee(deleteTarget.id);
-                      await refreshEmployees();
                       setSelectedCodes((current) =>
                         current.filter((code) => code !== deleteTarget.code),
                       );
+                      setTeams((current) =>
+                        current.filter((team) => team.id !== deleteTarget.id),
+                      );
                       setDeleteTarget(null);
+                      setSuccessMessage(`${deleteTarget.name} was deactivated.`);
                     } catch (error) {
                       setApiError(
                         error instanceof Error
                           ? error.message
                           : "Unable to delete employee.",
                       );
+                    } finally {
+                      setIsDeleting(false);
                     }
                   })();
                 }}
-                className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600"
+                disabled={isDeleting}
+                className="h-10 rounded-lg bg-error-500 px-4 text-sm font-medium text-white hover:bg-error-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Delete
-              </button> */}
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </div>
         </div>

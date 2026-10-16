@@ -9,6 +9,7 @@ import {
   type CampaignPayload,
 } from "@/api/campaigns";
 import { useEffect, useMemo, useState } from "react";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import {
   Eye,
@@ -134,6 +135,7 @@ const thClass =
   "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";
 
 export default function Campaign() {
+  const { currentWorkspace } = useWorkspace();
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
@@ -148,6 +150,8 @@ export default function Campaign() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
+    setCampaigns([]);
+    setTotal(0);
     setLoading(true);
     void listCampaigns({
       search,
@@ -172,7 +176,7 @@ export default function Campaign() {
         setError(reason instanceof Error ? reason.message : "Unable to load campaigns.");
       })
       .finally(() => setLoading(false));
-  }, [page, perPage, search]);
+  }, [currentWorkspace?.id, page, perPage, search]);
 
   const handleSaveCampaign = async (form: CampaignForm) => {
     setSaving(true);

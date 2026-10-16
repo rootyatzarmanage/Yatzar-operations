@@ -13,6 +13,7 @@ import {
 } from "@/api/meetings";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
 
@@ -126,6 +127,7 @@ function toApiDateTime(value: string, allDay: boolean) {
 }
 
 export default function Meetings({ embed }: EmbedProps = {}) {
+  const { currentWorkspace } = useWorkspace();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -150,6 +152,8 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   const [pickerSelection, setPickerSelection] = useState<Person[]>([]);
 
   useEffect(() => {
+    setPeople([]);
+    setMeetings([]);
     const fail =
       (label: string) =>
       (error: unknown) =>
@@ -222,7 +226,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
         setMeetings(result.items.map((meeting) => fromApiMeeting(meeting, []))),
       )
       .catch(fail("meetings"));
-  }, []);
+  }, [currentWorkspace?.id]);
 
   function fromApiMeeting(
     meeting: MeetingApi,
@@ -507,12 +511,6 @@ export default function Meetings({ embed }: EmbedProps = {}) {
       to: allDay
         ? cur.to.slice(0, 10)
         : `${cur.to.slice(0, 10)}T16:00`,
-    }));
-
-  const removeParticipant = (key: string) =>
-    setForm((cur) => ({
-      ...cur,
-      participants: cur.participants.filter((p) => p.key !== key),
     }));
 
   const renderSelect = (

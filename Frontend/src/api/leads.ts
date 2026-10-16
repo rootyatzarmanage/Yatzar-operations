@@ -27,6 +27,7 @@ function toPayload(values: RecordValues): ContactPayload {
     department: nullable(values, "title"),
     lead_source: nullable(values, "leadSource"),
     description: nullable(values, "description"),
+    tag_id: null,
     email_opt_out: Boolean(values.emailOptOut),
     mailing_country: nullable(values, "country"),
     mailing_building: nullable(values, "flat"),
