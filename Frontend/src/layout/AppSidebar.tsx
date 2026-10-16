@@ -64,11 +64,11 @@ const navItems: NavItem[] = [
     key: "contacts",
     path: "/contacts",
   },
-  {
-    icon: <Settings fontSize={24} />,
-    name: "Settings",
-    path: "/settings",
-  },
+  // {
+  //   icon: <Settings fontSize={24} />,
+  //   name: "Settings",
+  //   path: "/settings",
+  // },
   {
     icon: <User fontSize={24} />,
     name: "Profile",
