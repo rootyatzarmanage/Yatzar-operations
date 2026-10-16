@@ -20,9 +20,11 @@ import { addContactToLeads } from "@/api/leads";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
+import type { EmbedProps } from "@/components/records/embed";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
@@ -148,7 +150,7 @@ function validateCoordinates(
   return undefined;
 }
 
-export default function Contacts() {
+export default function Contacts({ embed }: EmbedProps = {}) {
   const { t } = useTranslation();
   const { currentWorkspace } = useWorkspace();
   const [contacts, setContacts] = useState<LocalContact[]>([]);
@@ -369,6 +371,7 @@ export default function Contacts() {
   };
 
   const closeForm = () => {
+    embed?.onClose();
     setShowForm(false);
     setEditingId(null);
     setViewing(false);
@@ -693,16 +696,27 @@ const handleBulkDelete = async () => {
   }
 };
 
+  const embedInit = useRef(false);
+  useEffect(() => {
+    if (!embed || embedInit.current) return;
+    embedInit.current = true;
+    openAddForm();
+  });
+
   return (
     <>
-      <PageMeta
-        title="Contacts | Yatzar Operations"
-        description="Yatzar Operations contacts"
-      />
-      <PageBreadcrumb
-        pageTitle={t("sidebar.items.contacts")}
-        parent={currentWorkspace ? { label: "Engagement" } : undefined}
-      />
+      {!embed && (
+        <PageMeta
+          title="Contacts | Yatzar Operations"
+          description="Yatzar Operations contacts"
+        />
+      )}
+      {!embed && (
+        <PageBreadcrumb
+          pageTitle={t("sidebar.items.contacts")}
+          parent={currentWorkspace ? { label: "Engagement" } : undefined}
+        />
+      )}
       {pageError && (
         <div
           role="alert"
@@ -720,7 +734,7 @@ const handleBulkDelete = async () => {
         </div>
       )}
 
-      {!showForm && (
+      {!showForm && !embed && (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
         <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
           <div>

@@ -11,6 +11,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import type { EmbedProps } from "@/components/records/embed";
 
 type CallType = "Outbound" | "Inbound" | "Missed";
 type CallStatus = "Completed" | "Scheduled" | "Missed";
@@ -105,7 +106,7 @@ const emptyForm = {
 
 type FormErrors = { contactId?: string; startTime?: string; duration?: string };
 
-export default function Calls() {
+export default function Calls({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
   const callOwner = user?.display_name || user?.employee_name || user?.username || "";
 
@@ -251,6 +252,7 @@ export default function Calls() {
     setView("list");
     setEditingId(null);
     setErrors({});
+    embed?.onClose();
   };
 
   const handleSave = async (event: FormEvent) => {
@@ -329,10 +331,25 @@ export default function Calls() {
   const formTitle = isSchedule ? (editingId ? "Edit scheduled call" : "Schedule a call") : editingId ? "Edit call log" : "Log a call";
   const submitLabel = isSchedule ? (editingId ? "Save" : "Schedule") : "Save";
 
+  const embedInit = useRef(false);
+  useEffect(() => {
+    if (!embed || embedInit.current) return;
+    if (!embed.editId) {
+      embedInit.current = true;
+      openAdd("schedule");
+      return;
+    }
+    const target = calls.find((x) => x.id === embed.editId);
+    if (target) {
+      embedInit.current = true;
+      openEdit(target);
+    }
+  });
+
   return (
     <>
-      <PageMeta title="Calls | Yatzar Operations" description="Yatzar Operations calls" />
-      <PageBreadcrumb pageTitle="Calls" parent={{ label: "Activities" }} />
+      {!embed && <PageMeta title="Calls | Yatzar Operations" description="Yatzar Operations calls" />}
+      {!embed && <PageBreadcrumb pageTitle="Calls" parent={{ label: "Activities" }} />}
       {apiError && (
         <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
           {apiError}
@@ -340,7 +357,7 @@ export default function Calls() {
       )}
 
       {/* ---------------- LIST ---------------- */}
-      {!showForm && (
+      {!showForm && !embed && (
         <section className="rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>

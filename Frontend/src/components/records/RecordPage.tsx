@@ -2,7 +2,8 @@ import type { RecordValues, StoredRecord } from "@/storage/localStore";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import type { EmbedConfig } from "@/components/records/embed";
 
 export type FieldDef = {
   key: string;
@@ -54,6 +55,7 @@ type Props<T extends StoredRecord> = {
   filters?: FilterDef<T>[];
   sorts?: SortDef<T>[];
   viewBadge?: (record: T) => string;
+  embed?: EmbedConfig;
   pageTitle: string;
   parent?: {
     label: string;
@@ -114,6 +116,7 @@ export default function RecordPage<T extends StoredRecord>({
   filters = [],
   sorts = [],
   viewBadge,
+  embed,
 }: Props<T>) {
   const allFields = useMemo(
     () => sections.flatMap((section) => section.fields),
@@ -338,6 +341,7 @@ export default function RecordPage<T extends StoredRecord>({
     setValues({ ...defaults });
     setErrors({});
     setFormError("");
+    embed?.onClose();
   };
 
   const setField = (key: string, value: string | boolean) => {
@@ -501,10 +505,17 @@ export default function RecordPage<T extends StoredRecord>({
     );
   };
 
+  const embedInit = useRef(false);
+  useEffect(() => {
+    if (!embed || embedInit.current) return;
+    embedInit.current = true;
+    openAdd();
+  });
+
   return (
     <>
-      <PageMeta title={`${pageTitle} | Yatzar Operations`} description={`Yatzar Operations ${plural}`} />
-      <PageBreadcrumb pageTitle={pageTitle} parent={parent} />
+      {!embed && <PageMeta title={`${pageTitle} | Yatzar Operations`} description={`Yatzar Operations ${plural}`} />}
+      {!embed && <PageBreadcrumb pageTitle={pageTitle} parent={parent} />}
 
       {pageError && (
         <div role="alert" className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400">
@@ -517,7 +528,7 @@ export default function RecordPage<T extends StoredRecord>({
         </div>
       )}
 
-      {!showForm && !viewRecord && (
+      {!showForm && !viewRecord && !embed && (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
@@ -730,7 +741,7 @@ export default function RecordPage<T extends StoredRecord>({
         </section>
       )}
 
-      {!showForm && viewRecord && (
+      {!showForm && viewRecord && !embed && (
         <RecordView
           singular={singular}
           plural={plural}

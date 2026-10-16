@@ -13,7 +13,8 @@ import {
 } from "@/api/meetings";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import type { EmbedProps } from "@/components/records/embed";
 
 type ParticipantType = "contact" | "lead" | "customer";
 
@@ -124,7 +125,7 @@ function toApiDateTime(value: string, allDay: boolean) {
   return allDay ? `${value.slice(0, 10)}T00:00:00` : value;
 }
 
-export default function Meetings() {
+export default function Meetings({ embed }: EmbedProps = {}) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -422,6 +423,7 @@ export default function Meetings() {
     setShowForm(false);
     setEditingId(null);
     setPickerOpen(false);
+    embed?.onClose();
   };
 
   const handleSave = async (event: FormEvent) => {
@@ -539,13 +541,30 @@ export default function Meetings() {
     </div>
   );
 
+  const embedInit = useRef(false);
+  useEffect(() => {
+    if (!embed || embedInit.current) return;
+    if (!embed.editId) {
+      embedInit.current = true;
+      openAdd();
+      return;
+    }
+    const target = meetings.find((x) => x.id === embed.editId);
+    if (target) {
+      embedInit.current = true;
+      openEdit(target);
+    }
+  });
+
   return (
     <>
-      <PageMeta
-        title="Meetings | Yatzar Operations"
-        description="Yatzar Operations meetings"
-      />
-      <PageBreadcrumb pageTitle="Meetings" parent={{ label: "Activities" }} />
+      {!embed && (
+        <PageMeta
+          title="Meetings | Yatzar Operations"
+          description="Yatzar Operations meetings"
+        />
+      )}
+      {!embed && <PageBreadcrumb pageTitle="Meetings" parent={{ label: "Activities" }} />}
 
       {apiError && (
         <div
@@ -565,7 +584,7 @@ export default function Meetings() {
         </div>
       )}
 
-      {!showForm && (
+      {!showForm && !embed && (
         <section className="rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
