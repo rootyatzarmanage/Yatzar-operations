@@ -213,3 +213,55 @@ pip install -r requirements.txt
 
 # to run
 python run.py
+
+
+## Employee drafts and employee codes
+
+For an existing database without an Alembic revision, run the targeted upgrade
+from `Backend` before starting the API:
+
+```bash
+venv/bin/python -m yo.core.database.upgrade_employee_status
+```
+
+This applies only the employee status migration in a transaction and can be
+rerun. It does not stamp or replay historical migrations. Do not run the full
+Alembic history on an unversioned existing database: revision `b7f3d7f0a1c2`
+drops and recreates ORM tables. For databases with an established migration
+history, use `alembic upgrade head` through the normal migration process.
+
+`create_all()` does not alter existing tables. The new migration merges the
+existing migration heads, marks existing employees as saved, and permits
+incomplete drafts in the `employees` table. The legacy
+`employee_drafts` table is retained as an archive; its old JSON records are not
+exposed or automatically converted by these endpoints.
+
+All employee routes require authentication and use the configured API v1 prefix.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/employees` | Create a complete employee with `status=1` and a user account. |
+| POST | `/employees/draft` | Create an incomplete employee with `status=0`; accepts employee fields only. |
+| GET | `/employees` | Retrieve by optional `employee_id` or `employee_code`, or list with `search`, optional `status`, `page=1`, and `per_page=5`. |
+| GET | `/employees/drafts` | Retrieve or search only drafts, with the same optional identifiers and pagination. |
+| PUT | `/employees/{employee_id}` | Update employee fields; saved employees also accept account changes. |
+| PUT | `/employees/{employee_id}/save` | Submit the complete employee creation payload to finalize a draft and create its account. |
+| DELETE | `/employees/{employee_id}` | Soft-delete a draft or saved employee. |
+| GET | `/employees/codes` | Return `employee_codes`, containing all codes stored on non-deleted employees, including drafts. |
+
+Draft saving preserves its assigned code. Supply account credentials only when
+creating a saved employee or finalizing a draft. Use the save endpoint to change
+a draft's status to `1`; the normal update endpoint does not accept status.
+Duplicate codes or account identifiers return HTTP 409, including concurrent
+creation conflicts. New frontend integrations should use these employee routes
+instead of the removed support draft routes.
+
+Employee and draft retrieval responses put a single `EmployeeResponse` directly
+in `data` when an identifier is supplied, otherwise `data` contains `items`,
+`total`, `page`, and `per_page`. `employee_id` takes precedence if both identifiers
+are supplied. Search and pagination apply to lists. Optional `status` filters
+employee lists and individual employee lookups; `/employees/drafts` always
+restricts results to status `0`. Blank searches are ignored. Deleted employees
+are excluded from retrieval and the codes API, while their codes remain reserved
+for uniqueness. Code generation is private service logic used only on creation.
+There are no GET routes with path parameters in the Employee router.

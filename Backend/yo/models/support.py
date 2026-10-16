@@ -1,7 +1,6 @@
 import uuid
-from typing import Any
 
-from sqlalchemy import ForeignKey, JSON, String, Text, Uuid
+from sqlalchemy import ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from yo.core.database.base import Base, SoftDeleteMixin, TimestampMixin
@@ -16,14 +15,6 @@ class Location(Base, TimestampMixin, SoftDeleteMixin):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("locations.id"), nullable=True)
 
     parent: Mapped["Location | None"] = relationship(remote_side="Location.id")
-
-
-class EmployeeDraft(Base, TimestampMixin, SoftDeleteMixin):
-    __tablename__ = "employee_drafts"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-
 
 class DropdownOption(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "dropdown_options"

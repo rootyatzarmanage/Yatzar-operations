@@ -1,5 +1,5 @@
-from yo.schemas.requests.employee import EmployeeCreateRequest, EmployeeUpdateRequest
+from yo.schemas.requests.employee import EmployeeCreateRequest, EmployeeDraftRequest, EmployeeUpdateRequest
 from yo.schemas.requests.role import RoleCreateRequest, RoleUpdateRequest
-from yo.schemas.requests.support import DraftRequest, DropdownOptionRequest
+from yo.schemas.requests.support import DropdownOptionRequest
 
-__all__ = ["DraftRequest", "DropdownOptionRequest", "EmployeeCreateRequest", "EmployeeUpdateRequest", "RoleCreateRequest", "RoleUpdateRequest"]
+__all__ = ["DropdownOptionRequest", "EmployeeCreateRequest", "EmployeeDraftRequest", "EmployeeUpdateRequest", "RoleCreateRequest", "RoleUpdateRequest"]

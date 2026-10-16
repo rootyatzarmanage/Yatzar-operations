@@ -133,5 +133,5 @@ async def seed_default_data(session: AsyncSession) -> None:
             continue
         username = email.split("@", 1)[0]
         user = User(username=username, email=email, password_hash=hash_password(settings.DEFAULT_SUPER_ADMIN_PASSWORD), role=roles[role_name], is_active=True)
-        session.add(Employee(user=user, employee_code=code, employee_name=name, employee_type=employee_type, date_of_birth=date(1995, 1, 1), gender="Other", mobile_number="+91-9000000000", email=email, address_line1="1 Main Street", country="India", state="Maharashtra", district="Mumbai", pincode="400001", date_of_joining=date(2026, 1, 1), department=department, designation="Team Member", work_location=location, employment_status=status))
+        session.add(Employee(user=user, status=1, employee_code=code, employee_name=name, employee_type=employee_type, date_of_birth=date(1995, 1, 1), gender="Other", mobile_number="+91-9000000000", email=email, address_line1="1 Main Street", country="India", state="Maharashtra", district="Mumbai", pincode="400001", date_of_joining=date(2026, 1, 1), department=department, designation="Team Member", work_location=location, employment_status=status))
     await session.commit()
