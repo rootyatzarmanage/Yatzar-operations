@@ -73,7 +73,31 @@ type StringFieldKey = {
 }[keyof ContactFields];
 type FieldErrors = Partial<Record<FieldKey, string>>;
 type ContactGroup = { contact: LocalContact; workspaceIds: string[] };
+const contactFieldLimits: Partial<Record<StringFieldKey, { maxLength?: number; maxDigits?: number }>> = {
+  firstName: { maxLength: 100 },
+  lastName: { maxLength: 100 },
+  company: { maxLength: 255 },
+  phone: { maxLength: 30, maxDigits: 10 },
+  otherPhone: { maxLength: 30, maxDigits: 10 },
+  homePhone: { maxLength: 30, maxDigits: 10 },
+  mobile: { maxLength: 30, maxDigits: 10 },
+  leadSource: { maxLength: 100 },
+  department: { maxLength: 150 },
+};
 const maxContactPhotoSize = 5 * 1024 * 1024;
+
+function contactFieldError(field: StringFieldKey, value: string) {
+  const limits = contactFieldLimits[field];
+  if (!limits || !value) return "";
+  if (limits.maxDigits && /\D/.test(value)) return "Enter digits only.";
+  if (limits.maxDigits && value.length > limits.maxDigits) {
+    return `Enter no more than ${limits.maxDigits} digits.`;
+  }
+  if (limits.maxLength && value.length > limits.maxLength) {
+    return `Use ${limits.maxLength} characters or fewer.`;
+  }
+  return "";
+}
 
 const inputClass =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
@@ -465,6 +489,14 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 
   const saveContact = async (): Promise<LocalContact | null> => {
+    const lengthErrors: FieldErrors = {};
+    for (const field of Object.keys(contactFieldLimits) as StringFieldKey[]) {
+      const error = contactFieldError(field, formValues[field]);
+      if (error) lengthErrors[field] = error;
+    }
+    setFormErrors(lengthErrors);
+    if (Object.values(lengthErrors).some(Boolean)) return null;
+
     try {
       let savedAll: LocalContact[] = [];
       let saved: LocalContact | undefined;
@@ -678,7 +710,9 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       fullWidth?: boolean;
       placeholder?: string;
     } = {},
-  ) => (
+  ) => {
+    const error = formErrors[field] || contactFieldError(field, formValues[field]);
+    return (
     <div className={options.fullWidth ? "md:col-span-2" : undefined}>
       <label
         htmlFor={`contact-${field}`}
@@ -693,17 +727,22 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
         placeholder={options.placeholder}
         value={formValues[field]}
         onChange={(event) => updateField(field, event.target.value)}
-        aria-invalid={Boolean(formErrors[field])}
-        aria-describedby={formErrors[field] ? `error-${field}` : undefined}
-        className={`${inputClass}${formErrors[field] ? " border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`}
+        onBlur={() => {
+          const fieldError = contactFieldError(field, formValues[field]);
+          setFormErrors((current) => ({ ...current, [field]: fieldError || undefined }));
+        }}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `error-${field}` : undefined}
+        className={`${inputClass}${error ? " border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`}
       />
-      {formErrors[field] && (
+      {error && (
         <p id={`error-${field}`} className="mt-1 text-xs text-red-600">
-          {formErrors[field]}
+          {error}
         </p>
       )}
     </div>
-  );
+    );
+  };
 
   const renderSectionTitle = (title: string) => (
     <div className="border-b border-gray-100 pb-3 dark:border-gray-800">

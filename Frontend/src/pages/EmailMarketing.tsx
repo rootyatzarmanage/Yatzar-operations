@@ -1493,6 +1493,7 @@ function EmailCampaignForm({
                 </span>
 
                 <input
+                  maxLength={255}
                   value={campaignName}
                   onChange={(event) =>
                     setCampaignName(
@@ -1664,6 +1665,7 @@ function EmailCampaignForm({
               </span>
 
               <input
+                maxLength={500}
                 value={subject}
                 onChange={(event) =>
                   setSubject(
