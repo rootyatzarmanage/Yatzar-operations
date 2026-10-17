@@ -43,7 +43,7 @@ const operations: { key: Permission; label: string }[] = [
   { key: "delete", label: "Delete" },
 ];
 
-const menuItems: MenuItem[] = [
+const knownMenuItems: MenuItem[] = [
   { name: "Teams", icon: UsersIcon },
   { name: "App Permission", icon: ShieldIcon },
   { name: "Workspace", icon: WorkspaceIcon },
@@ -56,9 +56,12 @@ const menuItems: MenuItem[] = [
   { name: "Event Webinar", icon: ShieldIcon },
 ];
 
-const createPermissions = (enabled = false): PermissionMap =>
+const createPermissions = (
+  enabled = false,
+  items: MenuItem[] = knownMenuItems,
+): PermissionMap =>
   Object.fromEntries(
-    menuItems.map(({ name }) => [
+    items.map(({ name }) => [
       name,
       operations.reduce(
         (permissions, operation) => ({
@@ -80,6 +83,7 @@ export default function AppPermission() {
   const canUpdateRole = hasPermission(user, "App Permission", "update");
   const canDeleteRole = hasPermission(user, "App Permission", "delete");
   const [roles, setRoles] = useState<Role[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(knownMenuItems);
   const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -93,15 +97,10 @@ export default function AppPermission() {
     useState<PermissionMap>(createPermissions());
   const editingRole = roles.find((role) => role.id === editingRoleId);
 
-  const roleFromApi = (record: RoleRecord): Role => {
-    const mappedPermissions = createPermissions();
+  const roleFromApi = (record: RoleRecord, menuCatalog: MenuItem[]): Role => {
+    const mappedPermissions = createPermissions(false, menuCatalog);
     for (const permission of record.permissions) {
-      const normalizedMenu = permission.menu.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const menu = menuItems.find(
-        (item) => item.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedMenu,
-      );
-      if (!menu) continue;
-      mappedPermissions[menu.name] = {
+      mappedPermissions[permission.menu] = {
         create: permission.create,
         view: permission.view,
         update: permission.update,
@@ -120,7 +119,29 @@ export default function AppPermission() {
   const refreshPermissionData = async () => {
     try {
       const roleRecords = await listRoles();
-      setRoles(roleRecords.map(roleFromApi));
+      const names = new Set(
+        [
+          ...(user?.permissions ?? []).map(({ menu }) => menu),
+          ...roleRecords.flatMap((role) => role.permissions.map(({ menu }) => menu)),
+        ],
+      );
+      const iconByName = new Map<string, MenuItem["icon"]>(
+        knownMenuItems.map(({ name, icon }) => [
+          name.toLowerCase().replace(/[^a-z0-9]/g, ""),
+          icon,
+        ] as const),
+      );
+      const menuNames = [...names];
+      const menuCatalog = menuNames
+        .sort((first, second) => first.localeCompare(second))
+        .map((name) => ({
+          name,
+          icon:
+            iconByName.get(name.toLowerCase().replace(/[^a-z0-9]/g, "")) ??
+            ShieldIcon,
+        }));
+      setMenuItems(menuCatalog);
+      setRoles(roleRecords.map((role) => roleFromApi(role, menuCatalog)));
       setApiError("");
     } catch (error) {
       setApiError(
@@ -144,7 +165,7 @@ export default function AppPermission() {
     setIsReadOnly(false);
     setEditingRoleId(null);
     setRoleName("");
-    setPermissions(createPermissions());
+    setPermissions(createPermissions(false, menuItems));
     setIsEditorOpen(true);
   };
 
@@ -168,8 +189,13 @@ export default function AppPermission() {
     setPermissions((current) => ({
       ...current,
       [menuName]: {
-        ...current[menuName],
-        [operation]: !current[menuName][operation],
+        ...(current[menuName] ?? {
+          create: false,
+          view: false,
+          update: false,
+          delete: false,
+        }),
+        [operation]: !(current[menuName]?.[operation] ?? false),
       },
     }));
   };
@@ -182,7 +208,17 @@ export default function AppPermission() {
     try {
       const payload = {
         name: trimmedName,
-        permissions: permissions as Record<string, PermissionValues>,
+        permissions: Object.fromEntries(
+          menuItems.map(({ name }) => [
+            name,
+            permissions[name] ?? {
+              create: false,
+              view: false,
+              update: false,
+              delete: false,
+            },
+          ]),
+        ) as Record<string, PermissionValues>,
       };
       if (editingRoleId === null) {
         await createRole(payload);
@@ -299,7 +335,7 @@ export default function AppPermission() {
                         >
                           <input
                             type="checkbox"
-                            checked={permissions[name][operation.key]}
+                            checked={permissions[name]?.[operation.key] ?? false}
                             disabled={isReadOnly}
                             onChange={() =>
                               togglePermission(name, operation.key)

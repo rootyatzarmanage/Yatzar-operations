@@ -55,6 +55,11 @@ function permissionMenuForPath(path: string): string | null {
 }
 
 function canViewPath(user: Parameters<typeof hasPermission>[0], path: string) {
+  if (path === "/calendar") {
+    return ["Tasks", "Meetings", "Calls", "Event Webinar"].some((menu) =>
+      hasPermission(user, menu),
+    );
+  }
   const menu = permissionMenuForPath(path);
   return menu ? hasPermission(user, menu) : true;
 }
@@ -127,8 +132,6 @@ const workspaceNavItems: NavItem[] = [
       { name: "Campaigns", path: "/campaigns" },
       { name: "Email marketing", path: "/email-marketing" },
       { name: "Event webinar", path: "/event-webinar" },
-      { name: "Content", path: "/content" },
-      { name: "Report", path: "/report" },
     ],
   },
   {
@@ -146,6 +149,9 @@ const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { currentWorkspace, leaveWorkspace } = useWorkspace();
   const { user } = useAuth();
+  const sidebarContentVisible = Boolean(
+    currentWorkspace || isExpanded || isHovered || isMobileOpen,
+  );
   const activeNavItems = useMemo(
     () => (currentWorkspace ? workspaceNavItems : navItems)
       .map((item) => item.subItems
@@ -214,7 +220,14 @@ const AppSidebar: React.FC = () => {
     <ul className="flex flex-col gap-1">
       {items.map((nav, index) => (
         <li key={nav.name}>
-          {nav.subItems ? (
+          {nav.subItems ? (currentWorkspace ? (
+            <div className="group menu-item menu-item-inactive cursor-default xl:justify-start">
+              <span className="menu-item-icon-size menu-item-icon-inactive">{nav.icon}</span>
+              {sidebarContentVisible && (
+                <span className="menu-item-text">{nav.name}</span>
+              )}
+            </div>
+          ) : (
             <button
               onClick={() => handleSubmenuToggle(index, menuType)}
               className={`group menu-item ${
@@ -222,7 +235,7 @@ const AppSidebar: React.FC = () => {
                   ? "menu-item-active"
                   : "menu-item-inactive"
               } cursor-pointer ${
-                !isExpanded && !isHovered
+                !sidebarContentVisible
                   ? "xl:justify-center"
                   : "xl:justify-start"
               }`}
@@ -237,12 +250,12 @@ const AppSidebar: React.FC = () => {
                 {nav.icon}
               </span>
 
-              {(isExpanded || isHovered || isMobileOpen) && (
+              {sidebarContentVisible && (
                 <span className="menu-item-text">
                   {nav.key ? t(`sidebar.items.${nav.key}`) : nav.name}
                 </span>
               )}
-              {nav.new && (isExpanded || isHovered || isMobileOpen) && (
+              {nav.new && sidebarContentVisible && (
                 <span
                   className={`absolute inset-e-10 ms-auto ${
                     openSubmenus.includes(`${menuType}-${index}`)
@@ -253,7 +266,7 @@ const AppSidebar: React.FC = () => {
                   {t("sidebar.badges.new")}
                 </span>
               )}
-              {(isExpanded || isHovered || isMobileOpen) && (
+              {sidebarContentVisible && (
                 <ChevronDownIcon
                   className={`ms-auto h-5 w-5 transition-transform duration-200 ${
                     openSubmenus.includes(`${menuType}-${index}`)
@@ -263,7 +276,7 @@ const AppSidebar: React.FC = () => {
                 />
               )}
             </button>
-          ) : (
+          )) : (
             nav.path && (
               <Link
                 to={nav.path}
@@ -293,7 +306,7 @@ const AppSidebar: React.FC = () => {
                 >
                   {nav.icon}
                 </span>
-                {(isExpanded || isHovered || isMobileOpen) && (
+                {sidebarContentVisible && (
                   <span className="menu-item-text">
                     {nav.key ? t(`sidebar.items.${nav.key}`) : nav.name}
                   </span>
@@ -301,15 +314,18 @@ const AppSidebar: React.FC = () => {
               </Link>
             )
           )}
-          {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
+          {nav.subItems && sidebarContentVisible && (
             <div
               ref={(el) => {
                 subMenuRefs.current[`${menuType}-${index}`] = el;
               }}
-              className="overflow-hidden transition-all duration-300"
+              className={
+                currentWorkspace ? "" : "overflow-hidden transition-all duration-300"
+              }
               style={{
-                height:
-                  openSubmenus.includes(`${menuType}-${index}`)
+                height: currentWorkspace
+                  ? "auto"
+                  : openSubmenus.includes(`${menuType}-${index}`)
                     ? `${subMenuHeight[`${menuType}-${index}`]}px`
                     : "0px",
               }}
@@ -368,7 +384,7 @@ const AppSidebar: React.FC = () => {
     <aside
       className={cn(
         "fixed inset-s-0 top-0 z-[99999] flex h-screen flex-col border-e border-gray-200 bg-white px-5 text-gray-900 transition-all duration-300 ease-in-out xl:translate-x-0 xl:rtl:translate-x-0 dark:border-gray-800 dark:bg-gray-900",
-        isExpanded || isMobileOpen ? "w-72.5" : isHovered ? "w-72.5" : "w-22.5",
+        currentWorkspace || isExpanded || isMobileOpen ? "w-72.5" : isHovered ? "w-72.5" : "w-22.5",
         isMobileOpen
           ? "translate-x-0"
           : "-translate-x-full rtl:translate-x-full",
@@ -379,7 +395,7 @@ const AppSidebar: React.FC = () => {
       <div
         className={cn(
           "flex items-center py-6",
-          !isExpanded && !isHovered
+          !sidebarContentVisible
             ? "justify-between xl:justify-center"
             : "justify-between xl:justify-start",
         )}
@@ -396,7 +412,7 @@ const AppSidebar: React.FC = () => {
             height={40}
             className="h-10 w-10 shrink-0 object-contain"
           />
-          {isExpanded || isHovered || isMobileOpen ? (
+          {sidebarContentVisible ? (
             <span className="text-sm leading-5 font-semibold tracking-wide text-gray-900 dark:text-white">
               YATZAR OPERATIONS
             </span>
@@ -434,12 +450,12 @@ const AppSidebar: React.FC = () => {
             <div>
               <h2
                 className={`mb-4 flex text-xs leading-5 text-gray-400 uppercase ${
-                  !isExpanded && !isHovered
+                  !sidebarContentVisible
                     ? "xl:justify-center"
                     : "justify-start"
                 }`}
               >
-                {isExpanded || isHovered || isMobileOpen ? (
+                {sidebarContentVisible ? (
                   currentWorkspace ? (
                     "Workspace menu"
                   ) : (
@@ -460,13 +476,13 @@ const AppSidebar: React.FC = () => {
                     title="Back to main menu"
                     className={cn(
                       "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10",
-                      !isExpanded && !isHovered && !isMobileOpen && "xl:justify-center",
+                      !sidebarContentVisible && "xl:justify-center",
                     )}
                   >
                     <ChevronLeft size={20} />
-                    {(isExpanded || isHovered || isMobileOpen) && "Back to main menu"}
+                    {sidebarContentVisible && "Back to main menu"}
                   </button>
-                  {(isExpanded || isHovered || isMobileOpen) && (
+                  {sidebarContentVisible && (
                     <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold tracking-wide text-brand-500 uppercase dark:bg-white/5 dark:text-brand-400">
                       <WorkspaceIcon className="size-5 shrink-0" />
                       <span className="truncate">{currentWorkspace.name}</span>
