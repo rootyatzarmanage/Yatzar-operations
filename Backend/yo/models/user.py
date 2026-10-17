@@ -1,9 +1,17 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, Uuid
+from sqlalchemy import Boolean, Column, ForeignKey, String, Table, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from yo.core.database.base import Base, SoftDeleteMixin, TimestampMixin
+
+
+user_workspaces = Table(
+    "user_workspaces",
+    Base.metadata,
+    Column("user_id", Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("workspace_id", Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True, index=True),
+)
 
 
 class User(Base, TimestampMixin, SoftDeleteMixin):
@@ -18,3 +26,6 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
 
     employee: Mapped["Employee | None"] = relationship(back_populates="user")
     role: Mapped["Role | None"] = relationship(back_populates="users")
+    workspaces: Mapped[list["Workspace"]] = relationship(
+        secondary=user_workspaces, back_populates="users",
+    )

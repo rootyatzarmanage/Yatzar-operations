@@ -97,6 +97,7 @@ class EmployeeResponse(BaseModel):
         user = getattr(value, "user", None)
         if user is not None:
             data.update(
+                workspaces=user.workspaces,
                 username=user.username,
                 login_email=user.email,
                 role=user.role.name if user.role else None,

@@ -31,4 +31,7 @@ class Workspace(Base, TimestampMixin, SoftDeleteMixin):
     employees: Mapped[list["Employee"]] = relationship(
         secondary="employee_workspaces", back_populates="workspaces",
     )
+    users: Mapped[list["User"]] = relationship(
+        secondary="user_workspaces", back_populates="workspaces",
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="Enabled")

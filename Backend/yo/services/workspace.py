@@ -39,12 +39,12 @@ class WorkspaceService:
         return await self.repository.list_all(skip, limit)
 
     async def list_for_user(self, user_id: UUID, skip: int = 0, limit: int = 50):
-        return await self.repository.list_for_user(user_id, skip, limit)
+        return await self.repository.list_for_user(user_id, skip, limit, include_disabled=True)
 
-    async def ensure_access(self, user_id: UUID, workspace_id: UUID | None) -> None:
+    async def ensure_access(self, user_id: UUID, workspace_id: UUID | None, *, include_disabled: bool = False) -> None:
         if workspace_id is None:
             raise AppException("Workspace is required.", 400)
-        if not await self.repository.user_has_workspace(user_id, workspace_id):
+        if not await self.repository.user_has_workspace(user_id, workspace_id, include_disabled=include_disabled):
             raise AppException("You do not have access to the selected workspace.", 403)
 
     async def update(
@@ -73,8 +73,7 @@ class WorkspaceService:
         workspace = await self.repository.get_by_id(workspace_id, for_update=for_update)
         if not workspace:
             raise NotFoundException("Workspace", str(workspace_id))
-        if not await self.repository.is_privileged(user_id):
-            await self.ensure_access(user_id, workspace_id)
+        await self.ensure_access(user_id, workspace_id)
         return workspace
 
     @staticmethod

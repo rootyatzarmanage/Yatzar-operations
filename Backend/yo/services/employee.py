@@ -127,6 +127,7 @@ class EmployeeService:
         await self._ensure_unique_code(code)
         workspaces = await self._get_workspaces(payload.workspace_ids)
         user = await self._new_user(payload, user_id)
+        user.workspaces = workspaces
         values = payload.model_dump(
             exclude=self.ACCOUNT_FIELDS | {"employee_code", "status", "workspace_ids"},
         )
@@ -189,6 +190,9 @@ class EmployeeService:
             if "role" in account:
                 user_values["role"] = await self._get_role(account["role"])
             user_values["updated_by"] = user_id
+        if workspace_ids is not None and employee.user is not None:
+            user_values["workspaces"] = values["workspaces"]
+            user_values["updated_by"] = user_id
         values["updated_by"] = user_id
         return await self._persist(values, employee, user_values)
 
@@ -204,6 +208,7 @@ class EmployeeService:
         )
         if "workspace_ids" in payload.model_fields_set:
             values["workspaces"] = await self._get_workspaces(payload.workspace_ids)
+        user.workspaces = values.get("workspaces", employee.workspaces)
         values.update(user=user, status=1, updated_by=user_id)
         return await self._persist(values, employee)
 

@@ -32,9 +32,8 @@ def employee_data(result, current_user):
     data = (EmployeeListResponse.model_validate(result) if isinstance(result, dict)
             else EmployeeResponse.model_validate(result))
     if not is_workspace_admin(current_user):
-        employee = current_user.employee
         allowed = {
-            workspace.id for workspace in (employee.workspaces if employee and employee.deleted_at is None and employee.status == 1 else [])
+            workspace.id for workspace in current_user.workspaces
             if workspace.deleted_at is None and workspace.status == "Enabled"
         }
         items = data.items if isinstance(data, EmployeeListResponse) else [data]
