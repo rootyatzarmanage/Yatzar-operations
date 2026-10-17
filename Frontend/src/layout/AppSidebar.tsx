@@ -1,6 +1,6 @@
 import { useSidebar } from "@/context/SidebarContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
@@ -15,6 +15,7 @@ import {
 import { CalendarDays, Volume1, Calendar1 } from 'lucide-react'
 import { ChevronLeft, MessageSquare, User } from "lucide-react"
 import { cn } from "../utils";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 type NavItem = {
   name: string;
@@ -33,13 +34,31 @@ type NavItem = {
   }[];
 };
 
+function permissionMenuForPath(path: string): string | null {
+  const menuByPath: Record<string, string> = {
+    "/teams": "Teams",
+    "/app-permission": "App Permission",
+    "/workspace": "Workspace",
+    "/contacts": "Contacts",
+    "/leads": "Contacts",
+    "/customers": "Contacts",
+    "/task": "Tasks",
+    "/meetings": "Meetings",
+    "/calendar": "Meetings",
+    "/calls": "Calls",
+    "/campaigns": "Campaigns",
+    "/email-marketing": "Email Marketing",
+    "/event-webinar": "Event Webinar",
+  };
+  return menuByPath[path] ?? null;
+}
+
+function canViewPath(user: Parameters<typeof hasPermission>[0], path: string) {
+  const menu = permissionMenuForPath(path);
+  return menu ? hasPermission(user, menu) : true;
+}
+
 const navItems: NavItem[] = [
-  {
-    icon: <GridIcon fontSize={24} />,
-    name: "Analytics",
-    key: "analytics",
-    path: "/",
-  },
   {
     icon: <UsersIcon fontSize={24} />,
     name: "Teams",
@@ -125,7 +144,15 @@ const AppSidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentWorkspace, leaveWorkspace } = useWorkspace();
-  const activeNavItems = currentWorkspace ? workspaceNavItems : navItems;
+  const { user } = useAuth();
+  const activeNavItems = useMemo(
+    () => (currentWorkspace ? workspaceNavItems : navItems)
+      .map((item) => item.subItems
+        ? { ...item, subItems: item.subItems.filter((subItem) => canViewPath(user, subItem.path)) }
+        : item)
+      .filter((item) => item.subItems ? item.subItems.length > 0 : !item.path || canViewPath(user, item.path)),
+    [currentWorkspace, user],
+  );
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([]);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>(
     {},

@@ -13,7 +13,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const destination = (location.state as { from?: string } | null)?.from ?? "/";
+  const destination = (location.state as { from?: string } | null)?.from ?? "/teams";
 
   if (isLoading) return null;
   if (user) return <Navigate to={destination} replace />;

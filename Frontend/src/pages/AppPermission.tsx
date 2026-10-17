@@ -19,6 +19,7 @@ import {
 } from "@/icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 type Permission = "create" | "view" | "update" | "delete";
 type PermissionMap = Record<string, Record<Permission, boolean>>;
@@ -74,6 +75,10 @@ const tableInputClass =
 
 export default function AppPermission() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const canCreateRole = hasPermission(user, "App Permission", "create");
+  const canUpdateRole = hasPermission(user, "App Permission", "update");
+  const canDeleteRole = hasPermission(user, "App Permission", "delete");
   const [roles, setRoles] = useState<Role[]>([]);
   const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -314,14 +319,14 @@ export default function AppPermission() {
                   Permissions are configured on roles. Each account inherits the permissions of its assigned role.
                 </p>
               </div>
-              <button
+              {canCreateRole && <button
                 type="button"
                 onClick={openCreate}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
               >
                 <span className="text-lg leading-none">+</span>
                 Create role
-              </button>
+              </button>}
             </div>
             <div className="p-4 sm:p-5">
               <input
@@ -364,12 +369,12 @@ export default function AppPermission() {
                             <button type="button" onClick={() => openView(role)} aria-label={`View ${role.name} permissions`} title="View" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
                               <EyeIcon className="size-4" />
                             </button>
-                            <button type="button" onClick={() => openEdit(role)} aria-label={`Edit ${role.name} permissions`} title="Edit" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
+                            {canUpdateRole && <button type="button" onClick={() => openEdit(role)} aria-label={`Edit ${role.name} permissions`} title="Edit" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
                               <EditIcon className="size-4" />
-                            </button>
-                            <button type="button" onClick={() => setDeleteTarget(role)} disabled={role.isSystem} aria-label={`Delete ${role.name}`} title={role.isSystem ? "System roles cannot be deleted" : "Delete role"} className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-error-500/10">
+                            </button>}
+                            {canDeleteRole && <button type="button" onClick={() => setDeleteTarget(role)} disabled={role.isSystem} aria-label={`Delete ${role.name}`} title={role.isSystem ? "System roles cannot be deleted" : "Delete role"} className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-error-500/10">
                               <TrashIcon className="size-4" />
-                            </button>
+                            </button>}
                           </div>
                         </td>
                       </tr>

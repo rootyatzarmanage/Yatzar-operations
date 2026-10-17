@@ -8,6 +8,13 @@ export type AuthUser = {
   display_name: string | null;
   role: string;
   photo: string | null;
+  permissions: Array<{
+    menu: string;
+    create: boolean;
+    view: boolean;
+    update: boolean;
+    delete: boolean;
+  }>;
   token?: string | null;
 };
 

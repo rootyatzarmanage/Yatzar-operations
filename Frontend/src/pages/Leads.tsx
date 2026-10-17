@@ -116,6 +116,7 @@ export default function Leads({ embed }: EmbedProps = {}) {
 
   return (
     <RecordPage<LeadRecord>
+      permissionMenu="Contacts"
       embed={embed}
       pageTitle="Leads"
       parent={{ label: "Engagement" }}
