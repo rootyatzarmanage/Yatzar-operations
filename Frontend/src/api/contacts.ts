@@ -71,6 +71,7 @@ export type ContactPayload = {
 
 export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   id: string;
+  customer_id?: string | null;
   first_name: string | null;
   email: string | null;
   phone: string | null;
