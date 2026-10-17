@@ -806,6 +806,7 @@ export default function Workspace() {
                 </label>
                 <input
                   required
+                  maxLength={150}
                   type="text"
                   value={formValues.name}
                   onChange={(event) =>
@@ -841,6 +842,7 @@ export default function Workspace() {
                 </label>
                 <textarea
                   required
+                  maxLength={2000}
                   value={formValues.description}
                   onChange={(event) =>
                     handleFieldChange("description", event.target.value)

@@ -661,6 +661,7 @@ function AddCampaign({
                 name="subject"
                 label="Campaign Subject"
                 required
+                maxLength={255}
                 placeholder="Enter campaign"
                 value={form.subject}
                 onChange={handleChange}
@@ -669,6 +670,7 @@ function AddCampaign({
               <FormInput
                 name="senderName"
                 label="Sender name"
+                maxLength={150}
                 placeholder="Enter sender name"
                 value={form.senderName}
                 onChange={handleChange}
@@ -732,6 +734,7 @@ function AddCampaign({
                 name="name"
                 label="Campaign name"
                 required
+                maxLength={255}
                 placeholder="Enter campaign name"
                 value={form.name}
                 onChange={handleChange}
@@ -822,10 +825,12 @@ function FormInput({
   value,
   onChange,
   required = false,
+  maxLength,
 }: {
   name: string;
   label: string;
   required?: boolean;
+  maxLength?: number;
   placeholder?: string;
   type?: string;
   value: string;
@@ -844,6 +849,7 @@ function FormInput({
         type={type}
         value={value}
         required={required}
+        maxLength={maxLength}
         placeholder={placeholder}
         onChange={onChange}
         className={inputClass}

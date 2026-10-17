@@ -80,13 +80,13 @@ export default function Customers({ embed }: EmbedProps = {}) {
       {
         title: "Customer information",
         fields: [
-          { key: "firstName", label: "First name", placeholder: "Enter first name" },
-          { key: "lastName", label: "Last name", placeholder: "Enter last name" },
+          { key: "firstName", label: "First name", maxLength: 100, placeholder: "Enter first name" },
+          { key: "lastName", label: "Last name", maxLength: 100, placeholder: "Enter last name" },
           { key: "email", label: "Email", type: "email", placeholder: "name@example.com" },
-          { key: "phone", label: "Phone", type: "tel" },
+          { key: "phone", label: "Phone", type: "tel", maxDigits: 10 },
           { key: "otherPhone", label: "Other phone", type: "tel" },
-          { key: "department", label: "Department" },
-          { key: "leadSource", label: "Lead source", type: "select", options: sources, placeholder: "Select lead source" },
+          { key: "department", label: "Department", maxLength: 150 },
+          { key: "leadSource", label: "Lead source", type: "select", maxLength: 100, options: sources, placeholder: "Select lead source" },
         ],
       },
       { title: "Address", subtitle: "Mailing address", fields: addressFields("") },

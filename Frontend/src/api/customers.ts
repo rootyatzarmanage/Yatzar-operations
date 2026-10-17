@@ -51,7 +51,7 @@ function fromContact(contact: Contact): CustomerRecord {
     id: contact.id,
     createdAt: contact.created_at,
     updatedAt: contact.updated_at ?? contact.created_at,
-    customerId: contact.id,
+    customerId: contact.customer_id ?? "",
     workspaceId: contact.workspace_id ?? "",
     firstName: contact.first_name ?? "",
     lastName: contact.last_name ?? "",
