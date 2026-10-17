@@ -19,6 +19,7 @@ class EmployeeRepository:
     def _employee_query():
         return select(Employee).options(
             joinedload(Employee.user).joinedload(User.role),
+            joinedload(Employee.user).joinedload(User.workspaces),
             joinedload(Employee.workspaces),
         ).execution_options(populate_existing=True)
 

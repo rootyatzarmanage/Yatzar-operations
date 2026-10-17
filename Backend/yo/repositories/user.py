@@ -16,6 +16,7 @@ class UserRepository:
         query = select(User).options(
             joinedload(User.employee).joinedload(Employee.workspaces),
             joinedload(User.role),
+            joinedload(User.workspaces),
         ).where(User.is_active.is_(True), User.deleted_at.is_(None))
         if user_id is not None:
             query = query.where(User.id == user_id)

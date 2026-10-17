@@ -26,11 +26,7 @@ async def _user_response(user: User, session: DatabaseSession, token: str | None
         permissions=await RoleService(session).effective_permissions(user),
         workspaces=[
             {"id": workspace.id, "name": workspace.name}
-            for workspace in (
-                user.employee.workspaces
-                if user.employee and user.employee.deleted_at is None and user.employee.status == 1
-                else []
-            )
+            for workspace in user.workspaces
             if workspace.deleted_at is None and workspace.status == "Enabled"
         ],
     )

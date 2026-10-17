@@ -2,14 +2,12 @@ from datetime import datetime, timezone
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.workspace import Workspace
-from yo.models.employee import Employee, employee_workspaces
-from yo.models.user import User
+from yo.models.user import User, user_workspaces
 from yo.models.permission import Role
-from yo.core.auth.permissions import WORKSPACE_ADMIN_ROLES
 
 
 class WorkspaceRepository:
@@ -18,6 +16,8 @@ class WorkspaceRepository:
 
     @staticmethod
     def privileged_user(user_id: UUID):
+        from yo.core.auth.permissions import WORKSPACE_ADMIN_ROLES
+
         return select(User.id).join(Role, Role.id == User.role_id).where(
             User.id == user_id, User.is_active.is_(True), User.deleted_at.is_(None),
             Role.deleted_at.is_(None), Role.is_system.is_(True),
@@ -25,17 +25,18 @@ class WorkspaceRepository:
         ).exists()
 
     @classmethod
-    def accessible_ids(cls, user_id: UUID):
-        membership = select(employee_workspaces.c.workspace_id).join(
-            Employee, Employee.id == employee_workspaces.c.employee_id,
-        ).join(User, User.id == Employee.user_id).where(
-            Employee.user_id == user_id, Employee.deleted_at.is_(None),
-            Employee.status == 1, User.deleted_at.is_(None), User.is_active.is_(True),
+    def accessible_ids(cls, user_id: UUID, *, include_disabled: bool = False):
+        membership = select(user_workspaces.c.workspace_id).join(
+            User, User.id == user_workspaces.c.user_id,
+        ).where(
+            User.id == user_id, User.deleted_at.is_(None), User.is_active.is_(True),
         )
-        return select(Workspace.id).where(
-            Workspace.deleted_at.is_(None), Workspace.status == "Enabled",
-            or_(cls.privileged_user(user_id), Workspace.id.in_(membership)),
+        query = select(Workspace.id).where(
+            Workspace.deleted_at.is_(None), Workspace.id.in_(membership),
         )
+        if not include_disabled:
+            query = query.where(Workspace.status == "Enabled")
+        return query
 
     @classmethod
     def scope_condition(cls, column, user_id: UUID, workspace_id: UUID | None = None):
@@ -44,14 +45,14 @@ class WorkspaceRepository:
             condition = and_(condition, column == workspace_id)
         return condition
 
-    async def user_has_workspace(self, user_id: UUID, workspace_id: UUID) -> bool:
+    async def user_has_workspace(self, user_id: UUID, workspace_id: UUID, *, include_disabled: bool = False) -> bool:
         return await self.session.scalar(select(
-            self.accessible_ids(user_id).where(Workspace.id == workspace_id).exists()
+            self.accessible_ids(user_id, include_disabled=include_disabled).where(Workspace.id == workspace_id).exists()
         ))
 
-    async def list_for_user(self, user_id: UUID, skip: int = 0, limit: int = 50):
+    async def list_for_user(self, user_id: UUID, skip: int = 0, limit: int = 50, *, include_disabled: bool = False):
         result = await self.session.execute(
-            select(Workspace).where(Workspace.id.in_(self.accessible_ids(user_id)))
+            select(Workspace).where(Workspace.id.in_(self.accessible_ids(user_id, include_disabled=include_disabled)))
             .order_by(Workspace.created_at.desc(), Workspace.id).offset(skip).limit(limit)
         )
         return list(result.scalars().unique().all())
@@ -76,10 +77,7 @@ class WorkspaceRepository:
             select(Workspace.id).where(
                 Workspace.image == image,
                 Workspace.deleted_at.is_(None),
-                or_(
-                    Workspace.id.in_(self.accessible_ids(user_id)),
-                    self.privileged_user(user_id),
-                ),
+                Workspace.id.in_(self.accessible_ids(user_id)),
             ).limit(1)
         )
 
@@ -116,19 +114,10 @@ class WorkspaceRepository:
 
     @staticmethod
     def owner_ids(workspace_id: UUID):
-        members = select(Employee.user_id).join(
-            employee_workspaces, Employee.id == employee_workspaces.c.employee_id,
-        ).where(
-            employee_workspaces.c.workspace_id == workspace_id,
-            Employee.deleted_at.is_(None), Employee.status == 1,
+        members = select(user_workspaces.c.user_id).where(
+            user_workspaces.c.workspace_id == workspace_id,
         )
         return select(User.id).where(
             User.deleted_at.is_(None), User.is_active.is_(True),
-            or_(
-                User.id.in_(members),
-                User.role.has(
-                    (Role.deleted_at.is_(None)) & Role.is_system.is_(True)
-                    & Role.name.in_(WORKSPACE_ADMIN_ROLES)
-                ),
-            ),
+            User.id.in_(members),
         )

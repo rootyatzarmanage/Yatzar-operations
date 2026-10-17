@@ -4,8 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from yo.core.database import DatabaseSession
+from yo.models.user import user_workspaces
 from yo.core.auth.dependencies import CurrentUser
-from yo.core.auth.permissions import is_workspace_admin, require_permission, require_workspace_admin
+from yo.core.auth.permissions import require_permission, require_workspace_admin
 from yo.core.schemas.responses import SuccessResponse
 from yo.schemas.requests.workspace import (
     WorkspaceCreateRequest,
@@ -28,6 +29,10 @@ async def create_workspace(
     request: WorkspaceCreateRequest, session: DatabaseSession, current_user: CurrentUser
 ) -> SuccessResponse[WorkspaceResponse]:
     workspace = await WorkspaceService(session).create(request)
+    # A newly created workspace must remain accessible to its creator.
+    await session.execute(user_workspaces.insert().values(
+        user_id=current_user.id, workspace_id=workspace.id,
+    ))
     return SuccessResponse(
         message="Workspace created successfully",
         data=WorkspaceResponse.model_validate(workspace),
@@ -42,10 +47,7 @@ async def list_workspaces(
     limit: int = Query(50, ge=1, le=100),
 ) -> SuccessResponse[List[WorkspaceResponse]]:
     service = WorkspaceService(session)
-    workspaces = (
-        await service.list_all(skip, limit) if is_workspace_admin(current_user)
-        else await service.list_for_user(current_user.id, skip, limit)
-    )
+    workspaces = await service.list_for_user(current_user.id, skip, limit)
     return SuccessResponse(
         message="Workspaces retrieved successfully",
         data=[WorkspaceResponse.model_validate(item) for item in workspaces],
@@ -60,7 +62,7 @@ async def workspace_options(
     session: DatabaseSession, current_user: CurrentUser,
     skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=100),
 ):
-    workspaces = await WorkspaceService(session).list_for_user(current_user.id, skip, limit)
+    workspaces = await WorkspaceService(session).list_all(skip, limit)
     return SuccessResponse(
         message="Workspace options retrieved successfully",
         data=[WorkspaceResponse.model_validate(item) for item in workspaces],
@@ -149,8 +151,7 @@ async def get_workspace(
     workspace_id: UUID, session: DatabaseSession, current_user: CurrentUser
 ) -> SuccessResponse[WorkspaceResponse]:
     service = WorkspaceService(session)
-    if not is_workspace_admin(current_user):
-        await service.ensure_access(current_user.id, workspace_id)
+    await service.ensure_access(current_user.id, workspace_id, include_disabled=True)
     workspace = await service.get_by_id(workspace_id)
     return SuccessResponse(
         message="Workspace retrieved successfully",
@@ -169,8 +170,7 @@ async def update_workspace(
     current_user: CurrentUser,
 ) -> SuccessResponse[WorkspaceResponse]:
     service = WorkspaceService(session)
-    if not is_workspace_admin(current_user):
-        await service.ensure_access(current_user.id, workspace_id)
+    await service.ensure_access(current_user.id, workspace_id, include_disabled=True)
     workspace = await service.update(workspace_id, request)
     return SuccessResponse(
         message="Workspace updated successfully",
@@ -186,8 +186,7 @@ async def delete_workspace(
     workspace_id: UUID, session: DatabaseSession, current_user: CurrentUser
 ) -> SuccessResponse[dict[str, str]]:
     service = WorkspaceService(session)
-    if not is_workspace_admin(current_user):
-        await service.ensure_access(current_user.id, workspace_id)
+    await service.ensure_access(current_user.id, workspace_id, include_disabled=True)
     await service.delete(workspace_id)
     return SuccessResponse(
         message="Workspace deleted successfully",
