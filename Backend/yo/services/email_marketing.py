@@ -1,11 +1,13 @@
 import hashlib
 import hmac
 import logging
+from datetime import datetime, timezone
 
 from urllib.parse import quote
 from uuid import UUID
 
 from bs4 import BeautifulSoup
+from sqlalchemy import select
 
 from yo.services.workspace import WorkspaceService
 from yo.core.config import settings
@@ -13,6 +15,7 @@ from yo.core.email import send_email
 from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.schemas.requests.email_marketing import EmailMarketingCreateRequest
+from yo.models.email_marketing import EmailMarketingRecipient
 
 
 logger = logging.getLogger(__name__)
@@ -165,6 +168,34 @@ class EmailMarketingService:
 
     async def send_email(self, from_email: str, to_email: str, subject: str, html_content: str):
         await send_email(to_email, subject, html_content, reply_to=from_email)
+
+    async def schedule_campaign(self, campaign_id: UUID, scheduled_at: datetime):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
+        # The sender takes the same row lock before SMTP delivery, so changing
+        # the time cannot race with a worker that has already begun sending.
+        campaign = await self.repository.get_campaign(campaign_id, for_update=True)
+        if not campaign:
+            raise NotFoundException("Email marketing campaign", str(campaign_id))
+        if campaign.status not in {"Queued", "Scheduled"} or campaign.sent_count:
+            raise AppException("Only queued or scheduled campaigns can be rescheduled before sending starts.", 409)
+        if scheduled_at <= datetime.now(timezone.utc):
+            raise AppException("scheduled_at must be a future date and time.", 400)
+        has_recipients = await self.repository.session.scalar(select(
+            select(EmailMarketingRecipient.id).where(
+                EmailMarketingRecipient.email_marketing_id == campaign.id,
+                EmailMarketingRecipient.is_enabled.is_(True),
+                EmailMarketingRecipient.sent.is_(False),
+            ).exists()
+        ))
+        if not has_recipients:
+            raise AppException("The campaign has no enabled recipients to send to.", 400)
+        campaign.scheduled_at = scheduled_at
+        campaign.status = "Scheduled"
+        campaign.updated_by = self.user_id
+        await self.repository.session.flush()
+        return campaign
 
     async def track_open(self, campaign_id: UUID, user_id: UUID, signature: str) -> bool:
         if not self.verify_signature(campaign_id, user_id, signature):
