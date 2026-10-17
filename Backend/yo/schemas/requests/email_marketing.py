@@ -1,4 +1,6 @@
 from uuid import UUID
+from datetime import datetime
+from yo.core.mail_schedule import aware
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 from typing import Literal
 
@@ -16,9 +18,11 @@ class EmailMarketingCreateRequest(BaseModel):
     selected_user_ids: list[UUID] = Field(default_factory=list)
     subject: str = Field(min_length=1,max_length=500)
     content: str = Field(min_length=1)
+    scheduled_at: datetime | None = None
     
     @model_validator(mode="after")
     def validate_recipients(self):
+        self.scheduled_at = aware(self.scheduled_at)
         if self.mail_type == "Test Email":
             if not self.to_email:
                 raise ValueError("to_email is required for Test Email")
