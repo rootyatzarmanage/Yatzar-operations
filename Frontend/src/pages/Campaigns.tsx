@@ -9,6 +9,7 @@ import {
   type CampaignPayload,
 } from "@/api/campaigns";
 import { useEffect, useMemo, useState } from "react";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import {
@@ -135,10 +136,16 @@ const thClass =
   "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";
 
 export default function Campaign() {
+  const { user } = useAuth();
+  const canView = hasPermission(user, "Campaigns", "view");
+  const canCreate = hasPermission(user, "Campaigns", "create");
+  const canUpdate = hasPermission(user, "Campaigns", "update");
+  const canDelete = hasPermission(user, "Campaigns", "delete");
   const { currentWorkspace } = useWorkspace();
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [viewingCampaign, setViewingCampaign] = useState(false);
   const [owners, setOwners] = useState<CampaignOwnerOption[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -179,6 +186,7 @@ export default function Campaign() {
   }, [currentWorkspace?.id, page, perPage, search]);
 
   const handleSaveCampaign = async (form: CampaignForm) => {
+    if (editingCampaign ? !canUpdate : !canCreate) return;
     setSaving(true);
     try {
       const saved = editingCampaign
@@ -205,6 +213,7 @@ export default function Campaign() {
   };
 
   const handleDeleteCampaign = async (id: string) => {
+    if (!canDelete) return;
     if (!window.confirm("Delete this campaign?")) return;
     try {
       await deleteCampaign(id);
@@ -232,7 +241,7 @@ export default function Campaign() {
   };
 
   const bulkDelete = async () => {
-    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} campaigns?`)) return;
+    if (!canDelete || !selectedIds.length || !window.confirm(`Delete ${selectedIds.length} campaigns?`)) return;
     try {
       await Promise.all(selectedIds.map((id) => deleteCampaign(id)));
       setCampaigns((current) => current.filter((campaign) => !selectedIds.includes(campaign.id)));
@@ -246,11 +255,16 @@ export default function Campaign() {
   if (showAddCampaign || editingCampaign) {
     return (
       <AddCampaign
-        onCancel={() => setShowAddCampaign(false)}
+        onCancel={() => {
+          setShowAddCampaign(false);
+          setEditingCampaign(null);
+          setViewingCampaign(false);
+        }}
         onSave={handleSaveCampaign}
         initialForm={editingCampaign ? toForm(editingCampaign) : emptyForm}
         owners={owners}
         saving={saving}
+        readOnly={viewingCampaign}
       />
     );
   }
@@ -272,7 +286,7 @@ export default function Campaign() {
               Plan and track marketing campaigns.
             </p>
           </div>
-          <button
+          {canCreate && <button
             type="button"
             onClick={() => {
               setEditingCampaign(null);
@@ -282,7 +296,7 @@ export default function Campaign() {
           >
             <Plus size={16} />
             Create campaign
-          </button>
+          </button>}
         </div>
 
         {error && (
@@ -331,7 +345,7 @@ export default function Campaign() {
             entries
           </label>
         </div>
-{selectedCount > 0 && (
+{canDelete && selectedCount > 0 && (
             <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
               <span>{selectedCount} selected</span>
               <div className="flex gap-2">
@@ -349,7 +363,7 @@ export default function Campaign() {
           <table className="w-full min-w-[1000px] text-start">
             <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.02]">
               <tr>
-                <th className="w-12 px-5 py-3">
+                {canDelete && <th className="w-12 px-5 py-3">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -357,7 +371,7 @@ export default function Campaign() {
                     className="size-4 accent-brand-500"
                     aria-label="Select all campaigns"
                   />
-                </th>
+                </th>}
 
                 <TableHeader>CAMPAIGN NAME</TableHeader>
                 <TableHeader>TYPE</TableHeader>
@@ -367,7 +381,7 @@ export default function Campaign() {
                 <TableHeader>BUDGETED COST</TableHeader>
                 <TableHeader>ACTUAL COST</TableHeader>
 
-                <th className={thClass}>ACTIONS</th>
+                {(canUpdate || canDelete) && <th className={thClass}>ACTIONS</th>}
               </tr>
             </thead>
 
@@ -379,7 +393,7 @@ export default function Campaign() {
                   key={campaign.id}
                   className="transition hover:bg-gray-50 dark:hover:bg-white/[0.02]"
                 >
-                  <td className="px-5 py-4">
+                  {canDelete && <td className="px-5 py-4">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(campaign.id)}
@@ -393,7 +407,7 @@ export default function Campaign() {
                       className="size-4 accent-brand-500"
                       aria-label={`Select ${campaign.name}`}
                     />
-                  </td>
+                  </td>}
 
                   <td className="px-3 py-4 sm:px-5">
                     <button
@@ -428,15 +442,16 @@ export default function Campaign() {
                     {campaign.actualCost}
                   </td>
 
-                  <td className="px-3 py-4 sm:px-5">
+                  {(canView || canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                     <div className="flex items-center gap-1">
-                      <button
+                      {canView && <button
                         type="button"
                         title="View"
                         onClick={() => {
                           void getCampaign(campaign.id)
                             .then((source) => {
                               setEditingCampaign(source);
+                              setViewingCampaign(true);
                               setShowAddCampaign(false);
                             })
                             .catch((reason: unknown) =>
@@ -446,15 +461,16 @@ export default function Campaign() {
                         className="rounded-md p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-white/[0.05] dark:hover:text-gray-300"
                       >
                         <Eye size={16} />
-                      </button>
+                      </button>}
 
-                      <button
+                      {canUpdate && <button
                         type="button"
                         title="Edit"
                         onClick={() => {
                           void getCampaign(campaign.id)
                             .then((source) => {
                               setEditingCampaign(source);
+                              setViewingCampaign(false);
                               setShowAddCampaign(false);
                             })
                             .catch((reason: unknown) =>
@@ -464,9 +480,9 @@ export default function Campaign() {
                         className="rounded-md p-1.5 text-brand-500 transition hover:bg-brand-50 dark:hover:bg-brand-500/10"
                       >
                         <Pencil size={16} />
-                      </button>
+                      </button>}
 
-                      <button
+                      {canDelete && <button
                         type="button"
                         title="Delete"
                         onClick={() =>
@@ -475,9 +491,9 @@ export default function Campaign() {
                         className="rounded-md p-1.5 text-error-500 transition hover:bg-error-50 dark:hover:bg-error-500/10"
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </button>}
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -545,6 +561,7 @@ type AddCampaignProps = {
   initialForm?: CampaignForm;
   owners: CampaignOwnerOption[];
   saving: boolean;
+  readOnly?: boolean;
 };
 
 function AddCampaign({
@@ -553,6 +570,7 @@ function AddCampaign({
   initialForm = emptyForm,
   owners,
   saving,
+  readOnly = false,
 }: AddCampaignProps) {
   const [form, setForm] = useState<CampaignForm>(initialForm);
   const [formError, setFormError] = useState("");
@@ -574,6 +592,7 @@ function AddCampaign({
     event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
+    if (readOnly) return;
 
     setFormError("");
     void onSave(form).catch((reason: unknown) => {
@@ -603,8 +622,8 @@ function AddCampaign({
       >
         {/* Form Header */}
         <div className="flex items-center justify-between border-b border-gray-200 p-5 dark:border-gray-800">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            {initialForm === emptyForm ? "Add campaign" : "Edit campaign"}
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            {readOnly ? "View campaign" : initialForm === emptyForm ? "Add campaign" : "Edit campaign"}
           </h2>
 
           <div className="flex gap-3">
@@ -616,12 +635,12 @@ function AddCampaign({
               Cancel
             </button>
 
-            <button
+            {!readOnly && <button
               type="submit"
               className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
             >
               {saving ? "Saving..." : "Save"}
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -634,7 +653,7 @@ function AddCampaign({
           </div>
         )}
 
-        <div className="space-y-6 p-5 sm:p-6">
+        <fieldset disabled={readOnly} className="space-y-6 p-5 sm:p-6">
           {/* Campaign Details */}
           <FormSection title="Campaign details">
             <div className="grid gap-5 md:grid-cols-2">
@@ -768,7 +787,7 @@ function AddCampaign({
               />
             </div>
           </FormSection>
-        </div>
+        </fieldset>
       </form>
     </div>
   );

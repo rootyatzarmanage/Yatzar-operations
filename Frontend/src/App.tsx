@@ -1,7 +1,6 @@
 import { Route, BrowserRouter as Router, Routes } from "react-router";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import AppLayout from "./layout/AppLayout";
-import Analytics from "./pages/Analytics";
 import AppPermission from "./pages/AppPermission";
 import Contacts from "./pages/Contacts";
 import Customers from "./pages/Customers";
@@ -19,8 +18,9 @@ import Calendar from "./pages/Calendar";
 import EmailMarketing from "./pages/EmailMarketing";
 import Campaign from "./pages/Campaigns";
 import EventWebinar from "./pages/EventWebinar";
-import { useAuth } from "./context/AuthContext";
+import { hasPermission, useAuth } from "./context/AuthContext";
 import { Navigate, useLocation } from "react-router";
+import type { ReactNode } from "react";
 
 function ProtectedApp() {
   const { user, isLoading } = useAuth();
@@ -28,6 +28,32 @@ function ProtectedApp() {
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return <AppLayout />;
+}
+
+function PermissionRoute({ menu, children }: { menu: string | string[]; children: ReactNode }) {
+  const { user } = useAuth();
+  const allowed = Array.isArray(menu)
+    ? menu.some((permissionMenu) => hasPermission(user, permissionMenu))
+    : hasPermission(user, menu);
+  return allowed ? children : <Navigate to="/" replace />;
+}
+
+function DefaultAppRoute() {
+  const { user } = useAuth();
+  const firstAllowedPath = [
+    ["Teams", "/teams"],
+    ["Workspace", "/workspace"],
+    ["Contacts", "/contacts"],
+    ["Tasks", "/task"],
+    ["Meetings", "/meetings"],
+    ["Calls", "/calls"],
+    ["Campaigns", "/campaigns"],
+    ["Email Marketing", "/email-marketing"],
+    ["Event Webinar", "/event-webinar"],
+    ["App Permission", "/app-permission"],
+  ].find(([menu]) => hasPermission(user, menu));
+
+  return <Navigate to={firstAllowedPath?.[1] ?? "/profile"} replace />;
 }
 
 export default function App() {
@@ -39,30 +65,30 @@ export default function App() {
           {/* Dashboard Layout */}
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedApp />}>
-            <Route index path="/" element={<Analytics />} />
-            <Route path="/teams" element={<Teams />} />
-            <Route path="/others" element={<Others />} />
+            <Route index path="/" element={<DefaultAppRoute />} />
+            <Route path="/teams" element={<PermissionRoute menu="Teams"><Teams /></PermissionRoute>} />
+            <Route path="/others" element={<PermissionRoute menu="Teams"><Others /></PermissionRoute>} />
 
             {/* App Permission */}
-            <Route path="/app-permission" element={<AppPermission />} />
+            <Route path="/app-permission" element={<PermissionRoute menu="App Permission"><AppPermission /></PermissionRoute>} />
 
             {/* Workspace */}
-            <Route path="/workspace" element={<Workspace />} />
+            <Route path="/workspace" element={<PermissionRoute menu="Workspace"><Workspace /></PermissionRoute>} />
 
             {/* Contacts */}
-            <Route path="/contacts" element={<Contacts />} />
+            <Route path="/contacts" element={<PermissionRoute menu="Contacts"><Contacts /></PermissionRoute>} />
             <Route path="/profile" element={<Profile />} />
 
             {/* Workspace menu: Engagement */}
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/customers" element={<Customers />} />
-            <Route path="/task" element={<Task />} />
-            <Route path="/meetings" element={<Meetings />} />
-            <Route path="/calls" element={<Calls />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/email-marketing" element={<EmailMarketing />} />
-            <Route path="/campaigns" element={<Campaign />} />
-            <Route path="/event-webinar" element={<EventWebinar />} />
+            <Route path="/leads" element={<PermissionRoute menu="Contacts"><Leads /></PermissionRoute>} />
+            <Route path="/customers" element={<PermissionRoute menu="Contacts"><Customers /></PermissionRoute>} />
+            <Route path="/task" element={<PermissionRoute menu="Tasks"><Task /></PermissionRoute>} />
+            <Route path="/meetings" element={<PermissionRoute menu="Meetings"><Meetings /></PermissionRoute>} />
+            <Route path="/calls" element={<PermissionRoute menu="Calls"><Calls /></PermissionRoute>} />
+            <Route path="/calendar" element={<PermissionRoute menu={["Tasks", "Meetings", "Calls", "Event Webinar"]}><Calendar /></PermissionRoute>} />
+            <Route path="/email-marketing" element={<PermissionRoute menu="Email Marketing"><EmailMarketing /></PermissionRoute>} />
+            <Route path="/campaigns" element={<PermissionRoute menu="Campaigns"><Campaign /></PermissionRoute>} />
+            <Route path="/event-webinar" element={<PermissionRoute menu="Event Webinar"><EventWebinar /></PermissionRoute>} />
           </Route>
 
           {/* Fallback Route */}

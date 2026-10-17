@@ -6,6 +6,9 @@ import {
   listWorkspaces,
   updateWorkspace,
   deleteWorkspaces,
+  uploadWorkspaceImage,
+  deleteWorkspaceImage,
+  getWorkspaceImageUrl,
 } from "@/api/workspaces";
 import type {
   Workspace as BaseWorkspace,
@@ -13,15 +16,14 @@ import type {
   WorkspaceStatus,
 } from "@/api/workspaces";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useAuth } from "@/context/AuthContext";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import { getEmployeeWorkspaceIds } from "@/utils/workspaceAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 
-type WorkspaceItem = BaseWorkspace & { image?: string | null };
-type WorkspaceRequest = BaseWorkspacePayload & { image?: string | null };
+type WorkspaceItem = BaseWorkspace;
 
 type WorkspaceFormValues = {
   name: string;
@@ -63,6 +65,9 @@ export default function Workspace() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const canCreate = hasPermission(user, "Workspace", "create");
+  const canUpdate = hasPermission(user, "Workspace", "update");
+  const canDelete = hasPermission(user, "Workspace", "delete");
   const { enterWorkspace } = useWorkspace();
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +77,8 @@ export default function Workspace() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<WorkspaceFormValues>(emptyForm);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const [apiError, setApiError] = useState("");
@@ -158,11 +165,16 @@ export default function Workspace() {
     setShowForm(false);
     setEditingId(null);
     setFormValues(emptyForm);
+    setSelectedImage(null);
+    setRemoveImage(false);
     setFormError("");
     setApiError("");
   };
 
   const handleAddNew = () => {
+    if (!canCreate) return;
+    setSelectedImage(null);
+    setRemoveImage(false);
     setFormValues(emptyForm);
     setEditingId(null);
     setFormError("");
@@ -171,12 +183,15 @@ export default function Workspace() {
   };
 
   const handleEdit = (workspace: WorkspaceItem) => {
+    if (!canUpdate) return;
+    setSelectedImage(null);
+    setRemoveImage(false);
     setEditingId(workspace.id);
     setFormValues({
       name: workspace.name,
       description: workspace.description,
       status: workspace.status,
-      image: workspace.image ?? "",
+      image: getWorkspaceImageUrl(workspace.image),
     });
     setFormError("");
     setApiError("");
@@ -184,6 +199,7 @@ export default function Workspace() {
   };
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (!canUpdate) return;
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -192,6 +208,8 @@ export default function Workspace() {
       setFormError("Please choose an image file.");
       return;
     }
+    setSelectedImage(file);
+    setRemoveImage(false);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -241,31 +259,47 @@ export default function Workspace() {
     setFormError("");
     setApiError("");
     setIsSaving(true);
-    const payload: WorkspaceRequest = {
+    const payload: BaseWorkspacePayload = {
       name: trimmedName,
       description: trimmedDescription,
       status: formValues.status,
-      // image: formValues.image || null,
     };
+    let createdWorkspace: WorkspaceItem | null = null;
     try {
+      let saved: WorkspaceItem;
       if (editingId !== null) {
-        const saved = (await updateWorkspace(
+        if (!canUpdate) return;
+        saved = await updateWorkspace(
           editingId,
           payload,
-        )) as WorkspaceItem;
-        setWorkspaces((current) =>
-          current.map((item) => (item.id === saved.id ? saved : item)),
         );
       } else {
-        const saved = (await createWorkspace(payload)) as WorkspaceItem;
-        setWorkspaces((current) => [saved, ...current]);
-        setPage(1);
+        if (!canCreate) return;
+        saved = await createWorkspace(payload);
+        createdWorkspace = saved;
       }
+      if (selectedImage) {
+        const uploaded = await uploadWorkspaceImage(saved.id, selectedImage, Boolean(saved.image));
+        saved = { ...saved, image: uploaded.image };
+      } else if (removeImage && saved.image) {
+        await deleteWorkspaceImage(saved.id);
+        saved = { ...saved, image: null };
+      }
+      setWorkspaces((current) => editingId !== null
+        ? current.map((item) => (item.id === saved.id ? saved : item))
+        : [saved, ...current]);
+      if (editingId === null) setPage(1);
       resetForm();
     } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : "Unable to save workspace.",
-      );
+      if (createdWorkspace) {
+        setWorkspaces((current) => [createdWorkspace!, ...current]);
+        setEditingId(createdWorkspace.id);
+        setFormError("Workspace was created, but its image could not be saved. Save again to retry.");
+      } else {
+        setFormError(
+          error instanceof Error ? error.message : "Unable to save workspace.",
+        );
+      }
     } finally {
       setIsSaving(false);
     }
@@ -280,6 +314,7 @@ export default function Workspace() {
   };
 
   const handleDelete = (id: string) => {
+    if (!canDelete) return;
     setDeleteId(id);
   };
 
@@ -287,7 +322,7 @@ export default function Workspace() {
     workspaces.find((workspace) => workspace.id === deleteId) ?? null;
 
   const confirmDelete = async () => {
-    if (deleteId === null) return;
+    if (deleteId === null || !canDelete) return;
     setApiError("");
     setIsSaving(true);
     try {
@@ -324,7 +359,7 @@ export default function Workspace() {
   };
 
   const handleBulkDelete = async () => {
-    if (visibleSelectedIds.length === 0 || isSaving) return;
+    if (!canDelete || visibleSelectedIds.length === 0 || isSaving) return;
 
     const idsToDelete = [...visibleSelectedIds];
 
@@ -405,13 +440,13 @@ export default function Workspace() {
                 Select a workspace card to open its menu.
               </p>
             </div>
-            <button
+            {canCreate && <button
               type="button"
               onClick={handleAddNew}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
             >
               <span className="text-lg leading-none">+</span>Add workspace
-            </button>
+            </button>}
           </div>
 
           {/* Search + page size */}
@@ -453,7 +488,7 @@ export default function Workspace() {
           </div>
 
           {/* Bulk action bar */}
-          {selectedCount > 0 && (
+          {canDelete && selectedCount > 0 && (
             <div className="flex flex-col gap-3 border-t border-gray-200 bg-blue-50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-gray-800 dark:bg-white/5">
               <p className="text-gray-700 dark:text-gray-300">
                 <span className="font-semibold">{selectedCount}</span> selected
@@ -502,7 +537,7 @@ export default function Workspace() {
               </p>
             ) : (
               <>
-                <label className="flex w-fit cursor-pointer items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
+                {canDelete && <label className="flex w-fit cursor-pointer items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -515,7 +550,7 @@ export default function Workspace() {
                     aria-label="Select all workspaces"
                   />
                   Select all
-                </label>
+                </label>}
 
                 <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   {paginatedWorkspaces.map((workspace) => {
@@ -534,7 +569,7 @@ export default function Workspace() {
                         <div className="relative grid h-40 w-full place-items-center overflow-hidden bg-linear-to-br from-brand-50 to-gray-100 text-brand-500 dark:from-white/5 dark:to-white/2 dark:text-brand-400">
                           {workspace.image ? (
                             <img
-                              src={workspace.image}
+                              src={getWorkspaceImageUrl(workspace.image)}
                               alt={workspace.name}
                               className="h-full w-full object-cover"
                             />
@@ -543,7 +578,7 @@ export default function Workspace() {
                               <LayoutIcon className="size-7" />
                             </span>
                           )}
-                          <label
+                          {canDelete && <label
                             onClick={(event) => event.stopPropagation()}
                             className="absolute top-3 left-3 grid size-7 cursor-pointer place-items-center rounded-md bg-white/90 shadow dark:bg-gray-900/80"
                           >
@@ -554,7 +589,7 @@ export default function Workspace() {
                               className="size-4 rounded accent-brand-500"
                               aria-label={`Select ${workspace.name}`}
                             />
-                          </label>
+                          </label>}
                         </div>
 
                         <div className="flex flex-1 flex-col gap-3 p-4">
@@ -582,7 +617,7 @@ export default function Workspace() {
                               Open &rarr;
                             </span>
                             <div className="flex items-center gap-3">
-                              <button
+                            {canUpdate && <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -602,8 +637,8 @@ export default function Workspace() {
                                   <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
                                   <path d="m13.5 6.5 4 4" />
                                 </svg>
-                              </button>
-                              <button
+                            </button>}
+                            {canDelete && <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -625,7 +660,7 @@ export default function Workspace() {
                                   <path d="M7 7l1 12h8l1-12" />
                                   <path d="M10 11v5M14 11v5" />
                                 </svg>
-                              </button>
+                            </button>}
                             </div>
                           </div>
                         </div>
@@ -696,7 +731,7 @@ export default function Workspace() {
               >
                 Cancel
               </button>
-              <button
+              {(editingId === null ? canCreate : canUpdate) && <button
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={isSaving}
@@ -707,7 +742,7 @@ export default function Workspace() {
                   : editingId !== null
                     ? "Save changes"
                     : "Submit"}
-              </button>
+              </button>}
             </div>
           </div>
 
@@ -716,7 +751,7 @@ export default function Workspace() {
               {/* Workspace image */}
               <div className="flex items-center gap-4 md:col-span-2">
                 <div className="grid h-24 w-40 shrink-0 place-items-center overflow-hidden rounded-xl bg-gray-100 text-gray-400 dark:bg-white/5">
-                  {formValues.image ? (
+                {formValues.image && !removeImage ? (
                     <img
                       src={formValues.image}
                       alt="Workspace"
@@ -731,17 +766,21 @@ export default function Workspace() {
                     Workspace image
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    {canUpdate && <button
                       type="button"
                       onClick={() => imageInputRef.current?.click()}
                       className="h-9 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
                     >
                       {formValues.image ? "Change image" : "Upload image"}
-                    </button>
-                    {formValues.image && (
+                    </button>}
+                    {formValues.image && canUpdate && (
                       <button
                         type="button"
-                        onClick={() => handleFieldChange("image", "")}
+                        onClick={() => {
+                          handleFieldChange("image", "");
+                          setSelectedImage(null);
+                          setRemoveImage(true);
+                        }}
                         className="h-9 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
                       >
                         Remove

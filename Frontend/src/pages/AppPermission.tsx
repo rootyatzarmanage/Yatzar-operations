@@ -19,6 +19,7 @@ import {
 } from "@/icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 type Permission = "create" | "view" | "update" | "delete";
 type PermissionMap = Record<string, Record<Permission, boolean>>;
@@ -42,7 +43,7 @@ const operations: { key: Permission; label: string }[] = [
   { key: "delete", label: "Delete" },
 ];
 
-const menuItems: MenuItem[] = [
+const knownMenuItems: MenuItem[] = [
   { name: "Teams", icon: UsersIcon },
   { name: "App Permission", icon: ShieldIcon },
   { name: "Workspace", icon: WorkspaceIcon },
@@ -55,9 +56,12 @@ const menuItems: MenuItem[] = [
   { name: "Event Webinar", icon: ShieldIcon },
 ];
 
-const createPermissions = (enabled = false): PermissionMap =>
+const createPermissions = (
+  enabled = false,
+  items: MenuItem[] = knownMenuItems,
+): PermissionMap =>
   Object.fromEntries(
-    menuItems.map(({ name }) => [
+    items.map(({ name }) => [
       name,
       operations.reduce(
         (permissions, operation) => ({
@@ -74,7 +78,12 @@ const tableInputClass =
 
 export default function AppPermission() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const canCreateRole = hasPermission(user, "App Permission", "create");
+  const canUpdateRole = hasPermission(user, "App Permission", "update");
+  const canDeleteRole = hasPermission(user, "App Permission", "delete");
   const [roles, setRoles] = useState<Role[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(knownMenuItems);
   const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -88,27 +97,51 @@ export default function AppPermission() {
     useState<PermissionMap>(createPermissions());
   const editingRole = roles.find((role) => role.id === editingRoleId);
 
-  const roleFromApi = (record: RoleRecord): Role => ({
-    id: record.id,
-    name: record.name,
-    isSystem: record.is_system,
-    permissions: Object.fromEntries(
-      record.permissions.map((permission) => [
-        permission.menu,
-        {
-          create: permission.create,
-          view: permission.view,
-          update: permission.update,
-          delete: permission.delete,
-        },
-      ]),
-    ),
-  });
+  const roleFromApi = (record: RoleRecord, menuCatalog: MenuItem[]): Role => {
+    const mappedPermissions = createPermissions(false, menuCatalog);
+    for (const permission of record.permissions) {
+      mappedPermissions[permission.menu] = {
+        create: permission.create,
+        view: permission.view,
+        update: permission.update,
+        delete: permission.delete,
+      };
+    }
+
+    return {
+      id: record.id,
+      name: record.name,
+      isSystem: record.is_system,
+      permissions: mappedPermissions,
+    };
+  };
 
   const refreshPermissionData = async () => {
     try {
       const roleRecords = await listRoles();
-      setRoles(roleRecords.map(roleFromApi));
+      const names = new Set(
+        [
+          ...(user?.permissions ?? []).map(({ menu }) => menu),
+          ...roleRecords.flatMap((role) => role.permissions.map(({ menu }) => menu)),
+        ],
+      );
+      const iconByName = new Map<string, MenuItem["icon"]>(
+        knownMenuItems.map(({ name, icon }) => [
+          name.toLowerCase().replace(/[^a-z0-9]/g, ""),
+          icon,
+        ] as const),
+      );
+      const menuNames = [...names];
+      const menuCatalog = menuNames
+        .sort((first, second) => first.localeCompare(second))
+        .map((name) => ({
+          name,
+          icon:
+            iconByName.get(name.toLowerCase().replace(/[^a-z0-9]/g, "")) ??
+            ShieldIcon,
+        }));
+      setMenuItems(menuCatalog);
+      setRoles(roleRecords.map((role) => roleFromApi(role, menuCatalog)));
       setApiError("");
     } catch (error) {
       setApiError(
@@ -132,7 +165,7 @@ export default function AppPermission() {
     setIsReadOnly(false);
     setEditingRoleId(null);
     setRoleName("");
-    setPermissions(createPermissions());
+    setPermissions(createPermissions(false, menuItems));
     setIsEditorOpen(true);
   };
 
@@ -156,20 +189,36 @@ export default function AppPermission() {
     setPermissions((current) => ({
       ...current,
       [menuName]: {
-        ...current[menuName],
-        [operation]: !current[menuName][operation],
+        ...(current[menuName] ?? {
+          create: false,
+          view: false,
+          update: false,
+          delete: false,
+        }),
+        [operation]: !(current[menuName]?.[operation] ?? false),
       },
     }));
   };
 
   const saveRole = async () => {
+    if (editingRoleId === null ? !canCreateRole : !canUpdateRole) return;
     const trimmedName = roleName.trim();
     if (!trimmedName) return;
 
     try {
       const payload = {
         name: trimmedName,
-        permissions: permissions as Record<string, PermissionValues>,
+        permissions: Object.fromEntries(
+          menuItems.map(({ name }) => [
+            name,
+            permissions[name] ?? {
+              create: false,
+              view: false,
+              update: false,
+              delete: false,
+            },
+          ]),
+        ) as Record<string, PermissionValues>,
       };
       if (editingRoleId === null) {
         await createRole(payload);
@@ -177,6 +226,7 @@ export default function AppPermission() {
         await updateRole(String(editingRoleId), payload);
       }
       await refreshPermissionData();
+      window.dispatchEvent(new Event("auth:permissions-updated"));
       setIsEditorOpen(false);
     } catch (error) {
       setApiError(
@@ -285,7 +335,7 @@ export default function AppPermission() {
                         >
                           <input
                             type="checkbox"
-                            checked={permissions[name][operation.key]}
+                            checked={permissions[name]?.[operation.key] ?? false}
                             disabled={isReadOnly}
                             onChange={() =>
                               togglePermission(name, operation.key)
@@ -314,14 +364,14 @@ export default function AppPermission() {
                   Permissions are configured on roles. Each account inherits the permissions of its assigned role.
                 </p>
               </div>
-              <button
+              {canCreateRole && <button
                 type="button"
                 onClick={openCreate}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
               >
                 <span className="text-lg leading-none">+</span>
                 Create role
-              </button>
+              </button>}
             </div>
             <div className="p-4 sm:p-5">
               <input
@@ -364,12 +414,12 @@ export default function AppPermission() {
                             <button type="button" onClick={() => openView(role)} aria-label={`View ${role.name} permissions`} title="View" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
                               <EyeIcon className="size-4" />
                             </button>
-                            <button type="button" onClick={() => openEdit(role)} aria-label={`Edit ${role.name} permissions`} title="Edit" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
+                            {canUpdateRole && <button type="button" onClick={() => openEdit(role)} aria-label={`Edit ${role.name} permissions`} title="Edit" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
                               <EditIcon className="size-4" />
-                            </button>
-                            <button type="button" onClick={() => setDeleteTarget(role)} disabled={role.isSystem} aria-label={`Delete ${role.name}`} title={role.isSystem ? "System roles cannot be deleted" : "Delete role"} className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-error-500/10">
+                            </button>}
+                            {canDeleteRole && <button type="button" onClick={() => setDeleteTarget(role)} disabled={role.isSystem} aria-label={`Delete ${role.name}`} title={role.isSystem ? "System roles cannot be deleted" : "Delete role"} className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-error-500/10">
                               <TrashIcon className="size-4" />
-                            </button>
+                            </button>}
                           </div>
                         </td>
                       </tr>
@@ -416,9 +466,11 @@ export default function AppPermission() {
                 type="button"
                 onClick={() => {
                   void (async () => {
+                    if (!canDeleteRole) return;
                     try {
                       await deleteRole(String(deleteTarget.id));
                       await refreshPermissionData();
+                      window.dispatchEvent(new Event("auth:permissions-updated"));
                       setDeleteTarget(null);
                     } catch (error) {
                       setApiError(

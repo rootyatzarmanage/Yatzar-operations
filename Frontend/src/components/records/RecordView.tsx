@@ -13,7 +13,7 @@ type Props = {
   blocks: ViewBlock[];
   actions?: ReactNode;
   onBack: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
 };
 
 const card =
@@ -53,13 +53,13 @@ export default function RecordView({
         </button>
         <div className="flex flex-wrap items-center gap-3">
           {actions}
-          <button
+          {onEdit && <button
             type="button"
             onClick={onEdit}
             className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
           >
             Edit {singular.toLowerCase()}
-          </button>
+          </button>}
         </div>
       </div>
 
