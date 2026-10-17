@@ -440,20 +440,35 @@ export default function Workspace() {
                 Select a workspace card to open its menu.
               </p>
             </div>
-            {canCreate && <button
-              type="button"
-              onClick={handleAddNew}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
-            >
-              <span className="text-lg leading-none">+</span>Add workspace
-            </button>}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={handleAddNew}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
+              >
+                <span className="text-lg leading-none">+</span>Add workspace
+              </button>
+            )}
           </div>
 
           {/* Search + page size */}
           <div className="flex flex-col gap-3 border-t border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5 dark:border-gray-800">
             <div className="relative w-full sm:max-w-xs">
               <span className="pointer-events-none absolute inset-s-3 top-1/2 -translate-y-1/2 text-gray-400">
-                ⌕
+                <svg
+                  className="size-5"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.375 17.208a7.833 7.833 0 1 0 0-15.667 7.833 7.833 0 0 0 0 15.667ZM15.418 14.357l2.82 2.821"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </span>
               <input
                 type="text"
@@ -537,20 +552,22 @@ export default function Workspace() {
               </p>
             ) : (
               <>
-                {canDelete && <label className="flex w-fit cursor-pointer items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(el) => {
-                      if (el) el.indeterminate = someSelected;
-                    }}
-                    onChange={toggleSelectAll}
-                    disabled={filteredWorkspaces.length === 0}
-                    className="size-4 rounded accent-brand-500"
-                    aria-label="Select all workspaces"
-                  />
-                  Select all
-                </label>}
+                {canDelete && (
+                  <label className="flex w-fit cursor-pointer items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someSelected;
+                      }}
+                      onChange={toggleSelectAll}
+                      disabled={filteredWorkspaces.length === 0}
+                      className="size-4 rounded accent-brand-500"
+                      aria-label="Select all workspaces"
+                    />
+                    Select all
+                  </label>
+                )}
 
                 <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   {paginatedWorkspaces.map((workspace) => {
@@ -578,18 +595,20 @@ export default function Workspace() {
                               <LayoutIcon className="size-7" />
                             </span>
                           )}
-                          {canDelete && <label
-                            onClick={(event) => event.stopPropagation()}
-                            className="absolute top-3 left-3 grid size-7 cursor-pointer place-items-center rounded-md bg-white/90 shadow dark:bg-gray-900/80"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelected(workspace.id)}
-                              className="size-4 rounded accent-brand-500"
-                              aria-label={`Select ${workspace.name}`}
-                            />
-                          </label>}
+                          {canDelete && (
+                            <label
+                              onClick={(event) => event.stopPropagation()}
+                              className="absolute top-3 left-3 grid size-7 cursor-pointer place-items-center rounded-md bg-white/90 shadow dark:bg-gray-900/80"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelected(workspace.id)}
+                                className="size-4 rounded accent-brand-500"
+                                aria-label={`Select ${workspace.name}`}
+                              />
+                            </label>
+                          )}
                         </div>
 
                         <div className="flex flex-1 flex-col gap-3 p-4">
@@ -617,50 +636,54 @@ export default function Workspace() {
                               Open &rarr;
                             </span>
                             <div className="flex items-center gap-3">
-                            {canUpdate && <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleEdit(workspace);
-                                }}
-                                className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
-                                aria-label={`Edit ${workspace.name}`}
-                                title="Edit"
-                              >
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  className="size-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
+                              {canUpdate && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleEdit(workspace);
+                                  }}
+                                  className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                                  aria-label={`Edit ${workspace.name}`}
+                                  title="Edit"
                                 >
-                                  <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
-                                  <path d="m13.5 6.5 4 4" />
-                                </svg>
-                            </button>}
-                            {canDelete && <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleDelete(workspace.id);
-                                }}
-                                className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
-                                aria-label={`Delete ${workspace.name}`}
-                                title="Delete"
-                              >
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  className="size-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="size-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                  >
+                                    <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
+                                    <path d="m13.5 6.5 4 4" />
+                                  </svg>
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleDelete(workspace.id);
+                                  }}
+                                  className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
+                                  aria-label={`Delete ${workspace.name}`}
+                                  title="Delete"
                                 >
-                                  <path d="M4 7h16" />
-                                  <path d="M9 7V4h6v3" />
-                                  <path d="M7 7l1 12h8l1-12" />
-                                  <path d="M10 11v5M14 11v5" />
-                                </svg>
-                            </button>}
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="size-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                  >
+                                    <path d="M4 7h16" />
+                                    <path d="M9 7V4h6v3" />
+                                    <path d="M7 7l1 12h8l1-12" />
+                                    <path d="M10 11v5M14 11v5" />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -731,18 +754,20 @@ export default function Workspace() {
               >
                 Cancel
               </button>
-              {(editingId === null ? canCreate : canUpdate) && <button
-                type="button"
-                onClick={() => void handleSave()}
-                disabled={isSaving}
-                className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50 sm:flex-none sm:px-4"
-              >
-                {isSaving
-                  ? "Saving…"
-                  : editingId !== null
-                    ? "Save changes"
-                    : "Submit"}
-              </button>}
+              {(editingId === null ? canCreate : canUpdate) && (
+                <button
+                  type="button"
+                  onClick={() => void handleSave()}
+                  disabled={isSaving}
+                  className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50 sm:flex-none sm:px-4"
+                >
+                  {isSaving
+                    ? "Saving…"
+                    : editingId !== null
+                      ? "Save changes"
+                      : "Submit"}
+                </button>
+              )}
             </div>
           </div>
 
@@ -751,7 +776,7 @@ export default function Workspace() {
               {/* Workspace image */}
               <div className="flex items-center gap-4 md:col-span-2">
                 <div className="grid h-24 w-40 shrink-0 place-items-center overflow-hidden rounded-xl bg-gray-100 text-gray-400 dark:bg-white/5">
-                {formValues.image && !removeImage ? (
+                  {formValues.image && !removeImage ? (
                     <img
                       src={formValues.image}
                       alt="Workspace"
@@ -766,13 +791,15 @@ export default function Workspace() {
                     Workspace image
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {canUpdate && <button
-                      type="button"
-                      onClick={() => imageInputRef.current?.click()}
-                      className="h-9 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
-                    >
-                      {formValues.image ? "Change image" : "Upload image"}
-                    </button>}
+                    {canUpdate && (
+                      <button
+                        type="button"
+                        onClick={() => imageInputRef.current?.click()}
+                        className="h-9 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        {formValues.image ? "Change image" : "Upload image"}
+                      </button>
+                    )}
                     {formValues.image && canUpdate && (
                       <button
                         type="button"
