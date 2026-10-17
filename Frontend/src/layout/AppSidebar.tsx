@@ -37,6 +37,7 @@ type NavItem = {
 function permissionMenuForPath(path: string): string | null {
   const menuByPath: Record<string, string> = {
     "/teams": "Teams",
+    "/others": "Teams",
     "/app-permission": "App Permission",
     "/workspace": "Workspace",
     "/contacts": "Contacts",

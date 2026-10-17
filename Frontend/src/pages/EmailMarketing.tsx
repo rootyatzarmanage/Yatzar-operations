@@ -7,6 +7,7 @@ import { listTags, type Tag } from "@/api/tags";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import {
   Mail,
   X,
@@ -72,7 +73,7 @@ function EmailListModal({
   contacts: Contact[];
   tagName: string;
   onClose: () => void;
-  onToggleContact: (contact: Contact) => Promise<void>;
+  onToggleContact?: (contact: Contact) => Promise<void>;
 }) {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -164,9 +165,9 @@ function EmailListModal({
                     Email
                   </th>
 
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
+                  {onToggleContact && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
                     Action
-                  </th>
+                  </th>}
                 </tr>
               </thead>
 
@@ -181,11 +182,12 @@ function EmailListModal({
                       {contact.email}
                     </td>
 
-                    <td className="px-4 py-3 text-right">
+                    {onToggleContact && <td className="px-4 py-3 text-right">
                       <button
                         type="button"
                         disabled={updatingId === contact.id}
                         onClick={() => {
+                          if (!onToggleContact) return;
                           setUpdatingId(contact.id);
 
                           void onToggleContact(contact).finally(() =>
@@ -204,7 +206,7 @@ function EmailListModal({
                             ? "Disable"
                             : "Enable"}
                       </button>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
 
@@ -448,6 +450,9 @@ function ReportCampaignModal({
 /* -------------------------------------------------------------------------- */
 
 export default function EmailMarketing() {
+  const { user } = useAuth();
+  const canCreate = hasPermission(user, "Email Marketing", "create");
+  const canDelete = hasPermission(user, "Email Marketing", "delete");
   const { currentWorkspace } = useWorkspace();
   const workspaceKey = currentWorkspace?.id ?? "__all_workspaces__";
   const [showNewCampaign, setShowNewCampaign] =
@@ -494,6 +499,7 @@ export default function EmailMarketing() {
     form: EmailCampaignForm,
     sendTo: number,
   ) => {
+    if (!canCreate) return;
     const newCampaign: EmailCampaign = {
       id: Date.now(),
       campaignName: form.campaignName,
@@ -551,6 +557,7 @@ export default function EmailMarketing() {
   const handleReplicateCampaign = (
     campaign: EmailCampaign,
   ) => {
+    if (!canCreate) return;
     setReplicateCampaign(campaign);
     setShowNewCampaign(true);
   };
@@ -562,6 +569,7 @@ export default function EmailMarketing() {
   const handleDeleteCampaign = (
     id: number,
   ) => {
+    if (!canDelete) return;
     setCampaigns((previous) =>
       previous.filter(
         (campaign) => campaign.id !== id,
@@ -624,7 +632,7 @@ export default function EmailMarketing() {
               </p>
             </div>
 
-            <button
+            {canCreate && <button
               type="button"
               onClick={() => {
                 setReplicateCampaign(null);
@@ -634,7 +642,7 @@ export default function EmailMarketing() {
             >
               <Plus size={16} />
               New campaign
-            </button>
+            </button>}
           </div>
 
           {/* Search / Entries */}
@@ -800,7 +808,7 @@ export default function EmailMarketing() {
 
                           {/* REPLICATE */}
 
-                          <button
+                          {canCreate && <button
                             type="button"
                             title="Replicate"
                             onClick={() =>
@@ -811,11 +819,11 @@ export default function EmailMarketing() {
                             className="rounded-md bg-warning-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-warning-600"
                           >
                             Replicate
-                          </button>
+                          </button>}
 
                           {/* DELETE */}
 
-                          <button
+                          {canDelete && <button
                             type="button"
                             title="Delete"
                             onClick={() =>
@@ -826,7 +834,7 @@ export default function EmailMarketing() {
                             className="rounded-md bg-error-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-error-600"
                           >
                             Delete
-                          </button>
+                          </button>}
                         </div>
                       </td>
                     </tr>
@@ -921,6 +929,8 @@ function EmailCampaignForm({
     sendTo: number,
   ) => void;
 }) {
+  const { user } = useAuth();
+  const canUpdateContacts = hasPermission(user, "Contacts", "update");
   const { currentWorkspace } = useWorkspace();
   const [mailType, setMailType] =
     useState<MailType>(
@@ -1007,6 +1017,7 @@ function EmailCampaignForm({
   async function toggleEmailOptOut(
     contact: Contact,
   ) {
+    if (!canUpdateContacts) return;
     try {
       const updatedContact =
         await updateContact(
@@ -1474,7 +1485,7 @@ function EmailCampaignForm({
             setShowRecipients(false)
           }
           onToggleContact={
-            toggleEmailOptOut
+            canUpdateContacts ? toggleEmailOptOut : undefined
           }
         />
       )}

@@ -4,7 +4,7 @@ import { listCustomers, type CustomerRecord } from "@/api/customers";
 import { createTask, deleteTask, listTasks, updateTask, type TaskApi, type TaskPayload } from "@/api/task";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import { useAuth } from "@/context/AuthContext";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
@@ -118,6 +118,9 @@ function Toggle({
 
 export default function Tasks({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
+  const canCreate = hasPermission(user, "Tasks", "create");
+  const canUpdate = hasPermission(user, "Tasks", "update");
+  const canDelete = hasPermission(user, "Tasks", "delete");
   const { currentWorkspace } = useWorkspace();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -246,7 +249,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   const allSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const bulkDelete = async () => {
-    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} tasks?`)) return;
+    if (!canDelete || !selectedIds.length || !window.confirm(`Delete ${selectedIds.length} tasks?`)) return;
     try {
       await Promise.all(selectedIds.map((id) => deleteTask(id)));
       setTasks((current) => current.filter((task) => !selectedIds.includes(task.id)));
@@ -257,6 +260,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   };
 
   const openAdd = () => {
+    if (!canCreate) return;
     setEditingId(null);
     setForm(emptyForm);
     setErrors({});
@@ -266,6 +270,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   };
 
   const openEdit = (task: Task) => {
+    if (!canUpdate) return;
     setEditingId(task.id);
     setForm({
       subject: task.subject,
@@ -299,6 +304,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
 
   const handleSave = async (event: FormEvent) => {
     event.preventDefault();
+    if (editingId ? !canUpdate : !canCreate) return;
     if (!form.subject.trim()) {
       setErrors({ subject: "Subject is required." });
       return;
@@ -321,6 +327,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   };
 
   const markComplete = async (id: string) => {
+    if (!canUpdate) return;
     try {
       const updated = await updateTask(id, { status: "Completed" });
       setTasks((current) => current.map((task) => (task.id === id ? fromApiTask(updated, taskOwner) : task)));
@@ -330,7 +337,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   };
 
   const confirmDelete = async () => {
-    if (!deleteId) return;
+    if (!canDelete || !deleteId) return;
     try {
       await deleteTask(deleteId);
       setTasks((current) => current.filter((task) => task.id !== deleteId));
@@ -407,13 +414,13 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                 Track and manage tasks in one place.
               </p>
             </div>
-            <button
+            {canCreate && <button
               type="button"
               onClick={openAdd}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
             >
               <span className="text-lg leading-none">+</span>Create Task
-            </button>
+            </button>}
           </div>
 
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -445,7 +452,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
             </label>
           </div>
 
-          {selectedIds.length > 0 && (
+          {canDelete && selectedIds.length > 0 && (
             <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
               <span>{selectedIds.length} selected</span>
               <div className="flex gap-2">
@@ -459,7 +466,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
             <table className="w-full min-w-[900px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>
+                  {canDelete && <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>}
                   <th className={thClass}>Subject</th>
                   <th className={thClass}>Due date</th>
                   <th className={thClass}>Status</th>
@@ -467,13 +474,13 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                   <th className={thClass}>Related to</th>
                   <th className={thClass}>Contact name</th>
                   <th className={thClass}>Task owner</th>
-                  <th className={`${thClass} text-center`}>Actions</th>
+                  {(canUpdate || canDelete) && <th className={`${thClass} text-center`}>Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {visible.map((task) => (
                   <tr key={task.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
-                    <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(task.id)} onChange={() => setSelectedIds((current) => current.includes(task.id) ? current.filter((id) => id !== task.id) : [...current, task.id])} className="size-4 accent-brand-500" aria-label={`Select ${task.subject}`} /></td>
+                    {canDelete && <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(task.id)} onChange={() => setSelectedIds((current) => current.includes(task.id) ? current.filter((id) => id !== task.id) : [...current, task.id])} className="size-4 accent-brand-500" aria-label={`Select ${task.subject}`} /></td>}
                     <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">{task.subject}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{formatDate(task.dueDate)}</td>
                     <td className="px-3 py-4 sm:px-5">
@@ -485,21 +492,21 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                       {selectionLabel(task.contactMode, task.contactIds) || "—"}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.owner}</td>
-                    <td className="px-3 py-4 sm:px-5">
+                    {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center justify-left gap-1">
-                        {task.status !== "Completed" && (
+                        {canUpdate && task.status !== "Completed" && (
                           <button type="button" onClick={() => markComplete(task.id)} title="Mark complete" aria-label="Mark complete" className="rounded-md p-1.5 text-success-600 hover:bg-success-50">
                             <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
                           </button>
                         )}
-                        <button type="button" onClick={() => openEdit(task)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
+                        {canUpdate && <button type="button" onClick={() => openEdit(task)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" /><path d="m13.5 6.5 4 4" /></svg>
-                        </button>
-                        <button type="button" onClick={() => setDeleteId(task.id)} title="Delete" aria-label="Delete" className="rounded-md p-1.5 text-error-500 hover:bg-error-50">
+                        </button>}
+                        {canDelete && <button type="button" onClick={() => setDeleteId(task.id)} title="Delete" aria-label="Delete" className="rounded-md p-1.5 text-error-500 hover:bg-error-50">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M7 7l1 12h8l1-12" /><path d="M10 11v5M14 11v5" /></svg>
-                        </button>
+                        </button>}
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -537,9 +544,9 @@ export default function Tasks({ embed }: EmbedProps = {}) {
               <button type="button" onClick={closeForm} className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300">
                 Cancel
               </button>
-              <button type="submit" className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
+              {(editingId ? canUpdate : canCreate) && <button type="submit" className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
                 Save task
-              </button>
+              </button>}
             </div>
           </div>
 

@@ -93,22 +93,29 @@ export default function AppPermission() {
     useState<PermissionMap>(createPermissions());
   const editingRole = roles.find((role) => role.id === editingRoleId);
 
-  const roleFromApi = (record: RoleRecord): Role => ({
-    id: record.id,
-    name: record.name,
-    isSystem: record.is_system,
-    permissions: Object.fromEntries(
-      record.permissions.map((permission) => [
-        permission.menu,
-        {
-          create: permission.create,
-          view: permission.view,
-          update: permission.update,
-          delete: permission.delete,
-        },
-      ]),
-    ),
-  });
+  const roleFromApi = (record: RoleRecord): Role => {
+    const mappedPermissions = createPermissions();
+    for (const permission of record.permissions) {
+      const normalizedMenu = permission.menu.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const menu = menuItems.find(
+        (item) => item.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedMenu,
+      );
+      if (!menu) continue;
+      mappedPermissions[menu.name] = {
+        create: permission.create,
+        view: permission.view,
+        update: permission.update,
+        delete: permission.delete,
+      };
+    }
+
+    return {
+      id: record.id,
+      name: record.name,
+      isSystem: record.is_system,
+      permissions: mappedPermissions,
+    };
+  };
 
   const refreshPermissionData = async () => {
     try {
@@ -168,6 +175,7 @@ export default function AppPermission() {
   };
 
   const saveRole = async () => {
+    if (editingRoleId === null ? !canCreateRole : !canUpdateRole) return;
     const trimmedName = roleName.trim();
     if (!trimmedName) return;
 
@@ -182,6 +190,7 @@ export default function AppPermission() {
         await updateRole(String(editingRoleId), payload);
       }
       await refreshPermissionData();
+      window.dispatchEvent(new Event("auth:permissions-updated"));
       setIsEditorOpen(false);
     } catch (error) {
       setApiError(
@@ -421,9 +430,11 @@ export default function AppPermission() {
                 type="button"
                 onClick={() => {
                   void (async () => {
+                    if (!canDeleteRole) return;
                     try {
                       await deleteRole(String(deleteTarget.id));
                       await refreshPermissionData();
+                      window.dispatchEvent(new Event("auth:permissions-updated"));
                       setDeleteTarget(null);
                     } catch (error) {
                       setApiError(

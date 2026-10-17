@@ -278,7 +278,7 @@ export default function RecordPage<T extends StoredRecord>({
   };
 
   const saveAndMove = async (move: RecordMove<T>) => {
-    if (!canUpdate || (editingId ? !canUpdate : !canCreate)) return;
+    if (editingId ? !canUpdate : !canCreate) return;
     const found = validate();
     setErrors(found);
     setFormError("");

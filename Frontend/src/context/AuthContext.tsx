@@ -14,7 +14,11 @@ export function hasPermission(
   menu: string,
   action: "create" | "view" | "update" | "delete" = "view",
 ) {
-  return user?.permissions?.some((permission) => permission.menu === menu && permission[action]) ?? false;
+  const normalizeMenu = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const expectedMenu = normalizeMenu(menu);
+  return user?.permissions?.some(
+    (permission) => normalizeMenu(permission.menu) === expectedMenu && permission[action],
+  ) ?? false;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -55,9 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("focus", refreshWhenActive);
     document.addEventListener("visibilitychange", refreshWhenActive);
+    window.addEventListener("auth:permissions-updated", refreshWhenActive);
     return () => {
       window.removeEventListener("focus", refreshWhenActive);
       document.removeEventListener("visibilitychange", refreshWhenActive);
+      window.removeEventListener("auth:permissions-updated", refreshWhenActive);
     };
   }, [refreshUser]);
 

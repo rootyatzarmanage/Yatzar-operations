@@ -64,7 +64,7 @@ export default function App() {
           <Route element={<ProtectedApp />}>
             <Route index path="/" element={<DefaultAppRoute />} />
             <Route path="/teams" element={<PermissionRoute menu="Teams"><Teams /></PermissionRoute>} />
-            <Route path="/others" element={<Others />} />
+            <Route path="/others" element={<PermissionRoute menu="Teams"><Others /></PermissionRoute>} />
 
             {/* App Permission */}
             <Route path="/app-permission" element={<PermissionRoute menu="App Permission"><AppPermission /></PermissionRoute>} />
