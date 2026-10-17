@@ -4,15 +4,14 @@ import {
   type Contact,
 } from "@/api/contacts";
 import { listTags, type Tag } from "@/api/tags";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import {
-  Eye,
   Mail,
   X,
   Plus,
   Search,
-  Trash2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -449,11 +448,19 @@ function ReportCampaignModal({
 /* -------------------------------------------------------------------------- */
 
 export default function EmailMarketing() {
+  const { currentWorkspace } = useWorkspace();
+  const workspaceKey = currentWorkspace?.id ?? "__all_workspaces__";
   const [showNewCampaign, setShowNewCampaign] =
     useState(false);
 
-  const [campaigns, setCampaigns] =
-    useState<EmailCampaign[]>([]);
+  const [campaignsByWorkspace, setCampaignsByWorkspace] =
+    useState<Record<string, EmailCampaign[]>>({});
+  const campaigns = campaignsByWorkspace[workspaceKey] ?? [];
+  const setCampaigns = (update: (current: EmailCampaign[]) => EmailCampaign[]) =>
+    setCampaignsByWorkspace((current) => ({
+      ...current,
+      [workspaceKey]: update(current[workspaceKey] ?? []),
+    }));
 
   const [search, setSearch] = useState("");
 
@@ -561,6 +568,14 @@ export default function EmailMarketing() {
       ),
     );
   };
+
+  useEffect(() => {
+    setShowNewCampaign(false);
+    setReplicateCampaign(null);
+    setSelectedCampaign(null);
+    setShowViewModal(false);
+    setShowReportModal(false);
+  }, [workspaceKey]);
 
   /* ---------------------------------------------------------------------- */
   /* New Campaign Page                                                      */
@@ -906,6 +921,7 @@ function EmailCampaignForm({
     sendTo: number,
   ) => void;
 }) {
+  const { currentWorkspace } = useWorkspace();
   const [mailType, setMailType] =
     useState<MailType>(
       initialCampaign?.mailType ?? "test",
@@ -948,6 +964,8 @@ function EmailCampaignForm({
     useState(false);
 
   useEffect(() => {
+    setTags([]);
+    setContacts([]);
     void Promise.all([
       listTags(),
       listContactStage("contact"),
@@ -971,7 +989,7 @@ function EmailCampaignForm({
             : "Unable to load tags and contacts.",
         );
       });
-  }, []);
+  }, [currentWorkspace?.id]);
 
   const selectedTag = tags.find(
     (tag) => tag.id === tagId,

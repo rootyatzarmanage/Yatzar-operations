@@ -18,6 +18,7 @@ function toPayload(values: RecordValues): ContactPayload {
   return {
     first_name: text(values, "firstName"),
     last_name: nullable(values, "lastName"),
+    company: null,
     email: nullable(values, "email"),
     phone: nullable(values, "phone"),
     other_phone: nullable(values, "otherPhone"),
@@ -40,6 +41,7 @@ function toPayload(values: RecordValues): ContactPayload {
     mobile: null,
     date_of_birth: null,
     description: null,
+    tag_id: null,
     email_opt_out: false,
   };
 }

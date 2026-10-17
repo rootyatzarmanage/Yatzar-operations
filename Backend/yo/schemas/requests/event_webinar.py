@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class EventWebinarCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: UUID
     webinar_schedule: datetime
     duration: str = Field(min_length=1, max_length=50)
     campaign_owner_id: UUID | None = None

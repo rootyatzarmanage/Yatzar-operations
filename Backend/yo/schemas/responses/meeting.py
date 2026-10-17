@@ -11,6 +11,8 @@ class MeetingParticipantResponse(BaseModel):
 
 
 class MeetingResponse(BaseModel):
+    workspace_id: UUID
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -43,8 +45,6 @@ class MeetingResponse(BaseModel):
     @classmethod
     def strip_whitespace(cls, value: str) -> str:
         return value.strip() if value is not None else value
-
-
 
 
 class MeetingListResponse(BaseModel):

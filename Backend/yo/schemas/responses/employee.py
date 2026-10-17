@@ -2,13 +2,21 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class EmployeeWorkspaceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
 
 
 class EmployeeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    workspaces: list[EmployeeWorkspaceResponse] = Field(default_factory=list)
     user_id: UUID | None = None
     employee_code: str
     status: Literal[0, 1]

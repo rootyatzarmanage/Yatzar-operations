@@ -9,6 +9,9 @@ class MeetingParticipantRequest(BaseModel):
     type: Literal["contact", "lead", "customer"]
 
 class MeetingCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: UUID
     title: str = Field(min_length=1, max_length=255)
     venue: str | None = None
     location: str | None = None
@@ -29,7 +32,6 @@ class MeetingCreateRequest(BaseModel):
         if value is not None:
             return value.strip()
         return value
-
 
 
 class MeetingUpdateRequest(BaseModel):

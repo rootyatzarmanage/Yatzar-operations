@@ -1,14 +1,11 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Cookie, Depends, Header, Response
-from sqlalchemy import or_, select
-from sqlalchemy.orm import joinedload
 
 from yo.core.config import settings
 from yo.core.database import DatabaseSession
-from yo.core.exceptions import AppException
-from yo.core.security import decode_session, encode_session, verify_password
+from yo.core.security import encode_session
 from yo.models.user import User
+from yo.services.auth import AuthService
+from yo.services.role import RoleService
 from yo.schemas.requests.auth import LoginRequest
 from yo.schemas.responses.auth import AuthUserResponse
 from yo.core.schemas.responses import SuccessResponse
@@ -16,7 +13,7 @@ from yo.core.schemas.responses import SuccessResponse
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _user_response(user: User, token: str | None = None) -> AuthUserResponse:
+async def _user_response(user: User, session: DatabaseSession, token: str | None = None) -> AuthUserResponse:
     return AuthUserResponse(
         id=user.id,
         username=user.username,
@@ -26,21 +23,21 @@ def _user_response(user: User, token: str | None = None) -> AuthUserResponse:
         role=user.role.name if user.role else "",
         photo=user.employee.photo if user.employee else None,
         token=token,
+        permissions=await RoleService(session).effective_permissions(user),
+        workspaces=[
+            {"id": workspace.id, "name": workspace.name}
+            for workspace in (
+                user.employee.workspaces
+                if user.employee and user.employee.deleted_at is None and user.employee.status == 1
+                else []
+            )
+            if workspace.deleted_at is None and workspace.status == "Enabled"
+        ],
     )
 
 
 async def _get_session_user(session: DatabaseSession, session_token: str | None) -> User:
-    user_id = decode_session(session_token)
-    if not user_id:
-        raise AppException("Authentication is required.", 401)
-    user = await session.scalar(
-        select(User)
-        .options(joinedload(User.employee), joinedload(User.role))
-        .where(User.id == UUID(user_id), User.is_active.is_(True), User.deleted_at.is_(None))
-    )
-    if not user:
-        raise AppException("Authentication is required.", 401)
-    return user
+    return await AuthService(session).get_session_user(session_token)
 
 
 async def get_token_from_request(
@@ -70,17 +67,7 @@ async def require_user(
 async def login(
     request: LoginRequest, response: Response, session: DatabaseSession
 ) -> SuccessResponse[AuthUserResponse]:
-    user = await session.scalar(
-        select(User)
-        .options(joinedload(User.employee), joinedload(User.role))
-        .where(
-            or_(User.email == request.identifier.strip().lower(), User.username == request.identifier.strip()),
-            User.is_active.is_(True),
-            User.deleted_at.is_(None),
-        )
-    )
-    if not user or not verify_password(request.password, user.password_hash):
-        raise AppException("Invalid username/email or password.", 401)
+    user = await AuthService(session).authenticate(request)
     session_token = encode_session(str(user.id))
     response.set_cookie(
         settings.SESSION_COOKIE_NAME,
@@ -91,15 +78,16 @@ async def login(
         samesite="lax",
         secure=False,
     )
-    return SuccessResponse(message="Signed in successfully", data=_user_response(user, token=session_token))
+    return SuccessResponse(message="Signed in successfully", data=await _user_response(user, session, token=session_token))
 
 
 @router.get("/me", response_model=SuccessResponse[AuthUserResponse])
 async def current_user(
+    session: DatabaseSession,
     user: User = Depends(require_user),
     token: str | None = Depends(get_token_from_request),
 ) -> SuccessResponse[AuthUserResponse]:
-    return SuccessResponse(message="Current user retrieved successfully", data=_user_response(user, token=token))
+    return SuccessResponse(message="Current user retrieved successfully", data=await _user_response(user, session, token=token))
 
 
 @router.post("/logout", response_model=SuccessResponse[None])

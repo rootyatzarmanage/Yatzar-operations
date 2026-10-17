@@ -4,6 +4,7 @@ import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { EmbedConfig } from "@/components/records/embed";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 export type FieldDef = {
   key: string;
@@ -118,6 +119,7 @@ export default function RecordPage<T extends StoredRecord>({
   viewBadge,
   embed,
 }: Props<T>) {
+  const { currentWorkspace } = useWorkspace();
   const allFields = useMemo(
     () => sections.flatMap((section) => section.fields),
     [sections],
@@ -157,6 +159,9 @@ export default function RecordPage<T extends StoredRecord>({
 
   useEffect(() => {
     let active = true;
+    setRecords([]);
+    setSelectedIds([]);
+    setLoading(true);
     void Promise.resolve(store.list())
       .then((items) => {
         if (active) setRecords(items);
@@ -170,7 +175,7 @@ export default function RecordPage<T extends StoredRecord>({
     return () => {
       active = false;
     };
-  }, [plural, store]);
+  }, [currentWorkspace?.id, plural, store]);
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();

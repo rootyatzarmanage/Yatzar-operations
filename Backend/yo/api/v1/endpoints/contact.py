@@ -1,13 +1,13 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status, Depends ,UploadFile, File
-from pathlib import Path
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from yo.core.database import DatabaseSession
+from yo.core.exceptions import AppException
 from yo.core.schemas.responses import SuccessResponse
 from yo.core.auth.dependencies import CurrentUser
-from yo.models.user import User
+from yo.core.auth.permissions import require_permission
 from yo.repositories.contact import ContactRepository
 from yo.schemas.requests.contact import (
     ContactCreateRequest,
@@ -17,10 +17,9 @@ from yo.schemas.requests.contact import (
 from yo.schemas.responses.contact import (
     ContactResponse,
     ContactListResponse,
-    OwnerOptionResponse,
 )
 
-from yo.services.contact import ContactService 
+from yo.services.contact import ContactService
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +34,7 @@ router = APIRouter(
     response_model=SuccessResponse[ContactListResponse],
     status_code=status.HTTP_200_OK,
     summary="Get contacts, leads or customers",
+    dependencies=[Depends(require_permission("contacts", "view"))],
 )
 async def list_contacts(
     session: DatabaseSession,
@@ -43,6 +43,7 @@ async def list_contacts(
         default="contact",
         pattern="^(contact|lead|customer)$",
     ),
+    workspace_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=5, ge=1, le=100),
@@ -51,6 +52,7 @@ async def list_contacts(
         repository = ContactRepository(session)
         service = ContactService(repository)
         result = await service.list_by_stage(
+            user_id=current_user.id, workspace_id=workspace_id,
             stage=stage,
             search=search,
             page=page,
@@ -83,7 +85,7 @@ async def list_contacts(
             message=f"{stage.title()} records fetched successfully",
             data=data,
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to fetch contact records")
@@ -97,6 +99,7 @@ async def list_contacts(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Upload contact image",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def upload_contact_image(
     contact_id: UUID,
@@ -107,10 +110,11 @@ async def upload_contact_image(
     repository = ContactRepository(session)
     service = ContactService(repository)
 
-    contact = await service.get_by_id(contact_id)
+    contact = await service.get_by_id(contact_id, current_user.id)
 
     image_path = await service.save_contact_image(
         current_user.id,
+        contact_id,
         file,
     )
 
@@ -122,7 +126,7 @@ async def upload_contact_image(
         },
     )
 
-    contact = await service.get_by_id(contact_id)
+    contact = await service.get_by_id(contact_id, current_user.id)
 
     return SuccessResponse(
         success=True,
@@ -135,6 +139,7 @@ async def upload_contact_image(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Create a contact",
+    dependencies=[Depends(require_permission("contacts", "create"))],
 )
 async def create_contact(
     payload: ContactCreateRequest,
@@ -152,7 +157,7 @@ async def create_contact(
             message="Contact created successfully",
             data=ContactResponse.model_validate(contact),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to create contact")
@@ -167,6 +172,7 @@ async def create_contact(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Get contact by ID",
+    dependencies=[Depends(require_permission("contacts", "view"))],
 )
 async def get_contact(
     contact_id: UUID,
@@ -177,14 +183,14 @@ async def get_contact(
         repository = ContactRepository(session)
         service = ContactService(repository)
 
-        contact = await service.get_by_id(contact_id)
+        contact = await service.get_by_id(contact_id, current_user.id)
 
         return SuccessResponse(
             success=True,
             message="Contact fetched successfully",
             data=ContactResponse.model_validate(contact),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception(
@@ -202,6 +208,7 @@ async def get_contact(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Update a contact",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def update_contact(
     contact_id: UUID,
@@ -224,7 +231,7 @@ async def update_contact(
             message="Contact updated successfully",
             data=ContactResponse.model_validate(contact),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception(
@@ -242,6 +249,7 @@ async def update_contact(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Move contact to leads",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def move_to_lead(
     contact_id: UUID,
@@ -263,7 +271,7 @@ async def move_to_lead(
             message="Contact moved to leads successfully",
             data=ContactResponse.model_validate(contact),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to move contact to lead")
@@ -278,6 +286,7 @@ async def move_to_lead(
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Move contact to customers",
+    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def move_to_customer(
     contact_id: UUID,
@@ -299,7 +308,7 @@ async def move_to_customer(
             message="Contact moved to customers successfully",
             data=ContactResponse.model_validate(contact),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to move contact to customer")
@@ -314,6 +323,7 @@ async def move_to_customer(
     response_model=SuccessResponse[dict[str, int]],
     status_code=status.HTTP_200_OK,
     summary="Bulk delete contacts",
+    dependencies=[Depends(require_permission("contacts", "delete"))],
 )
 async def bulk_delete_contacts(
     payload: ContactBulkDeleteRequest,
@@ -334,7 +344,7 @@ async def bulk_delete_contacts(
             message="Contacts deleted successfully",
             data={"deleted": deleted},
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to bulk delete contacts")
@@ -349,6 +359,7 @@ async def bulk_delete_contacts(
     response_model=SuccessResponse[dict[str, str]],
     status_code=status.HTTP_200_OK,
     summary="Delete a contact",
+    dependencies=[Depends(require_permission("contacts", "delete"))],
 )
 async def delete_contact(
     contact_id: UUID,
@@ -366,7 +377,7 @@ async def delete_contact(
             message="Contact deleted successfully",
             data={"deleted_id": str(contact_id)},
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to delete contact")

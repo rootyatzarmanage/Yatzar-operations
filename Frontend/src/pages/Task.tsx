@@ -1,15 +1,25 @@
 import { listContacts, type Contact } from "@/api/contacts";
-import { listTags, type Tag } from "@/api/tags";
+import { listLeads, type LeadRecord } from "@/api/leads";
+import { listCustomers, type CustomerRecord } from "@/api/customers";
 import { createTask, deleteTask, listTasks, updateTask, type TaskApi, type TaskPayload } from "@/api/task";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useAuth } from "@/context/AuthContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
 
 type TaskStatus = "Not Started" | "Deferred" | "In Progress" | "Waiting for input" | "Completed";
 type TaskPriority = "Highest" | "High" | "Normal" | "Low" | "Lowest";
 type ContactMode = "name" | "tag";
+type ParticipantType = "contact" | "lead" | "customer";
+type Participant = { id: string; type: ParticipantType; name: string; email: string };
+
+const participantSourceLabels: Record<ParticipantType, string> = {
+  contact: "Contact",
+  lead: "Lead",
+  customer: "Customer",
+};
 
 type Task = {
   id: string;
@@ -108,14 +118,19 @@ function Toggle({
 
 export default function Tasks({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [leads, setLeads] = useState<LeadRecord[]>([]);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<{ subject?: string }>({});
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSelection, setPickerSelection] = useState<string[]>([]);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerSource, setPickerSource] = useState<ParticipantType>("contact");
   const [searchTerm, setSearchTerm] = useState("");
   const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [page, setPage] = useState(1);
@@ -127,27 +142,55 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   const taskOwner = user?.display_name || user?.employee_name || user?.username || "";
 
   useEffect(() => {
+    setTasks([]);
+    setContacts([]);
+    setLeads([]);
+    setCustomers([]);
     void listContacts()
       .then(setContacts)
       .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load contacts."));
-    void listTags()
-      .then(setTags)
-      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tags."));
+    void listLeads()
+      .then(setLeads)
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load leads."));
+    void listCustomers()
+      .then(setCustomers)
+      .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load customers."));
     void listTasks()
       .then((result) => setTasks(result.map((task) => fromApiTask(task, taskOwner))))
       .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tasks."));
-  }, [taskOwner]);
+  }, [currentWorkspace?.id, taskOwner]);
+
+  const participants = useMemo<Participant[]>(() => [
+    ...contacts.map((contact) => ({
+      id: contact.id,
+      type: "contact" as const,
+      name: contactFullName(contact) || contact.email || "Unnamed",
+      email: contact.email ?? "",
+    })),
+    ...leads.map((lead) => ({
+      id: lead.id,
+      type: "lead" as const,
+      name: `${lead.firstName ?? ""} ${lead.lastName ?? ""}`.trim() || String(lead.email ?? "") || "Unnamed",
+      email: String(lead.email ?? ""),
+    })),
+    ...customers.map((customer) => ({
+      id: customer.id,
+      type: "customer" as const,
+      name: `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || String(customer.email ?? "") || "Unnamed",
+      email: String(customer.email ?? ""),
+    })),
+  ], [contacts, leads, customers]);
 
   const selectionLabel = (_mode: ContactMode, ids: string[]) =>
-    contacts.filter((c) => ids.includes(c.id)).map(contactFullName).join(", ");
+    participants.filter((person) => ids.includes(person.id)).map((person) => person.name).join(", ");
 
   const toTaskPayload = (values: typeof emptyForm): TaskPayload => {
     return {
       subject: values.subject.trim(),
       due_date: values.dueDate || null,
       contact_selection: {
-        selection_type: values.contactMode,
-        tag_id: values.contactMode === "tag" ? values.tagId || null : null,
+        selection_type: "name",
+        tag_id: null,
         contact_ids: values.contactIds,
       },
       account: values.account.trim() || null,
@@ -193,7 +236,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
         v.toLowerCase().includes(q),
       ),
     );
-  }, [contacts, searchTerm, tags, tasks]);
+  }, [participants, searchTerm, tasks]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / entriesPerPage));
   const currentPage = Math.min(page, totalPages);
@@ -298,32 +341,37 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   };
 
   const togglePicked = (id: string) =>
-    setForm((current) => ({
-      ...current,
-      contactIds: current.contactIds.includes(id)
-        ? current.contactIds.filter((x) => x !== id)
-        : [...current.contactIds, id],
-    }));
+    setPickerSelection((current) =>
+      current.includes(id)
+        ? current.filter((x) => x !== id)
+        : [...current, id],
+    );
 
-  const selectTag = (tagId: string) => {
-    setForm((current) => ({
-      ...current,
-      tagId,
-      contactIds: contacts
-        .filter((contact) => contact.tag_id === tagId)
-        .map((contact) => contact.id),
-    }));
+  const pickerItems = participants.filter((person) => person.type === pickerSource);
+  const visiblePickerItems = pickerItems.filter((item) => {
+    const query = pickerSearch.trim().toLowerCase();
+    return !query || item.name.toLowerCase().includes(query) || item.email.toLowerCase().includes(query);
+  });
+  const allPickerItemsSelected =
+    visiblePickerItems.length > 0 &&
+    visiblePickerItems.every((item) => pickerSelection.includes(item.id));
+  const toggleAllPickerItems = () =>
+    setPickerSelection((current) => {
+      if (allPickerItemsSelected) {
+        return current.filter((id) => !visiblePickerItems.some((item) => item.id === id));
+      }
+      return [...new Set([...current, ...visiblePickerItems.map((item) => item.id)])];
+    });
+  const openContactPicker = () => {
+    setPickerSelection(form.contactIds);
+    setPickerSource("contact");
+    setPickerSearch("");
+    setPickerOpen(true);
   };
-
-  const pickerItems =
-    form.contactMode === "name"
-      ? contacts.map((c) => ({ id: c.id, label: contactFullName(c) || c.email || "Unnamed" }))
-      : contacts
-          .filter((contact) => contact.tag_id === form.tagId)
-          .map((contact) => ({
-            id: contact.id,
-            label: contactFullName(contact) || contact.email || "Unnamed",
-          }));
+  const applyContactPicker = () => {
+    setForm((current) => ({ ...current, contactMode: "name", tagId: "", contactIds: pickerSelection }));
+    setPickerOpen(false);
+  };
 
   const embedInit = useRef(false);
   useEffect(() => {
@@ -522,91 +570,27 @@ export default function Tasks({ embed }: EmbedProps = {}) {
               </div>
             </div>
 
-            {/* Contact: label + radios on the left, tag / summary / list on the right */}
-            <div className="grid gap-5 md:grid-cols-2">
-              <div>
-                <label className={labelClass}>Contact</label>
-                <div className="flex gap-5 text-sm text-gray-700 dark:text-gray-300">
-                  {(["name", "tag"] as const).map((mode) => (
-                    <label key={mode} className="flex cursor-pointer items-center gap-2">
-                      <input
-                        type="radio"
-                        name="contact-mode"
-                        checked={form.contactMode === mode}
-                        onChange={() => {
-                          setForm({ ...form, contactMode: mode, tagId: "", contactIds: [] });
-                          setPickerOpen(false);
-                        }}
-                        className="accent-brand-500"
-                      />
-                      {mode === "name" ? "Name" : "Tag"}
-                    </label>
-                  ))}
+            <div>
+              <label className={labelClass}>Participants</label>
+              <div className="flex min-h-[44px] items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-1.5 text-sm dark:border-gray-800">
+                <div className="flex flex-wrap gap-1.5">
+                  {form.contactIds.length === 0 && <span className="text-gray-400">None</span>}
+                  {form.contactIds.map((id) => {
+                    const person = participants.find((item) => item.id === id);
+                    return (
+                      <span key={id} className="rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                        {person?.name ?? id}
+                      </span>
+                    );
+                  })}
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                {form.contactMode === "tag" && (
-                  <select
-                    aria-label="Select tag"
-                    value={form.tagId}
-                    onChange={(event) => {
-                      selectTag(event.target.value);
-                      setPickerOpen(true);
-                    }}
-                    className={inputClass}
-                  >
-                    <option value="">Select a tag</option>
-                    {tags.map((tag) => (
-                      <option key={tag.id} value={tag.id}>{tag.name}</option>
-                    ))}
-                  </select>
-                )}
-
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3.5 py-3 text-sm dark:border-gray-800">
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {form.contactMode === "tag"
-                      ? !form.tagId
-                        ? "Select a tag to choose contacts"
-                        : `${form.contactIds.length} of ${pickerItems.length} contacts selected`
-                      : form.contactIds.length === 0
-                        ? "No contacts selected"
-                        : `${form.contactIds.length} contacts selected`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen((open) => !open)}
-                    className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
-                  >
-                    {pickerOpen ? "Done" : "Edit"}
-                  </button>
-                </div>
-
-                {pickerOpen && (
-                  <div className="custom-scrollbar max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
-                    {pickerItems.length === 0 && (
-                      <p className="px-4 py-3 text-sm text-gray-500">
-                        {form.contactMode === "tag" && !form.tagId
-                          ? "Select a tag first."
-                          : "Nothing to select yet."}
-                      </p>
-                    )}
-                    {pickerItems.map((item) => (
-                      <label
-                        key={item.id}
-                        className="flex cursor-pointer items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.contactIds.includes(item.id)}
-                          onChange={() => togglePicked(item.id)}
-                          className="size-4 accent-brand-500"
-                        />
-                        {item.label}
-                      </label>
-                    ))}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={openContactPicker}
+                  className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
+                >
+                  Select
+                </button>
               </div>
             </div>
 
@@ -694,6 +678,123 @@ export default function Tasks({ embed }: EmbedProps = {}) {
             </div>
           </div>
         </form>
+      )}
+
+      {pickerOpen && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-gray-900/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-contact-picker-title"
+            className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-xl dark:bg-gray-dark"
+          >
+            <div className="border-b border-gray-200 p-6 dark:border-gray-800">
+              <h3 id="task-contact-picker-title" className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                Select participants
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Choose from contacts, leads and customers. Your selections are kept when you switch the list.
+              </p>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto p-6">
+              <div className="flex gap-3">
+                <select
+                  value={pickerSource}
+                  onChange={(event) => setPickerSource(event.target.value as ParticipantType)}
+                  className={`${inputClass} !w-40`}
+                >
+                  {(Object.keys(participantSourceLabels) as ParticipantType[]).map((source) => (
+                    <option key={source} value={source}>{participantSourceLabels[source]}</option>
+                  ))}
+                </select>
+                <input
+                  type="search"
+                  value={pickerSearch}
+                  onChange={(event) => setPickerSearch(event.target.value)}
+                  placeholder="Search by name or email"
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={allPickerItemsSelected}
+                    onChange={toggleAllPickerItems}
+                    className="size-4 accent-brand-500"
+                  />
+                  Select all in this list
+                </label>
+                <span className="text-gray-500">{pickerSelection.length} selected</span>
+              </div>
+              <div className="custom-scrollbar max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
+                {visiblePickerItems.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-gray-500">Nothing to select.</p>
+                ) : (
+                  visiblePickerItems.map((item) => (
+                    <label
+                      key={item.id}
+                      className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pickerSelection.includes(item.id)}
+                        onChange={() => togglePicked(item.id)}
+                        className="size-4 accent-brand-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-gray-800 dark:text-white/90">{item.name}</span>
+                        {item.email && <span className="block text-xs text-gray-500">{item.email}</span>}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+              {pickerSelection.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs text-gray-500">Selected</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pickerSelection.map((id) => {
+                      const person = participants.find((item) => item.id === id);
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                          {person?.name ?? id}{" "}
+                          <span className="text-gray-400">({person ? participantSourceLabels[person.type] : "Participant"})</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${person?.name ?? "participant"}`}
+                            onClick={() => togglePicked(id)}
+                            className="ms-1 text-gray-500 hover:text-gray-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-gray-200 p-5 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyContactPicker}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {deleteId && (

@@ -8,6 +8,7 @@ from uuid import UUID
 
 from bs4 import BeautifulSoup
 
+from yo.services.workspace import WorkspaceService
 from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.schemas.requests.email_marketing import EmailMarketingCreateRequest
@@ -18,8 +19,9 @@ logger = logging.getLogger(__name__)
 
 class EmailMarketingService:
 
-    def __init__(self, repository: EmailMarketingRepository):
+    def __init__(self, repository: EmailMarketingRepository, user_id: UUID | None = None):
         self.repository = repository
+        self.user_id = user_id
         self.tracking_base_url = os.environ.get(
             "EMAIL_TRACKING_BASE_URL",
             "http://localhost:8000/api/v1/email-marketing",
@@ -27,6 +29,9 @@ class EmailMarketingService:
         self.tracking_secret = os.environ.get("EMAIL_TRACKING_SECRET", "")
 
     async def get_campaign(self, campaign_id: UUID):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         campaign = await self.repository.get_campaign(campaign_id)
 
         if not campaign:
@@ -35,13 +40,21 @@ class EmailMarketingService:
         return campaign
 
     async def list_campaigns(self, search: str | None = None, page: int = 1, per_page: int = 10):
+        if self.repository.workspace_id is not None:
+            await WorkspaceService(self.repository.session).ensure_access(
+                self.user_id, self.repository.workspace_id,
+            )
         return await self.repository.list_campaigns(
+            user_id=self.user_id,
             search=search,
             page=page,
             per_page=per_page,
         )
 
     async def list_recipients(self, campaign_id: UUID, page: int, per_page: int):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         await self.get_campaign(campaign_id)
 
         return await self.repository.list_recipients(
@@ -126,6 +139,9 @@ class EmailMarketingService:
         return str(soup)
 
     async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         mail_type = payload.mail_type.strip().lower()
 
         values = payload.model_dump(
@@ -188,7 +204,8 @@ class EmailMarketingService:
         recipients_data = await self.repository.get_recipients_by_tag(
             tag_id=payload.tag_id,
             selection_mode=payload.selection_mode,
-            selected_user_ids=payload.selected_user_ids,
+            selected_contact_ids=payload.selected_user_ids,
+            user_id=logged_user_id,
         )
 
         if not recipients_data:
@@ -272,10 +289,15 @@ class EmailMarketingService:
         )
 
     async def update_recipient_status(self, recipient_id: UUID, is_enabled: bool):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         recipient = await self.repository.get_recipient_by_id(recipient_id)
 
         if not recipient:
             raise NotFoundException("Recipient", str(recipient_id))
+
+        await self.get_campaign(recipient.email_marketing_id)
 
         return await self.repository.update_recipient_status(
             recipient,
@@ -283,6 +305,9 @@ class EmailMarketingService:
         )
 
     async def get_report(self, campaign_id: UUID):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         campaign = await self.get_campaign(campaign_id)
 
         return {
@@ -295,13 +320,20 @@ class EmailMarketingService:
         }
 
     async def delete_campaign(self, campaign_id: UUID, user_id: UUID):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         campaign = await self.get_campaign(campaign_id)
         await self.repository.delete_campaign(campaign, user_id)
 
     async def replicate_campaign(self, campaign_id: UUID, user_id: UUID):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
         old_campaign = await self.get_campaign(campaign_id)
 
         values = {
+            "workspace_id": old_campaign.workspace_id,
             "campaign_name": f"{old_campaign.campaign_name} - Copy",
             "platform": old_campaign.platform,
             "from_email": old_campaign.from_email,

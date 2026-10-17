@@ -10,10 +10,17 @@ from yo.core.database import engine
 from yo.core.database import AsyncSessionLocal
 from yo.core.database.base import Base
 from yo.core.exceptions import AppException
+from yo.core.storage import STORAGE_DIR
 from yo.core.schemas.responses import ErrorResponse
 from yo.seeders.admin import seed_default_data
-from pathlib import Path
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from yo.core.auth.dependencies import CurrentUser
+from yo.core.database import DatabaseSession
+from yo.models.contact import Contact
+from yo.repositories.contact import ContactRepository
+from yo.repositories.workspace import WorkspaceRepository
+from yo.services.role import RoleService
+from sqlalchemy import select
 
 
 @asynccontextmanager
@@ -32,14 +39,26 @@ app = FastAPI(
     description="YO FastAPI backend",
     lifespan=lifespan,
 )
-STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-app.mount(
-    "/storage",
-    StaticFiles(directory=STORAGE_DIR),
-    name="storage",
-)
+@app.get("/storage/{file_path:path}", include_in_schema=False)
+async def contact_image(file_path: str, session: DatabaseSession, current_user: CurrentUser):
+    destination = (STORAGE_DIR / file_path).resolve()
+    if not destination.is_relative_to(STORAGE_DIR.resolve()) or not destination.is_file():
+        raise AppException("Image not found.", 404)
+    allowed = await session.scalar(select(Contact.id).where(
+        Contact.photo == f"storage/{file_path}", Contact.deleted_at.is_(None),
+        ContactRepository.access_condition(current_user.id),
+    ).limit(1))
+    if allowed is None:
+        workspace_id = await WorkspaceRepository(session).get_id_by_image(
+            f"storage/{file_path}", current_user.id,
+        )
+        if workspace_id is None:
+            raise AppException("Image not found.", 404)
+        await RoleService(session).check_permission(current_user, "workspace", "view")
+    return FileResponse(destination, headers={"Cache-Control": "private, no-store"})
+
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,9 +4,10 @@ import logging
 from uuid import UUID
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import RedirectResponse, Response
 
+from yo.core.auth.permissions import require_permission
 from yo.core.database import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
 from yo.core.auth.dependencies import CurrentUser
@@ -43,9 +44,9 @@ TRANSPARENT_GIF = base64.b64decode(
 )
 
 
-def get_service(session: DatabaseSession) -> EmailMarketingService:
-    repository = EmailMarketingRepository(session)
-    return EmailMarketingService(repository)
+def get_service(session: DatabaseSession, workspace_id: UUID | None = None, user_id: UUID | None = None) -> EmailMarketingService:
+    repository = EmailMarketingRepository(session, workspace_id)
+    return EmailMarketingService(repository, user_id)
 
 
 @router.get(
@@ -126,13 +127,14 @@ async def track_email_click(
     response_model=SuccessResponse[EmailMarketingResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Create and send email marketing campaign",
+    dependencies=[Depends(require_permission("emailMarketing", "create"))],
 )
 async def create_email_campaign(
     payload: EmailMarketingCreateRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
 ) -> SuccessResponse[EmailMarketingResponse]:
-    service = get_service(session)
+    service = get_service(session, payload.workspace_id, current_user.id)
 
     campaign = await service.create_and_send(
         payload,
@@ -155,16 +157,18 @@ async def create_email_campaign(
     "",
     status_code=status.HTTP_200_OK,
     summary="Get email marketing campaigns",
+    dependencies=[Depends(require_permission("emailMarketing", "view"))],
 )
 async def get_email_campaigns(
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
     campaign_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=10, ge=1, le=100),
 ):
-    service = get_service(session)
+    service = get_service(session, workspace_id, current_user.id)
 
     if campaign_id:
         campaign = await service.get_campaign(campaign_id)
@@ -203,15 +207,17 @@ async def get_email_campaigns(
     response_model=SuccessResponse[EmailMarketingRecipientListResponse],
     status_code=status.HTTP_200_OK,
     summary="Get email marketing campaign recipients",
+    dependencies=[Depends(require_permission("emailMarketing", "view"))],
 )
 async def get_email_recipients(
     campaign_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=10, ge=1, le=100),
 ) -> SuccessResponse[EmailMarketingRecipientListResponse]:
-    service = get_service(session)
+    service = get_service(session, workspace_id, current_user.id)
 
     result = await service.list_recipients(
         campaign_id,
@@ -241,14 +247,16 @@ async def get_email_recipients(
     response_model=SuccessResponse[EmailMarketingRecipientResponse],
     status_code=status.HTTP_200_OK,
     summary="Enable or disable email recipient",
+    dependencies=[Depends(require_permission("emailMarketing", "update"))],
 )
 async def update_recipient_status(
     recipient_id: UUID,
     payload: EmailMarketingRecipientStatusRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[EmailMarketingRecipientResponse]:
-    service = get_service(session)
+    service = get_service(session, workspace_id, current_user.id)
 
     recipient = await service.update_recipient_status(
         recipient_id,
@@ -267,13 +275,15 @@ async def update_recipient_status(
     response_model=SuccessResponse[EmailMarketingReportResponse],
     status_code=status.HTTP_200_OK,
     summary="Get email marketing campaign report",
+    dependencies=[Depends(require_permission("emailMarketing", "view"))],
 )
 async def get_campaign_report(
     campaign_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[EmailMarketingReportResponse]:
-    service = get_service(session)
+    service = get_service(session, workspace_id, current_user.id)
 
     report = await service.get_report(campaign_id)
 
@@ -289,13 +299,15 @@ async def get_campaign_report(
     response_model=SuccessResponse[EmailMarketingResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Replicate email marketing campaign",
+    dependencies=[Depends(require_permission("emailMarketing", "create"))],
 )
 async def replicate_campaign(
     campaign_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[EmailMarketingResponse]:
-    service = get_service(session)
+    service = get_service(session, workspace_id, current_user.id)
 
     campaign = await service.replicate_campaign(
         campaign_id,
@@ -314,13 +326,15 @@ async def replicate_campaign(
     response_model=SuccessResponse[dict[str, str]],
     status_code=status.HTTP_200_OK,
     summary="Delete email marketing campaign",
+    dependencies=[Depends(require_permission("emailMarketing", "delete"))],
 )
 async def delete_email_campaign(
     campaign_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[dict[str, str]]:
-    service = get_service(session)
+    service = get_service(session, workspace_id, current_user.id)
 
     await service.delete_campaign(
         campaign_id,

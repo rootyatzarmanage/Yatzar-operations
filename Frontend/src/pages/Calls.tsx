@@ -10,6 +10,7 @@ import {
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import { useAuth } from "@/context/AuthContext";
+import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
 
@@ -108,6 +109,7 @@ type FormErrors = { contactId?: string; startTime?: string; duration?: string };
 
 export default function Calls({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const callOwner = user?.display_name || user?.employee_name || user?.username || "";
 
   const [calls, setCalls] = useState<Call[]>([]);
@@ -126,6 +128,8 @@ export default function Calls({ embed }: EmbedProps = {}) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setCalls([]);
+    setContacts([]);
     void Promise.all([listContacts(), listCalls({ page: 1, perPage: 100 })])
       .then(([contactItems, callResult]) => {
         setContacts(contactItems);
@@ -134,7 +138,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
       .catch((error: unknown) =>
         setApiError(error instanceof Error ? error.message : "Unable to load calls."),
       );
-  }, []);
+  }, [currentWorkspace?.id]);
 
   function fromApiCall(call: CallApi, availableContacts: Contact[]): Call {
     const contact = availableContacts.find((item) => item.id === call.contact_id);

@@ -1,6 +1,6 @@
 from datetime import date
 from typing import Literal
-
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -32,6 +32,7 @@ class EmployeeCreateRequest(EmployeeRequestBase):
     blood_group: str | None = Field(default=None, max_length=10)
     marital_status: str | None = Field(default=None, max_length=30)
     photo: str | None = None
+    workspace_ids: list[UUID] = Field(default_factory=list)
 
     mobile_number: str = Field(min_length=1, max_length=30)
     alternate_phone: str | None = Field(default=None, max_length=30)
@@ -97,6 +98,7 @@ class EmployeeDraftRequest(EmployeeRequestBase):
     blood_group: str | None = Field(default=None, max_length=10)
     marital_status: str | None = Field(default=None, max_length=30)
     photo: str | None = None
+    workspace_ids: list[UUID] | None = None
 
     mobile_number: str | None = Field(default=None, min_length=1, max_length=30)
     alternate_phone: str | None = Field(default=None, max_length=30)
@@ -156,6 +158,7 @@ class EmployeeUpdateRequest(EmployeeRequestBase):
     blood_group: str | None = Field(default=None, max_length=10)
     marital_status: str | None = Field(default=None, max_length=30)
     photo: str | None = None
+    workspace_ids: list[UUID] | None = None
 
     mobile_number: str | None = Field(default=None, min_length=1, max_length=30)
     alternate_phone: str | None = Field(default=None, max_length=30)

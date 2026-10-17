@@ -5,6 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class CallCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: UUID
     contact_id: UUID
     subject: str = Field(min_length=1, max_length=255)
     call_type: str = Field(pattern="^(Outbound|Inbound|Missed)$")

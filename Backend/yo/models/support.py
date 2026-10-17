@@ -1,20 +1,12 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text, Uuid
+from sqlalchemy import String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from yo.core.database.base import Base, SoftDeleteMixin, TimestampMixin
 
 
-class Location(Base, TimestampMixin, SoftDeleteMixin):
-    __tablename__ = "locations"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("locations.id"), nullable=True)
-
-    parent: Mapped["Location | None"] = relationship(remote_side="Location.id")
 
 class DropdownOption(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "dropdown_options"

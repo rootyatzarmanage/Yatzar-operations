@@ -1,3 +1,5 @@
+import { workspaceStorageKey } from "@/context/WorkspaceContext";
+
 const TOKEN_KEY = "yatzar_auth_token";
 
 function getApiBase(): string {
@@ -59,16 +61,81 @@ type ApiError = {
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
   const headers = new Headers(init?.headers);
+  let requestPath = path;
+  let requestBody = init?.body;
 
-  if (init?.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+  const workspaceId = getStoredWorkspaceId();
+  if (workspaceId) {
+    const url = new URL(`${API_BASE}${path}`, window.location.origin);
+    const apiPathPrefix = new URL(API_BASE).pathname.replace(/\/+$/, "");
+    const pathname = apiPathPrefix && url.pathname.startsWith(apiPathPrefix)
+      ? url.pathname.slice(apiPathPrefix.length) || "/"
+      : url.pathname;
+    const roots = [
+      "/contacts",
+      "/calls",
+      "/meetings",
+      "/tasks",
+      "/campaigns",
+      "/event-webinars",
+      "/email-marketing",
+    ];
+    const root = roots.find(
+      (candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`),
+    );
+    const method = (init?.method ?? "GET").toUpperCase();
+    const isEmailTracking = pathname === "/email-marketing/track/open";
+
+    if (root && !isEmailTracking) {
+      if (root !== "/contacts" || (pathname === root && method === "GET")) {
+        url.searchParams.set("workspace_id", workspaceId);
+      }
+
+      const createRoots = [
+        "/contacts",
+        "/calls",
+        "/meetings",
+        "/tasks",
+        "/campaigns",
+        "/event-webinars",
+        "/email-marketing",
+      ];
+      if (
+        createRoots.includes(root) &&
+        pathname === root &&
+        method === "POST" &&
+        typeof requestBody === "string"
+      ) {
+        try {
+          const payload: unknown = JSON.parse(requestBody);
+          if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+            const data = payload as Record<string, unknown>;
+            if (data.workspace_id == null) {
+              data.workspace_id = workspaceId;
+              requestBody = JSON.stringify(data);
+            }
+          }
+        } catch {
+          // Leave non-JSON request bodies unchanged.
+        }
+      }
+      const apiPath = apiPathPrefix && url.pathname.startsWith(apiPathPrefix)
+        ? url.pathname.slice(apiPathPrefix.length) || "/"
+        : url.pathname;
+      requestPath = `${apiPath}${url.search}`;
+    }
+  }
+
+  if (requestBody && !(requestBody instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE}${requestPath}`, {
     ...init,
+    body: requestBody,
     credentials: "include",
     headers,
   });
@@ -102,4 +169,23 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return body.data;
+}
+
+function getStoredWorkspaceId(): string | null {
+  try {
+    const stored = localStorage.getItem(workspaceStorageKey);
+    if (!stored) return null;
+    const value: unknown = JSON.parse(stored);
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "id" in value &&
+      typeof value.id === "string"
+    ) {
+      return value.id;
+    }
+  } catch {
+    // Ignore unavailable or invalid workspace storage.
+  }
+  return null;
 }

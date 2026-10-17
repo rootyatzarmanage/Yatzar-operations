@@ -1,8 +1,10 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from yo.core.auth.permissions import require_permission
+from yo.core.exceptions import AppException
 from yo.core.auth.dependencies import CurrentUser
 from yo.core.database.dependencies import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
@@ -23,14 +25,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
 
 
-def get_service(session: DatabaseSession) -> CampaignService:
-    return CampaignService(CampaignRepository(session))
+def get_service(session: DatabaseSession, workspace_id: UUID | None, user_id: UUID) -> CampaignService:
+    return CampaignService(CampaignRepository(session, workspace_id), user_id)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("campaigns", "create"))])
 async def create_campaign(payload: CampaignCreateRequest,session: DatabaseSession,current_user: CurrentUser):
     try:
-        campaign = await get_service(session).create_campaign(payload, current_user.id)
+        campaign = await get_service(session, payload.workspace_id, current_user.id).create_campaign(payload, current_user.id)
 
         return SuccessResponse(
             success=True,
@@ -38,7 +40,7 @@ async def create_campaign(payload: CampaignCreateRequest,session: DatabaseSessio
             data=CampaignResponse.model_validate(campaign),
         )
 
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to create campaign")
@@ -48,10 +50,11 @@ async def create_campaign(payload: CampaignCreateRequest,session: DatabaseSessio
         )
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_permission("campaigns", "view"))])
 async def get_campaigns(
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
     campaign_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
@@ -59,7 +62,7 @@ async def get_campaigns(
     include_options: bool = Query(default=False),
 ):
     try:
-        service = get_service(session)
+        service = get_service(session, workspace_id, current_user.id)
 
         if campaign_id is not None:
             campaign = await service.get_campaign(campaign_id)
@@ -96,7 +99,7 @@ async def get_campaigns(
             data=response_data,
         )
 
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to retrieve campaigns")
@@ -106,15 +109,16 @@ async def get_campaigns(
         )
 
 
-@router.put("/{campaign_id}")
+@router.put("/{campaign_id}", dependencies=[Depends(require_permission("campaigns", "update"))])
 async def update_campaign(
     campaign_id: UUID,
     payload: CampaignUpdateRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ):
     try:
-        campaign = await get_service(session).update_campaign(
+        campaign = await get_service(session, workspace_id, current_user.id).update_campaign(
             campaign_id,
             payload,
             current_user.id,
@@ -126,7 +130,7 @@ async def update_campaign(
             data=CampaignResponse.model_validate(campaign),
         )
 
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to update campaign")
@@ -136,14 +140,15 @@ async def update_campaign(
         )
 
 
-@router.delete("/{campaign_id}")
+@router.delete("/{campaign_id}", dependencies=[Depends(require_permission("campaigns", "delete"))])
 async def delete_campaign(
     campaign_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ):
     try:
-        await get_service(session).delete_campaign(
+        await get_service(session, workspace_id, current_user.id).delete_campaign(
             campaign_id,
             current_user.id,
         )
@@ -154,7 +159,7 @@ async def delete_campaign(
             data=None,
         )
 
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to delete campaign")
@@ -164,14 +169,15 @@ async def delete_campaign(
         )
 
 
-@router.post("/bulk-delete")
+@router.post("/bulk-delete", dependencies=[Depends(require_permission("campaigns", "delete"))])
 async def bulk_delete_campaigns(
     payload: CampaignBulkDeleteRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ):
     try:
-        result = await get_service(session).bulk_delete_campaigns(
+        result = await get_service(session, workspace_id, current_user.id).bulk_delete_campaigns(
             payload.ids,
             current_user.id,
         )
@@ -182,7 +188,7 @@ async def bulk_delete_campaigns(
             data=result,
         )
 
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to bulk delete campaigns")

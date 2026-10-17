@@ -13,7 +13,7 @@ import {
   WorkspaceIcon,
 } from "../icons";
 import { CalendarDays, Volume1, Calendar1 } from 'lucide-react'
-import { ChevronLeft, MessageSquare, Settings, User } from "lucide-react"
+import { ChevronLeft, MessageSquare, User } from "lucide-react"
 import { cn } from "../utils";
 
 type NavItem = {

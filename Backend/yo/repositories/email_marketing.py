@@ -4,30 +4,38 @@ from uuid import UUID
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yo.repositories.workspace import WorkspaceRepository
+
 from yo.models.contact import Contact
+from yo.repositories.contact import ContactRepository
 from yo.models.email_marketing import EmailMarketing, EmailMarketingRecipient
 
 
 class EmailMarketingRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: UUID | None = None):
         self.session = session
+        self.workspace_id = workspace_id
 
     async def get_campaign(self, campaign_id: UUID):
         result = await self.session.execute(
             select(EmailMarketing).where(
                 EmailMarketing.id == campaign_id,
-                EmailMarketing.deleted_at.is_(None),
+                EmailMarketing.deleted_at.is_(None), or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
             )
         )
         return result.scalar_one_or_none()
 
     async def list_campaigns(
         self,
+        user_id: UUID,
         search: str | None = None,
         page: int = 1,
         per_page: int = 10,
     ):
-        conditions = [EmailMarketing.deleted_at.is_(None)]
+        conditions = [
+            EmailMarketing.deleted_at.is_(None),
+            WorkspaceRepository.scope_condition(EmailMarketing.workspace_id, user_id, self.workspace_id),
+        ]
 
         if search and search.strip():
             search_term = f"%{search.strip()}%"
@@ -118,75 +126,25 @@ class EmailMarketingRepository:
         self,
         tag_id: UUID,
         selection_mode: str,
-        tag_contact_ids: list[UUID],
-        selected_contact_ids: list[UUID] | None = None,
+        selected_contact_ids: list[UUID],
+        *, user_id: UUID,
     ) -> list[dict]:
-        """
-        Retrieve eligible contacts from the existing contacts table.
-
-        tag_contact_ids:
-            Contact IDs associated with the selected tag,
-            supplied by the caller.
-
-        selection_mode:
-            "all"      -> all IDs in tag_contact_ids
-            "selected" -> selected_contact_ids only
-
-        IMPORTANT:
-            The Contact model has no tag relationship.
-            This method cannot independently validate that
-            tag_contact_ids belong to tag_id.
-        """
-        if selection_mode not in ("all", "selected"):
-            raise ValueError(
-                "selection_mode must be 'all' or 'selected'"
-            )
-
-        tag_ids = set(tag_contact_ids or [])
-        selected_ids = set(selected_contact_ids or [])
-
-        if not tag_ids:
-            return []
-
-        if selection_mode == "all":
-            if selected_ids:
-                raise ValueError(
-                    "selected_contact_ids must be empty for Select All"
-                )
-            contact_ids = tag_ids
-
-        else:
-            if not selected_ids:
-                raise ValueError(
-                    "Select at least one contact"
-                )
-
-            if not selected_ids.issubset(tag_ids):
-                raise ValueError(
-                    "Some selected contacts are not in the supplied tag contact list"
-                )
-
-            contact_ids = selected_ids
-
-        query = (
-            select(Contact.id, Contact.email)
-            .where(
-                Contact.id.in_(contact_ids),
-                Contact.deleted_at.is_(None),
-                Contact.email.is_not(None),
-                Contact.email_opt_out.is_(False),
-                func.length(func.trim(Contact.email)) > 0,
-            )
-            .distinct()
+        query = select(Contact.id, Contact.email).where(
+            Contact.tag_id == tag_id,
+            Contact.workspace_id == self.workspace_id,
+            ContactRepository.access_condition(user_id),
+            Contact.deleted_at.is_(None),
+            Contact.email.is_not(None),
+            Contact.email_opt_out.is_(False),
+            func.length(func.trim(Contact.email)) > 0,
         )
-
+        if selection_mode == "selected":
+            query = query.where(Contact.id.in_(selected_contact_ids))
         result = await self.session.execute(query)
-
+        # The existing recipient user_id is an opaque tracking UUID, without a
+        # users FK. Bulk campaigns use the selected contact's UUID here.
         return [
-            {
-                "contact_id": contact_id,
-                "email": email.strip(),
-            }
+            {"user_id": contact_id, "email": email.strip()}
             for contact_id, email in result.all()
         ]
 
@@ -319,7 +277,7 @@ class EmailMarketingRepository:
             update(EmailMarketing)
             .where(
                 EmailMarketing.id == campaign_id,
-                EmailMarketing.deleted_at.is_(None),
+                EmailMarketing.deleted_at.is_(None), or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
             )
             .values(
                 open_count=EmailMarketing.open_count + 1
@@ -367,7 +325,7 @@ class EmailMarketingRepository:
             update(EmailMarketing)
             .where(
                 EmailMarketing.id == campaign_id,
-                EmailMarketing.deleted_at.is_(None),
+                EmailMarketing.deleted_at.is_(None), or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
             )
             .values(
                 click_count=EmailMarketing.click_count + 1

@@ -1,8 +1,10 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from yo.core.auth.permissions import require_permission
+from yo.core.exceptions import AppException
 from yo.core.auth.dependencies import CurrentUser
 from yo.core.database.dependencies import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
@@ -16,16 +18,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
 
-@router.get("", response_model=SuccessResponse)
+@router.get("", response_model=SuccessResponse, dependencies=[Depends(require_permission("meetings", "view"))])
 async def get_meetings(
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
     meeting_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=5, ge=1, le=100),
 ):
-    service = MeetingService(MeetingRepository(session))
+    service = MeetingService(MeetingRepository(session, workspace_id), current_user.id)
 
     try:
         if meeting_id is not None:
@@ -52,7 +55,7 @@ async def get_meetings(
             message="Meetings retrieved successfully",
             data=data,
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to retrieve meetings")
@@ -61,70 +64,66 @@ async def get_meetings(
         )
 
 
-@router.post("", response_model=SuccessResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=SuccessResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("meetings", "create"))])
 async def create_meeting(
     payload: MeetingCreateRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
 ):
     try:
-        meeting = await MeetingService(
-            MeetingRepository(session)
-        ).create_meeting(payload, current_user.id)
+        meeting = await MeetingService(MeetingRepository(session, payload.workspace_id), current_user.id).create_meeting(payload, current_user.id)
 
         return SuccessResponse(
             success=True,
             message="Meeting created successfully",
             data=MeetingResponse.model_validate(meeting),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to create meeting")
         raise HTTPException(status_code=500, detail="Failed to create meeting")
 
 
-@router.put("/{meeting_id}", response_model=SuccessResponse)
+@router.put("/{meeting_id}", response_model=SuccessResponse, dependencies=[Depends(require_permission("meetings", "update"))])
 async def update_meeting(
     meeting_id: UUID,
     payload: MeetingUpdateRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ):
     try:
-        meeting = await MeetingService(
-            MeetingRepository(session)
-        ).update_meeting(meeting_id, payload, current_user.id)
+        meeting = await MeetingService(MeetingRepository(session, workspace_id), current_user.id).update_meeting(meeting_id, payload, current_user.id)
 
         return SuccessResponse(
             success=True,
             message="Meeting updated successfully",
             data=MeetingResponse.model_validate(meeting),
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to update meeting")
         raise HTTPException(status_code=500, detail="Failed to update meeting")
 
 
-@router.delete("/{meeting_id}", response_model=SuccessResponse)
+@router.delete("/{meeting_id}", response_model=SuccessResponse, dependencies=[Depends(require_permission("meetings", "delete"))])
 async def delete_meeting(
     meeting_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ):
     try:
-        await MeetingService(
-            MeetingRepository(session)
-        ).delete_meeting(meeting_id, current_user.id)
+        await MeetingService(MeetingRepository(session, workspace_id), current_user.id).delete_meeting(meeting_id, current_user.id)
 
         return SuccessResponse(
             success=True,
             message="Meeting deleted successfully",
             data=None,
         )
-    except HTTPException:
+    except (HTTPException, AppException):
         raise
     except Exception:
         logger.exception("Failed to delete meeting")

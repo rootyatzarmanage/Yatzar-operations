@@ -4,25 +4,32 @@ from datetime import datetime, timezone
 from sqlalchemy import or_, select, func , cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from yo.repositories.workspace import WorkspaceRepository
+
 from yo.models.meeting import Meeting
 from yo.repositories.base import BaseRepository
 
 
 class MeetingRepository(BaseRepository):
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID | None):
         super().__init__(Meeting, session)
+        self.workspace_id = workspace_id
 
     async def get_meeting(self, meeting_id: uuid.UUID) -> Meeting | None:
         result = await self.session.execute(
             select(Meeting).where(
                 Meeting.id == meeting_id,
                 Meeting.deleted_at.is_(None),
+                Meeting.workspace_id == self.workspace_id,
             )
         )
         return result.scalar_one_or_none()
 
-    async def list_meetings(self,search: str | None = None,page: int = 1,per_page: int = 5) -> dict:
-        conditions = [Meeting.deleted_at.is_(None)]
+    async def list_meetings(self, user_id: uuid.UUID, search: str | None = None,page: int = 1,per_page: int = 5) -> dict:
+        conditions = [
+            Meeting.deleted_at.is_(None),
+            WorkspaceRepository.scope_condition(Meeting.workspace_id, user_id, self.workspace_id),
+        ]
 
         if search and search.strip():
             term = f"%{search.strip()}%"

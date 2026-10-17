@@ -72,6 +72,7 @@ type StringFieldKey = {
     : never;
 }[keyof ContactFields];
 type FieldErrors = Partial<Record<FieldKey, string>>;
+type ContactGroup = { contact: LocalContact; workspaceIds: string[] };
 const maxContactPhotoSize = 5 * 1024 * 1024;
 
 const inputClass =
@@ -127,23 +128,6 @@ function fromApiContact(contact: Contact): LocalContact {
   };
 }
 
-function validateCoordinates(
-  value: string,
-  min: number,
-  max: number,
-  label: string,
-): string | undefined {
-  if (!value.trim()) return `${label} is required.`;
-  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())) {
-    return `Enter a valid ${label.toLowerCase()} from ${min} to ${max}.`;
-  }
-  const coordinate = Number(value);
-  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) {
-    return `Enter a valid ${label.toLowerCase()} from ${min} to ${max}.`;
-  }
-  return undefined;
-}
-
 export default function Contacts({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -186,6 +170,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
 
   useEffect(() => {
     let active = true;
+    setContacts([]);
     void listContacts()
       .then((items) => {
         if (!active) return;
@@ -265,20 +250,53 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 }, []);
 
+  // A contact copied to several workspaces is stored as one row per workspace
+  // by the API. In the global view, combine exact copies for display.
+  const groupedContacts = useMemo<ContactGroup[]>(() => {
+    const groups = new Map<string, ContactGroup>();
+    for (const contact of contacts) {
+      const {
+        workspace: _workspace,
+        id: _id,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        photoUrl: _photoUrl,
+        ...fields
+      } = contact;
+      const signature = JSON.stringify(fields);
+      const existing = groups.get(signature);
+      if (existing && !existing.workspaceIds.includes(contact.workspace)) {
+        existing.workspaceIds.push(contact.workspace);
+      } else if (!existing) {
+        groups.set(signature, {
+          contact,
+          workspaceIds: contact.workspace ? [contact.workspace] : [],
+        });
+      } else {
+        // Identical records in the same workspace are separate contacts.
+        groups.set(`${signature}:${contact.id}`, {
+          contact,
+          workspaceIds: contact.workspace ? [contact.workspace] : [],
+        });
+      }
+    }
+    return [...groups.values()];
+  }, [contacts]);
+
   const filteredContacts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return contacts;
-    return contacts.filter((contact) =>
+    if (!query) return groupedContacts;
+    return groupedContacts.filter(({ contact, workspaceIds }) =>
       [
         contactName(contact),
         contact.email,
         contact.phone,
         contact.otherPhone,
-        contact.workspace,
+        workspaceIds.map((id) => workspaceNames.get(id) ?? "").join(" "),
         contact.leadSource,
       ].some((value) => value.toLowerCase().includes(query)),
     );
-  }, [contacts, searchTerm]);
+  }, [groupedContacts, searchTerm, workspaceNames]);
 
   const totalPages = Math.max(
     1,
@@ -296,7 +314,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   );
   const allPageSelected =
     paginatedContacts.length > 0 &&
-    paginatedContacts.every((contact) => selectedIds.includes(contact.id));
+    paginatedContacts.every(({ contact }) => selectedIds.includes(contact.id));
   const selectedCount = selectedIds.filter((id) =>
     contacts.some((contact) => contact.id === id),
   ).length;
@@ -407,7 +425,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   const saveContact = async (): Promise<LocalContact | null> => {
     try {
       let savedAll: LocalContact[] = [];
-      let saved: LocalContact;
+      let saved: LocalContact | undefined;
       if (editingId) {
   const targets = currentWorkspace ? [currentWorkspace.id] : workspaceIds;
   // keep the contact's own workspace if still selected, else use the first selected
@@ -441,7 +459,34 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       ? `Contact updated and copied to ${extras.length} more workspace(s).`
       : "Contact updated.",
   );
-}     
+      } else {
+        const targets = currentWorkspace ? [currentWorkspace.id] : workspaceIds;
+        const primary = targets.includes(formValues.workspace)
+          ? formValues.workspace
+          : (targets[0] ?? "");
+        const created = fromApiContact(
+          await createContact(
+            toContactPayload({ ...formValues, workspace: primary }),
+          ),
+        );
+        saved = created;
+
+        const extras: LocalContact[] = [];
+        for (const workspaceId of targets.filter((id) => id !== primary)) {
+          const copy = await createContact(
+            toContactPayload({ ...formValues, workspace: workspaceId }),
+          );
+          extras.push(fromApiContact(copy));
+        }
+
+        savedAll = [created, ...extras];
+        setContacts((current) => [created, ...extras, ...current]);
+        setNotice(
+          extras.length
+            ? `Contact created and copied to ${extras.length} more workspace(s).`
+            : "Contact created.",
+        );
+      }
       if (selectedPhoto) {
         for (const c of savedAll) {
           const uploaded = fromApiContact(await uploadContactPhoto(c.id, selectedPhoto));
@@ -452,7 +497,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
         }
       }
       setPageError("");
-      return saved;
+      return saved ?? null;
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Unable to save this contact.",
@@ -544,7 +589,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       setSelectedIds((current) =>
         current.filter(
           (selectedId) =>
-            !paginatedContacts.some((contact) => contact.id === selectedId),
+            !paginatedContacts.some(({ contact }) => contact.id === selectedId),
         ),
       );
       return;
@@ -552,7 +597,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
     setSelectedIds((current) => [
       ...new Set([
         ...current,
-        ...paginatedContacts.map((contact) => contact.id),
+        ...paginatedContacts.map(({ contact }) => contact.id),
       ]),
     ]);
   };
@@ -850,7 +895,7 @@ const handleBulkDelete = async () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {paginatedContacts.map((contact) => (
+                {paginatedContacts.map(({ contact, workspaceIds }) => (
                   <tr
                     key={contact.id}
                     className="transition hover:bg-gray-50 dark:hover:bg-white/2"
@@ -874,7 +919,9 @@ const handleBulkDelete = async () => {
                       {contact.phone}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
-                      {workspaceNames.get(contact.workspace) ?? "—"}
+                      {workspaceIds.length
+                        ? workspaceIds.map((id) => workspaceNames.get(id) ?? id).join(", ")
+                        : "—"}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
                       {contact.leadSource}
@@ -1257,7 +1304,6 @@ const handleBulkDelete = async () => {
                       placeholder: "Enter last name",
                     })}
                     {renderInput("email", "Email", {
-                      required: true,
                       type: "email",
                       inputMode: "email",
                       placeholder: "name@example.com",

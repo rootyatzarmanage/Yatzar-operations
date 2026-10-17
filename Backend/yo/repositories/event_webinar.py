@@ -6,28 +6,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.event_webinar import EventWebinar
 from yo.models.user import User
+from yo.repositories.workspace import WorkspaceRepository
 
 
 class EventWebinarRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: UUID | None):
         self.session = session
+        self.workspace_id = workspace_id
 
     async def get_by_id(self, event_id: UUID):
         result = await self.session.execute(
             select(EventWebinar).where(
                 EventWebinar.id == event_id,
                 EventWebinar.deleted_at.is_(None),
+                EventWebinar.workspace_id == self.workspace_id,
             )
         )
         return result.scalar_one_or_none()
 
     async def list_events(
         self,
+        user_id: UUID,
         search: str | None = None,
         page: int = 1,
         per_page: int = 10,
     ):
-        conditions = [EventWebinar.deleted_at.is_(None)]
+        conditions = [
+            EventWebinar.deleted_at.is_(None),
+            WorkspaceRepository.scope_condition(EventWebinar.workspace_id, user_id, self.workspace_id),
+        ]
 
         if search and search.strip():
             term = f"%{search.strip()}%"
@@ -86,6 +93,7 @@ class EventWebinarRepository:
             select(EventWebinar).where(
                 EventWebinar.id.in_(ids),
                 EventWebinar.deleted_at.is_(None),
+                EventWebinar.workspace_id == self.workspace_id,
             )
         )
         events = result.scalars().all()
@@ -100,7 +108,9 @@ class EventWebinarRepository:
 
     async def get_options(self):
         result = await self.session.execute(
-            select(User.id, User.username).order_by(User.username)
+            select(User.id, User.username).where(
+                User.id.in_(WorkspaceRepository.owner_ids(self.workspace_id)),
+            ).order_by(User.username)
         )
 
         return {

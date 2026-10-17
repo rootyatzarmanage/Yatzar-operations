@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from yo.models.employee import Employee
+from yo.models.workspace import Workspace
 from yo.models.permission import Role
 from yo.models.user import User
 
@@ -17,7 +18,8 @@ class EmployeeRepository:
     @staticmethod
     def _employee_query():
         return select(Employee).options(
-            joinedload(Employee.user).joinedload(User.role)
+            joinedload(Employee.user).joinedload(User.role),
+            joinedload(Employee.workspaces),
         ).execution_options(populate_existing=True)
 
     async def get_employee(self, employee_id: UUID) -> Employee | None:
@@ -26,7 +28,25 @@ class EmployeeRepository:
                 Employee.id == employee_id, Employee.deleted_at.is_(None)
             )
         )
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
+
+    async def get_workspaces_by_ids(
+        self,
+        workspace_ids: list[UUID],
+    ) -> list[Workspace]:
+        if not workspace_ids:
+            return []
+
+        result = await self.session.execute(
+            select(Workspace).where(
+                Workspace.id.in_(workspace_ids),
+                Workspace.deleted_at.is_(None),
+                Workspace.status == "Enabled",
+            )
+        )
+
+        return list(result.scalars().all())
+
 
     async def get_employee_by_code(
         self, employee_code: str, *, include_deleted: bool = False,
@@ -35,7 +55,7 @@ class EmployeeRepository:
         if not include_deleted:
             query = query.where(Employee.deleted_at.is_(None))
         result = await self.session.execute(query)
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def list_employees(
         self,
@@ -98,7 +118,7 @@ class EmployeeRepository:
         else:
             return None
         result = await self.session.execute(self._employee_query().where(*conditions))
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def get_employee_codes(self) -> list[str]:
         result = await self.session.execute(
@@ -126,13 +146,13 @@ class EmployeeRepository:
         if current_user_id is not None:
             query = query.where(User.id != current_user_id)
         result = await self.session.execute(query.limit(1))
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def get_role_by_name(self, name: str) -> Role | None:
         result = await self.session.execute(
             select(Role).where(Role.name == name, Role.deleted_at.is_(None))
         )
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def create_employee(self, values: dict) -> Employee:
         async with self.session.begin_nested():
