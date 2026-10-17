@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yo.models.workspace import Workspace
@@ -13,6 +13,14 @@ from yo.models.permission import Role
 class WorkspaceRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    def super_admin_user(user_id: UUID):
+        return select(User.id).join(Role, Role.id == User.role_id).where(
+            User.id == user_id, User.is_active.is_(True), User.deleted_at.is_(None),
+            Role.deleted_at.is_(None), Role.is_system.is_(True),
+            Role.name == "Super Admin",
+        ).exists()
 
     @staticmethod
     def privileged_user(user_id: UUID):
@@ -32,7 +40,8 @@ class WorkspaceRepository:
             User.id == user_id, User.deleted_at.is_(None), User.is_active.is_(True),
         )
         query = select(Workspace.id).where(
-            Workspace.deleted_at.is_(None), Workspace.id.in_(membership),
+            Workspace.deleted_at.is_(None),
+            or_(cls.super_admin_user(user_id), Workspace.id.in_(membership)),
         )
         if not include_disabled:
             query = query.where(Workspace.status == "Enabled")
