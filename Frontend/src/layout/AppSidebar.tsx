@@ -126,8 +126,8 @@ const workspaceNavItems: NavItem[] = [
       { name: "Campaigns", path: "/campaigns" },
       { name: "Email marketing", path: "/email-marketing" },
       { name: "Event webinar", path: "/event-webinar" },
-      { name: "Content", path: "/content" },
-      { name: "Report", path: "/report" },
+      // { name: "Content", path: "/content" },
+      // { name: "Report", path: "/report" },
     ],
   },
   {
