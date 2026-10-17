@@ -131,7 +131,9 @@ export function getContactPhotoUrl(photo: string | null): string {
   if (!photo) return "";
   if (/^https?:\/\//i.test(photo)) return photo;
 
-  const backendOrigin = API_BASE.replace(/\/api\/v1\/?$/, "");
+  const backendOrigin = API_BASE.startsWith("/")
+    ? ""
+    : API_BASE.replace(/\/api\/v1\/?$/, "");
   return `${backendOrigin}/${photo.replace(/^\/+/, "")}`;
 }
 

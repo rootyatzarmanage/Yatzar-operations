@@ -20,7 +20,9 @@ export type WorkspacePayload = Pick<
 export function getWorkspaceImageUrl(image: string | null | undefined): string {
   if (!image) return "";
   if (/^https?:\/\//i.test(image) || image.startsWith("data:")) return image;
-  const backendOrigin = API_BASE.replace(/\/api\/v1\/?$/, "");
+  const backendOrigin = API_BASE.startsWith("/")
+    ? ""
+    : API_BASE.replace(/\/api\/v1\/?$/, "");
   return `${backendOrigin}/${image.replace(/^\/+/, "")}`;
 }
 
