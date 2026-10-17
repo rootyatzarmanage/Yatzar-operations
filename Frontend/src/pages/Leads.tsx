@@ -1,5 +1,6 @@
 import { listOptions } from "@/api/options";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   addLeadToCustomers,
   createLead,
@@ -33,6 +34,8 @@ const columns: Column<LeadRecord>[] = [
 
 export default function Leads({ embed }: EmbedProps = {}) {
   const { currentWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const currentUserName = user?.display_name || user?.employee_name || user?.username || "";
   const [sources, setSources] = useState<string[]>(fallbackSources);
 
   const store = useMemo(
@@ -42,15 +45,17 @@ export default function Leads({ embed }: EmbedProps = {}) {
 
         const leads = await listLeads();
 
-        return leads.filter(
-          (lead) => lead.workspaceId === currentWorkspace.id,
-        );
+        return leads
+          .filter((lead) => lead.workspaceId === currentWorkspace.id)
+          .map((lead) => lead.leadOwner === user?.id
+            ? { ...lead, leadOwner: currentUserName }
+            : lead);
       },
       create: createLead,
       update: updateLead,
       remove: deleteLead,
     }),
-    [currentWorkspace],
+    [currentWorkspace, user?.id, currentUserName],
   );
 
   useEffect(() => {
@@ -71,7 +76,7 @@ export default function Leads({ embed }: EmbedProps = {}) {
       {
         title: "Lead information",
         fields: [
-          { key: "leadOwner", label: "Lead owner", type: "select", options: ["superadmin"], placeholder: "Select owner", defaultValue: "superadmin" },
+          { key: "leadOwner", label: "Lead owner", type: "select", options: currentUserName ? [currentUserName] : [], placeholder: "Current user", defaultValue: currentUserName },
           { key: "company", label: "Company", maxLength: 255, placeholder: "Enter company" },
           { key: "firstName", label: "First name", maxLength: 100, placeholder: "Enter first name" },
           { key: "lastName", label: "Last name", maxLength: 100, placeholder: "Enter last name" },
@@ -111,7 +116,7 @@ export default function Leads({ embed }: EmbedProps = {}) {
         fields: [{ key: "description", label: "Description", type: "textarea", placeholder: "Add notes about this lead" }],
       },
     ],
-    [sources],
+    [sources, currentUserName],
   );
 
   return (

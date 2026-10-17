@@ -203,8 +203,12 @@ export function uploadContactPhoto(
 export function moveContact(
   contactId: string,
   stage: Exclude<ContactStage, "contact">,
+  workspaceId?: string,
 ): Promise<Contact> {
-  return request<Contact>(`/contacts/${contactId}/move-to-${stage}`, {
+  const query = workspaceId
+    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
+    : "";
+  return request<Contact>(`/contacts/${contactId}/move-to-${stage}${query}`, {
     method: "POST",
   });
 }
