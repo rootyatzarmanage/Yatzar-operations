@@ -2,10 +2,21 @@ from datetime import datetime
 from uuid import UUID
 from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from yo.core.mail_schedule import aware, validate_reminder
 
 
 class CallCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("reminder")
+    @classmethod
+    def validate_mail_lead_time(cls, value):
+        return validate_reminder(value)
+
+    @field_validator("call_start_time")
+    @classmethod
+    def normalize_mail_time(cls, value):
+        return aware(value)
 
     workspace_id: UUID
     contact_id: UUID
@@ -44,6 +55,17 @@ class CallCreateRequest(BaseModel):
 
 class CallUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("reminder")
+    @classmethod
+    def validate_mail_lead_time(cls, value):
+        return validate_reminder(value)
+
+    @field_validator("call_start_time")
+    @classmethod
+    def normalize_mail_time(cls, value):
+        return aware(value)
+
     
     contact_id: UUID | None = None
     subject: str | None = Field(default=None, min_length=1, max_length=255)

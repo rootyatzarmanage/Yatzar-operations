@@ -157,7 +157,18 @@ const AppSidebar: React.FC = () => {
       .map((item) => item.subItems
         ? { ...item, subItems: item.subItems.filter((subItem) => canViewPath(user, subItem.path)) }
         : item)
-      .filter((item) => item.subItems ? item.subItems.length > 0 : !item.path || canViewPath(user, item.path)),
+      .filter((item) => {
+        if (
+          !currentWorkspace &&
+          item.path === "/contacts" &&
+          user?.role !== "Super Admin"
+        ) {
+          return false;
+        }
+        return item.subItems
+          ? item.subItems.length > 0
+          : !item.path || canViewPath(user, item.path);
+      }),
     [currentWorkspace, user],
   );
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([]);

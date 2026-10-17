@@ -21,6 +21,8 @@ export function setAuthToken(token: string | null): void {
 }
 
 const getApiBase = () => {
+  if (import.meta.env.DEV) return "/api/v1";
+
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
     if (typeof window !== "undefined" && window.location) {

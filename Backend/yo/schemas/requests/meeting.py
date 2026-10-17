@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 from typing import Self , Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from yo.core.mail_schedule import aware, validate_reminder
 
     
 class MeetingParticipantRequest(BaseModel):
@@ -10,6 +11,16 @@ class MeetingParticipantRequest(BaseModel):
 
 class MeetingCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("reminder", "reminder_type")
+    @classmethod
+    def validate_mail_lead_time(cls, value):
+        return validate_reminder(value)
+
+    @field_validator("starts_at", "ends_at")
+    @classmethod
+    def normalize_mail_time(cls, value):
+        return aware(value)
 
     workspace_id: UUID
     title: str = Field(min_length=1, max_length=255)
@@ -36,6 +47,16 @@ class MeetingCreateRequest(BaseModel):
 
 class MeetingUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("reminder", "reminder_type")
+    @classmethod
+    def validate_mail_lead_time(cls, value):
+        return validate_reminder(value)
+
+    @field_validator("starts_at", "ends_at")
+    @classmethod
+    def normalize_mail_time(cls, value):
+        return aware(value)
 
     title: str | None = Field(default=None, min_length=1, max_length=255)
     venue: str | None = None

@@ -11,6 +11,13 @@ class TaskService:
         self.repository = repository
         self.user_id = user_id
 
+    @staticmethod
+    def _validate_reminder(enabled, at, kind):
+        if enabled and at is None:
+            raise HTTPException(400, "reminder_at is required when reminders are enabled.")
+        if enabled and (kind or "").lower() not in {"email", "popup", "email and popup"}:
+            raise HTTPException(400, "reminder_type must be Email, Popup, or Email and Popup.")
+
     async def _validate_selection(self, selection, user_id: UUID) -> dict:
         selection_type = selection.selection_type
         contact_ids = list(set(selection.contact_ids))
@@ -78,6 +85,7 @@ class TaskService:
         await WorkspaceService(self.repository.session).ensure_access(
             self.user_id, self.repository.workspace_id,
         )
+        self._validate_reminder(request.reminder_enabled, request.reminder_at, request.reminder_type)
         values = request.model_dump(exclude={"contact_selection"})
         values["contact_selection"] = await self._validate_selection(
             request.contact_selection, user_id
@@ -94,6 +102,11 @@ class TaskService:
         )
         task = await self.get_task(task_id, user_id)
         values = request.model_dump(exclude_unset=True)
+        self._validate_reminder(
+            values.get("reminder_enabled", task.reminder_enabled),
+            values.get("reminder_at", task.reminder_at),
+            values.get("reminder_type", task.reminder_type),
+        )
 
         if "contact_selection" in values:
             selection = request.contact_selection
