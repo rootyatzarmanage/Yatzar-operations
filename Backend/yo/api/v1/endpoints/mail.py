@@ -1,7 +1,7 @@
 from html import escape
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
@@ -14,7 +14,7 @@ from yo.core.schemas.responses import SuccessResponse
 from yo.models.mail_delivery import MailDelivery
 from yo.repositories.workspace import WorkspaceRepository
 
-router = APIRouter(prefix="/mail", tags=["Mail"], dependencies=[Depends(require_workspace_admin)])
+router = APIRouter(prefix="/mail", tags=["Mail"])
 
 
 class MailTestRequest(BaseModel):
@@ -23,7 +23,8 @@ class MailTestRequest(BaseModel):
 
 
 @router.get("/status", summary="Check SMTP configuration without exposing credentials")
-async def mail_status():
+async def mail_status(current_user: CurrentUser):
+    await require_workspace_admin(current_user)
     return SuccessResponse(data={
         "configured": smtp_configured(), "worker_enabled": settings.MAIL_WORKER_ENABLED,
         "poll_seconds": settings.MAIL_POLL_SECONDS, "timezone": settings.MAIL_TIMEZONE,
@@ -33,7 +34,8 @@ async def mail_status():
 
 
 @router.post("/test", summary="Send an SMTP test email immediately")
-async def test_mail(payload: MailTestRequest):
+async def test_mail(current_user: CurrentUser, payload: MailTestRequest):
+    await require_workspace_admin(current_user)
     await send_email(str(payload.to_email), payload.subject,
                      f"<h2>{escape(payload.subject)}</h2><p>SMTP delivery from Yatzar Operations is working.</p>")
     return SuccessResponse(message="SMTP server accepted the test email", data={"to_email": payload.to_email})
@@ -43,6 +45,7 @@ async def test_mail(payload: MailTestRequest):
 async def mail_deliveries(session: DatabaseSession, current_user: CurrentUser, workspace_id: UUID | None = None,
                           source_id: UUID | None = None,
                           skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+    await require_workspace_admin(current_user)
     query = select(MailDelivery).where(MailDelivery.workspace_id.in_(
         WorkspaceRepository.accessible_ids(current_user.id, include_disabled=True),
     ))

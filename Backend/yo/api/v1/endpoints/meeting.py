@@ -1,9 +1,9 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
-from yo.core.auth.permissions import require_permission
+from yo.services.role import RoleService
 from yo.core.exceptions import AppException
 from yo.core.auth.dependencies import CurrentUser
 from yo.core.database.dependencies import DatabaseSession
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
 
-@router.get("", response_model=SuccessResponse, dependencies=[Depends(require_permission("meetings", "view"))])
+@router.get("", response_model=SuccessResponse)
 async def get_meetings(
     session: DatabaseSession,
     current_user: CurrentUser,
@@ -28,6 +28,7 @@ async def get_meetings(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=5, ge=1, le=100),
 ):
+    await RoleService(session).check_permission(current_user, "meetings", "view")
     service = MeetingService(MeetingRepository(session, workspace_id), current_user.id)
 
     try:
@@ -64,12 +65,13 @@ async def get_meetings(
         )
 
 
-@router.post("", response_model=SuccessResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("meetings", "create"))])
+@router.post("", response_model=SuccessResponse, status_code=status.HTTP_201_CREATED)
 async def create_meeting(
     payload: MeetingCreateRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
 ):
+    await RoleService(session).check_permission(current_user, "meetings", "create")
     try:
         meeting = await MeetingService(MeetingRepository(session, payload.workspace_id), current_user.id).create_meeting(payload, current_user.id)
 
@@ -85,7 +87,7 @@ async def create_meeting(
         raise HTTPException(status_code=500, detail="Failed to create meeting")
 
 
-@router.put("/{meeting_id}", response_model=SuccessResponse, dependencies=[Depends(require_permission("meetings", "update"))])
+@router.put("/{meeting_id}", response_model=SuccessResponse)
 async def update_meeting(
     meeting_id: UUID,
     payload: MeetingUpdateRequest,
@@ -93,6 +95,7 @@ async def update_meeting(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
+    await RoleService(session).check_permission(current_user, "meetings", "update")
     try:
         meeting = await MeetingService(MeetingRepository(session, workspace_id), current_user.id).update_meeting(meeting_id, payload, current_user.id)
 
@@ -108,13 +111,14 @@ async def update_meeting(
         raise HTTPException(status_code=500, detail="Failed to update meeting")
 
 
-@router.delete("/{meeting_id}", response_model=SuccessResponse, dependencies=[Depends(require_permission("meetings", "delete"))])
+@router.delete("/{meeting_id}", response_model=SuccessResponse)
 async def delete_meeting(
     meeting_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
+    await RoleService(session).check_permission(current_user, "meetings", "delete")
     try:
         await MeetingService(MeetingRepository(session, workspace_id), current_user.id).delete_meeting(meeting_id, current_user.id)
 
