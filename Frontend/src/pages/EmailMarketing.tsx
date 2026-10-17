@@ -13,7 +13,9 @@ import {
   replicateEmailMarketingCampaign,
   scheduleEmailMarketingCampaign,
   setEmailMarketingRecipientEnabled,
+  updateEmailMarketingCampaign,
   type EmailMarketingCampaign as ApiEmailCampaign,
+  type EmailMarketingCreatePayload,
   type EmailMarketingReport,
   type EmailMarketingRecipient,
 } from "@/api/emailMarketing";
@@ -67,6 +69,7 @@ type EmailCampaignForm = {
   mailType: MailType;
   platform: string;
   scheduledAt: string;
+  selectedUserIds: string[] | null;
 };
 
 function fromApiCampaign(campaign: ApiEmailCampaign): EmailCampaign {
@@ -671,6 +674,8 @@ export default function EmailMarketing() {
   const workspaceKey = currentWorkspace?.id ?? "__all_workspaces__";
   const [showNewCampaign, setShowNewCampaign] =
     useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<EmailCampaign | null>(null);
+  const [editingRecipientUserIds, setEditingRecipientUserIds] = useState<string[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [pageError, setPageError] = useState("");
@@ -734,7 +739,7 @@ export default function EmailMarketing() {
   }, [workspaceKey]);
 
   const handleAddCampaign = async (form: EmailCampaignForm) => {
-    if (!canCreate) return;
+    if (editingCampaign ? !canUpdate : !canCreate) return;
     if (!currentWorkspace?.id) {
       setPageError("Open a workspace before creating an email campaign.");
       setShowNewCampaign(false);
@@ -743,7 +748,7 @@ export default function EmailMarketing() {
     setIsSaving(true);
     setPageError("");
     try {
-      await createEmailMarketingCampaign({
+      const payload: EmailMarketingCreatePayload = {
         workspace_id: currentWorkspace.id,
         campaign_name: form.campaignName,
         platform: form.platform,
@@ -751,18 +756,50 @@ export default function EmailMarketing() {
         mail_type: form.mailType === "test" ? "Test Email" : "Bulk Email",
         to_email: form.mailType === "test" ? form.testEmail : null,
         tag_id: form.mailType === "bulk" ? form.tagId : null,
-        selection_mode: form.mailType === "bulk" ? "all" : null,
-        selected_user_ids: [],
+        selection_mode: form.mailType === "bulk" ? (form.selectedUserIds ? "selected" : "all") : null,
+        selected_user_ids: form.mailType === "bulk" ? (form.selectedUserIds ?? []) : [],
         subject: form.subject,
         content: form.content,
         scheduled_at: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
-      });
+      };
+      const saved = editingCampaign
+        ? await updateEmailMarketingCampaign(editingCampaign.id, payload)
+        : await createEmailMarketingCampaign(payload);
+      if (editingCampaign) {
+        setCampaigns((previous) => previous.map((campaign) =>
+          campaign.id === saved.id ? fromApiCampaign(saved) : campaign,
+        ));
+      }
       await refreshCampaigns();
       setReplicateCampaign(null);
+      setEditingCampaign(null);
+      setEditingRecipientUserIds(null);
       setShowNewCampaign(false);
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Unable to create campaign.");
       throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditCampaign = async (campaign: EmailCampaign) => {
+    if (!canUpdate) return;
+    setIsSaving(true);
+    setPageError("");
+    try {
+      const [details, recipients] = await Promise.all([
+        getEmailMarketingCampaign(campaign.id),
+        getEmailMarketingRecipients(campaign.id),
+      ]);
+      setEditingCampaign(fromApiCampaign(details));
+      setEditingRecipientUserIds(details.mail_type === "Bulk Email"
+        ? recipients.filter((recipient) => recipient.is_enabled && recipient.user_id).map((recipient) => recipient.user_id!)
+        : null);
+      setReplicateCampaign(null);
+      setShowNewCampaign(true);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Unable to load campaign for editing.");
     } finally {
       setIsSaving(false);
     }
@@ -826,6 +863,8 @@ export default function EmailMarketing() {
 
   useEffect(() => {
     setShowNewCampaign(false);
+    setEditingCampaign(null);
+    setEditingRecipientUserIds(null);
     setReplicateCampaign(null);
     setSelectedCampaign(null);
     setShowViewModal(false);
@@ -839,9 +878,13 @@ export default function EmailMarketing() {
   if (showNewCampaign) {
     return (
       <EmailCampaignForm
-        initialCampaign={replicateCampaign}
+        initialCampaign={editingCampaign ?? replicateCampaign}
+        initialSelectedUserIds={editingCampaign ? editingRecipientUserIds : null}
+        isEditing={Boolean(editingCampaign)}
         onCancel={() => {
           setReplicateCampaign(null);
+          setEditingCampaign(null);
+          setEditingRecipientUserIds(null);
           setShowNewCampaign(false);
         }}
         onSave={handleAddCampaign}
@@ -1050,7 +1093,7 @@ export default function EmailMarketing() {
 
                           {/* REPORT */}
 
-                          <button
+                          {!(["Draft", "Queued", "Scheduled"].includes(campaign.status) && campaign.scheduledAt) && <button
                             type="button"
                             title="Report"
                             onClick={() =>
@@ -1061,7 +1104,19 @@ export default function EmailMarketing() {
                             className="rounded-md bg-blue-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-600"
                           >
                             Report
-                          </button>
+                          </button>}
+
+                          {canUpdate && Boolean(campaign.scheduledAt) && ["Draft", "Queued", "Scheduled"].includes(campaign.status) && (
+                            <button
+                              type="button"
+                              title="Edit scheduled email"
+                              onClick={() => void handleEditCampaign(campaign)}
+                              disabled={isSaving}
+                              className="rounded-md bg-blue-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-600 disabled:opacity-50"
+                            >
+                              Edit
+                            </button>
+                          )}
 
                           {/* REPLICATE */}
 
@@ -1184,11 +1239,15 @@ export default function EmailMarketing() {
 
 function EmailCampaignForm({
   initialCampaign,
+  initialSelectedUserIds,
+  isEditing,
   onCancel,
   onSave,
   isSaving,
 }: {
   initialCampaign: EmailCampaign | null;
+  initialSelectedUserIds: string[] | null;
+  isEditing: boolean;
   onCancel: () => void;
   onSave: (form: EmailCampaignForm) => Promise<void>;
   isSaving: boolean;
@@ -1220,6 +1279,7 @@ function EmailCampaignForm({
   const [tagId, setTagId] = useState(
     initialCampaign?.tagId ?? "",
   );
+  const [selectedUserIds, setSelectedUserIds] = useState<string[] | null>(initialSelectedUserIds);
 
   const [subject, setSubject] = useState(
     initialCampaign?.subject ?? "",
@@ -1372,6 +1432,7 @@ function EmailCampaignForm({
           mailType,
           platform,
           scheduledAt,
+          selectedUserIds: null,
         });
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Unable to queue campaign.");
@@ -1392,6 +1453,11 @@ function EmailCampaignForm({
       return;
     }
 
+    if (selectedUserIds && selectedUserIds.length === 0) {
+      setError("This campaign has no enabled recipients. Choose a different tag before saving.");
+      return;
+    }
+
     /*
      * Bulk email = number of contacts
      * inside selected tag
@@ -1408,6 +1474,7 @@ function EmailCampaignForm({
         mailType,
         platform,
         scheduledAt,
+        selectedUserIds,
       });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to queue campaign.");
@@ -1417,12 +1484,12 @@ function EmailCampaignForm({
   return (
     <>
       <PageMeta
-        title="New campaign | Yatzar Operations"
+        title={`${isEditing ? "Edit" : "New"} campaign | Yatzar Operations`}
         description="Create and send email marketing campaigns."
       />
 
       <PageBreadcrumb
-        pageTitle="New campaign"
+        pageTitle={isEditing ? "Edit campaign" : "New campaign"}
         parent={{
           label: "Email marketing",
         }}
@@ -1437,8 +1504,7 @@ function EmailCampaignForm({
           </h1>
 
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Create and send email marketing
-            campaigns.
+            {isEditing ? "Update this scheduled email campaign." : "Create and send email marketing campaigns."}
           </p>
         </div>
 
@@ -1602,9 +1668,10 @@ function EmailCampaignForm({
                   <select
                     value={tagId}
                     onChange={(event) =>
-                      setTagId(
-                        event.target.value,
-                      )
+                      {
+                        setTagId(event.target.value);
+                        setSelectedUserIds(null);
+                      }
                     }
                     className={inputClass}
                   >
@@ -1721,7 +1788,7 @@ function EmailCampaignForm({
                 Cancel
               </button>
 
-              <button
+              {!isEditing && <button
                 type="button"
                 onClick={() => {
                   setCampaignName("");
@@ -1738,14 +1805,14 @@ function EmailCampaignForm({
                 className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
               >
                 Clear
-              </button>
+              </button>}
 
               <button
                 type="submit"
                 disabled={isSaving}
                 className="rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-700 disabled:cursor-wait disabled:opacity-60"
               >
-                {isSaving ? "Saving…" : scheduledAt ? "Schedule email" : "Send email"}
+                {isSaving ? "Saving…" : isEditing ? "Save changes" : scheduledAt ? "Schedule email" : "Send email"}
               </button>
             </div>
           </form>
