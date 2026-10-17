@@ -251,7 +251,7 @@ export default function Workspace() {
     const trimmedName = formValues.name.trim();
     const trimmedDescription = formValues.description.trim();
 
-    if (!trimmedName || !trimmedDescription || !formValues.status) {
+    if (!trimmedName || !trimmedDescription) {
       setFormError("Please fill in all required fields.");
       return;
     }
@@ -818,10 +818,9 @@ export default function Workspace() {
 
               <div className="md:col-span-1">
                 <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Status <span className="text-red-500">*</span>
+                  Status
                 </label>
                 <select
-                  required
                   value={formValues.status}
                   onChange={(event) =>
                     handleFieldChange(
