@@ -21,14 +21,26 @@ from yo.models.contact import Contact
 from yo.repositories.contact import ContactRepository
 from yo.repositories.workspace import WorkspaceRepository
 from yo.services.role import RoleService
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from yo.services.mail_worker import run_mail_worker
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    def check_schema(connection):
+        inspector = inspect(connection)
+        tables = set(inspector.get_table_names())
+        if "alembic_version" not in tables or not connection.scalar(text("SELECT version_num FROM alembic_version LIMIT 1")):
+            raise RuntimeError("Database migrations are not initialized. Run `alembic upgrade head` from Backend before starting the API.")
+        missing = []
+        for table in Base.metadata.sorted_tables:
+            columns = {c["name"] for c in inspector.get_columns(table.name)} if table.name in tables else set()
+            missing.extend(f"{table.name}.{column.name}" for column in table.columns if column.name not in columns)
+        if missing:
+            raise RuntimeError("Database schema is outdated. Run `alembic upgrade head`. Missing: " + ", ".join(missing))
+
+    async with engine.connect() as connection:
+        await connection.run_sync(check_schema)
     async with AsyncSessionLocal() as session:
         await seed_default_data(session)
     stop = asyncio.Event()
