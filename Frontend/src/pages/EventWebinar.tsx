@@ -18,6 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { getCurrentUser } from "@/api/auth";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 type EventStatus = "Planning" | "Active" | "Complete";
 
@@ -134,6 +135,10 @@ function getStatusClass(status: EventStatus) {
 }
 
 export default function EventWebinar() {
+  const { user } = useAuth();
+  const canCreate = hasPermission(user, "Event Webinar", "create");
+  const canUpdate = hasPermission(user, "Event Webinar", "update");
+  const canDelete = hasPermission(user, "Event Webinar", "delete");
   const { currentWorkspace } = useWorkspace();
   const [events, setEvents] = useState<EventWebinar[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -234,7 +239,7 @@ export default function EventWebinar() {
   };
 
   const bulkDelete = async () => {
-    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} events?`)) return;
+    if (!canDelete || !selectedIds.length || !window.confirm(`Delete ${selectedIds.length} events?`)) return;
     try {
       await Promise.all(selectedIds.map((id) => deleteEventWebinar(id)));
       setEvents((current) => current.filter((event) => !selectedIds.includes(event.id)));
@@ -246,6 +251,7 @@ export default function EventWebinar() {
   };
 
   const openAddForm = () => {
+    if (!canCreate) return;
     setEditingId(null);
     setForm({
         ...emptyForm,
@@ -255,6 +261,7 @@ export default function EventWebinar() {
   };
 
   const openEditForm = (event: EventWebinar) => {
+    if (!canUpdate) return;
     setEditingId(event.id);
 
     setForm({
@@ -294,6 +301,7 @@ export default function EventWebinar() {
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (editingId ? !canUpdate : !canCreate) return;
 
     setSaving(true);
     try {
@@ -318,6 +326,7 @@ export default function EventWebinar() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return;
     if (!window.confirm("Delete this event webinar?")) return;
     try {
       await deleteEventWebinar(id);
@@ -386,14 +395,14 @@ export default function EventWebinar() {
             </p>
           </div>
 
-          <button
+          {canCreate && <button
             type="button"
             onClick={openAddForm}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
           >
             <Plus size={17} />
             Add event
-          </button>
+          </button>}
         </div>
 
         {/* SEARCH + ENTRIES */}
@@ -437,7 +446,7 @@ export default function EventWebinar() {
             entries
           </label>
         </div>
-        {selectedCount > 0 && (
+        {canDelete && selectedCount > 0 && (
           <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
             <span>{selectedCount} selected</span>
             <div className="flex gap-2">
@@ -455,7 +464,7 @@ export default function EventWebinar() {
           <table className="w-full min-w-[1200px] text-start">
             <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.02]">
               <tr>
-                <th className="w-12 px-5 py-3">
+                {canDelete && <th className="w-12 px-5 py-3">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -463,7 +472,7 @@ export default function EventWebinar() {
                     className="size-4 accent-brand-500"
                     aria-label="Select all events"
                   />
-                </th>
+                </th>}
 
                 <th className={thClass}>CAMPAIGN NAME</th>
 
@@ -483,7 +492,7 @@ export default function EventWebinar() {
 
                 <th className={thClass}>ACTUAL COST</th>
 
-                <th className={thClass}>ACTIONS</th>
+                {(canUpdate || canDelete) && <th className={thClass}>ACTIONS</th>}
               </tr>
             </thead>
 
@@ -499,7 +508,7 @@ export default function EventWebinar() {
                   key={event.id}
                   className="transition hover:bg-gray-50 dark:hover:bg-white/[0.02]"
                 >
-                  <td className="px-5 py-4">
+                  {canDelete && <td className="px-5 py-4">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(event.id)}
@@ -513,7 +522,7 @@ export default function EventWebinar() {
                       className="size-4 accent-brand-500"
                       aria-label={`Select ${event.name}`}
                     />
-                  </td>
+                  </td>}
 
                   <td className="px-3 py-4 sm:px-5">
                     <span className="text-sm font-medium text-gray-800 dark:text-white/90">
@@ -567,9 +576,9 @@ export default function EventWebinar() {
                       : "Rs. 0"}
                   </td>
 
-                  <td className="px-3 py-4 sm:px-5">
+                  {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                     <div className="flex items-center gap-1">
-                      <button
+                      {canUpdate && <button
                         type="button"
                         onClick={() => openEditForm(event)}
                         title="Edit"
@@ -577,9 +586,9 @@ export default function EventWebinar() {
                         className="rounded-md p-1.5 text-brand-500 transition hover:bg-brand-50 dark:hover:bg-brand-500/10"
                       >
                         <Pencil size={16} />
-                      </button>
+                      </button>}
 
-                      <button
+                      {canDelete && <button
                         type="button"
                         onClick={() => handleDelete(event.id)}
                         title="Delete"
@@ -587,9 +596,9 @@ export default function EventWebinar() {
                         className="rounded-md p-1.5 text-error-500 transition hover:bg-error-50 dark:hover:bg-error-500/10"
                       >
                         <Trash2 size={16} />
-                      </button>
+                      </button>}
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
