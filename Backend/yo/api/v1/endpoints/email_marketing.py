@@ -19,6 +19,7 @@ from yo.services.email_marketing import EmailMarketingService
 from yo.schemas.requests.email_marketing import (
     EmailMarketingCreateRequest,
     EmailMarketingRecipientStatusRequest,
+    EmailMarketingScheduleRequest,
 )
 
 from yo.schemas.responses.email_marketing import (
@@ -127,6 +128,7 @@ async def track_email_click(
     response_model=SuccessResponse[EmailMarketingResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Queue email campaign for immediate or scheduled SMTP delivery",
+    description="Set scheduled_at to a future date/time to schedule delivery. The worker sends the saved subject/content only to the saved enabled recipients, at or after that time. Omit scheduled_at for immediate queuing.",
     dependencies=[Depends(require_permission("emailMarketing", "create"))],
 )
 async def create_email_campaign(
@@ -149,6 +151,28 @@ async def create_email_campaign(
     return SuccessResponse(
         success=True,
         message="Email marketing campaign queued for delivery",
+        data=EmailMarketingResponse.model_validate(campaign),
+    )
+
+
+@router.patch(
+    "/{campaign_id}/schedule",
+    response_model=SuccessResponse[EmailMarketingResponse],
+    summary="Set or change the send time before campaign delivery starts",
+    dependencies=[Depends(require_permission("emailMarketing", "update"))],
+)
+async def schedule_email_campaign(
+    campaign_id: UUID,
+    payload: EmailMarketingScheduleRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+    workspace_id: UUID = Query(...),
+) -> SuccessResponse[EmailMarketingResponse]:
+    campaign = await get_service(session, workspace_id, current_user.id).schedule_campaign(
+        campaign_id, payload.scheduled_at,
+    )
+    return SuccessResponse(
+        message="Campaign scheduled for delivery to its saved recipients",
         data=EmailMarketingResponse.model_validate(campaign),
     )
 
