@@ -72,8 +72,8 @@ export default function Leads({ embed }: EmbedProps = {}) {
         title: "Lead information",
         fields: [
           { key: "leadOwner", label: "Lead owner", type: "select", options: ["superadmin"], placeholder: "Select owner", defaultValue: "superadmin" },
-          { key: "company", label: "Company", required: true, placeholder: "Enter company" },
-          { key: "firstName", label: "First name", required: true, placeholder: "Enter first name" },
+          { key: "company", label: "Company", placeholder: "Enter company" },
+          { key: "firstName", label: "First name", placeholder: "Enter first name" },
           { key: "lastName", label: "Last name", placeholder: "Enter last name" },
           { key: "title", label: "Title", placeholder: "Enter title" },
           { key: "email", label: "Email", type: "email", placeholder: "name@example.com" },

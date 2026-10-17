@@ -740,7 +740,6 @@ function AddCampaign({
               <FormSelect
                 name="status"
                 label="Status"
-                required
                 value={form.status}
                 onChange={handleChange}
               >

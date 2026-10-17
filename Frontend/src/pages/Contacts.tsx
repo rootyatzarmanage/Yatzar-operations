@@ -673,7 +673,6 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
     field: StringFieldKey,
     label: string,
     options: {
-      required?: boolean;
       type?: string;
       inputMode?: "text" | "email" | "tel" | "decimal";
       fullWidth?: boolean;
@@ -721,26 +720,21 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
     return (
       <div className="grid gap-5 md:grid-cols-2">
         {renderInput(field("AddressLine1"), "Flat / House no. / Building", {
-          required: true,
           placeholder: "Enter flat, house number or building",
         })}
         {renderInput(field("AddressLine2"), "Street address", {
           placeholder: "Enter street address",
         })}
         {renderInput(field("City"), "City", {
-          required: true,
           placeholder: "Enter city",
         })}
         {renderInput(field("State"), "State", {
-          required: true,
           placeholder: "Enter state",
         })}
         {renderInput(field("Country"), "Country", {
-          required: true,
           placeholder: "Enter country",
         })}
         {renderInput(field("Pincode"), "Pincode", {
-          required: true,
           placeholder: "Enter pincode",
         })}
       </div>
@@ -1344,7 +1338,6 @@ const handleBulkDelete = async () => {
                       </select>
                     </div>
                     {renderInput("firstName", "First Name", {
-                      required: true,
                       placeholder: "Enter first name",
                     })}
                     {renderInput("lastName", "Last Name", {
@@ -1357,7 +1350,6 @@ const handleBulkDelete = async () => {
                     })}
                     {renderInput("secondaryEmail", "Secondary email", { type: "email", inputMode: "email", placeholder: "secondary@example.com" })}
                     {renderInput("phone", "Phone", {
-                      required: true,
                       type: "tel",
                       inputMode: "tel",
                       placeholder: "Enter phone number",
