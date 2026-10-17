@@ -22,7 +22,7 @@ import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
 import type { EmbedProps } from "@/components/records/embed";
-import { useAuth } from "@/context/AuthContext";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import {
   useEffect,
   useMemo,
@@ -130,6 +130,9 @@ function fromApiContact(contact: Contact): LocalContact {
 
 export default function Contacts({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
+  const canCreate = hasPermission(user, "Contacts", "create");
+  const canUpdate = hasPermission(user, "Contacts", "update");
+  const canDelete = hasPermission(user, "Contacts", "delete");
   const { t } = useTranslation();
   const { currentWorkspace } = useWorkspace();
   const [contacts, setContacts] = useState<LocalContact[]>([]);
@@ -327,6 +330,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 
   const openAddForm = () => {
+    if (!canCreate) return;
     clearMessages();
     setEditingId(null);
     setViewing(false);
@@ -340,6 +344,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 
   const openEditForm = (contact: LocalContact) => {
+    if (!canUpdate) return;
     clearMessages();
     setEditingId(contact.id);
     setViewing(false);
@@ -508,6 +513,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (editingId ? !canUpdate : !canCreate) return;
     setIsSaving(true);
     try {
       if (await saveContact()) closeForm();
@@ -518,6 +524,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
 
   /** Form buttons: save the contact and also add it to Leads / Customers. */
   const handleSaveAndAdd = async (to: MoveTarget) => {
+    if (!canUpdate || (editingId ? !canUpdate : !canCreate)) return;
     setIsSaving(true);
     try {
       const saved = await saveContact();
@@ -550,6 +557,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
 
   /** Row action: move the contact to Leads / Customers (removed from Contacts). */
   const confirmMove = async () => {
+    if (!canUpdate) return;
     if (!moveRequest) return;
     const contact = contacts.find((item) => item.id === moveRequest.id);
     if (!contact) {
@@ -603,6 +611,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 
   const confirmDelete = async () => {
+    if (!canDelete) return;
     if (!deleteId) return;
     setIsSaving(true);
     try {
@@ -708,6 +717,7 @@ const clearSelection = () => {
 };
 
 const handleBulkDelete = async () => {
+  if (!canDelete) return;
   const idsToDelete = selectedIds.filter((id) =>
     contacts.some((contact) => contact.id === id)
   );
@@ -751,8 +761,8 @@ const handleBulkDelete = async () => {
   useEffect(() => {
     if (!embed || embedInit.current) return;
     embedInit.current = true;
-    openAddForm();
-  });
+    if (canCreate) openAddForm();
+  }, [embed, canCreate]);
 
   return (
     <>
@@ -796,13 +806,13 @@ const handleBulkDelete = async () => {
               Manage contact records and their information in one place.
             </p>
           </div>
-          <button
+          {canCreate && <button
             type="button"
             onClick={openAddForm}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
           >
             <span className="text-lg leading-none">+</span>Add Contact
-          </button>
+          </button>}
         </div>
 
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -843,7 +853,7 @@ const handleBulkDelete = async () => {
           </div>
         </div>
         
-{selectedCount > 0 && (
+{canDelete && selectedCount > 0 && (
   <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
     <span className="text-sm text-gray-700 dark:text-gray-300">
       <strong>{selectedCount}</strong> selected
@@ -875,7 +885,7 @@ const handleBulkDelete = async () => {
           <table className="w-full min-w-[900px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3">
+                  {canDelete && <th className="w-12 px-5 py-3">
                     <input
                       type="checkbox"
                       checked={allPageSelected}
@@ -883,7 +893,7 @@ const handleBulkDelete = async () => {
                       className="size-4 rounded accent-brand-500"
                       aria-label="Select all contacts on this page"
                     />
-                  </th>
+                  </th>}
                   <th className={tableHeaderClass}>Contact Name</th>
                   <th className={tableHeaderClass}>Email</th>
                   <th className={tableHeaderClass}>Phone</th>
@@ -900,7 +910,7 @@ const handleBulkDelete = async () => {
                     key={contact.id}
                     className="transition hover:bg-gray-50 dark:hover:bg-white/2"
                   >
-                    <td className="px-5 py-4">
+                    {canDelete && <td className="px-5 py-4">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(contact.id)}
@@ -908,7 +918,7 @@ const handleBulkDelete = async () => {
                         className="size-4 rounded accent-brand-500"
                         aria-label={`Select ${contactName(contact)}`}
                       />
-                    </td>
+                    </td>}
                     <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
                       {contactName(contact)}
                     </td>
@@ -928,7 +938,7 @@ const handleBulkDelete = async () => {
                     </td>
                     <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center justify-center gap-1 text-sm font-medium sm:gap-3">
-                        <button
+                        {canUpdate && <button
                           type="button"
                           onClick={() => {
                             clearMessages();
@@ -943,8 +953,8 @@ const handleBulkDelete = async () => {
                             <circle cx="9" cy="7" r="4" />
                             <path d="M19 8v6M22 11h-6" />
                           </svg>
-                        </button>
-                        <button
+                        </button>}
+                        {canUpdate && <button
                           type="button"
                           onClick={() => {
                             clearMessages();
@@ -959,7 +969,7 @@ const handleBulkDelete = async () => {
                             <circle cx="9" cy="7" r="4" />
                             <path d="m16 11 2 2 4-4" />
                           </svg>
-                        </button>
+                        </button>}
                         <button
                           type="button"
                           onClick={() => openViewForm(contact)}
@@ -972,7 +982,7 @@ const handleBulkDelete = async () => {
                             <circle cx="12" cy="12" r="2.5" />
                           </svg>
                         </button>
-                        <button
+                        {canUpdate && <button
                           type="button"
                           onClick={() => openEditForm(contact)}
                           className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
@@ -989,8 +999,8 @@ const handleBulkDelete = async () => {
                             <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
                             <path d="m13.5 6.5 4 4" />
                           </svg>
-                        </button>
-                        <button
+                        </button>}
+                        {canDelete && <button
                           type="button"
                           onClick={() => {
                             clearMessages();
@@ -1012,7 +1022,7 @@ const handleBulkDelete = async () => {
                             <path d="M7 7l1 12h8l1-12" />
                             <path d="M10 11v5M14 11v5" />
                           </svg>
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -1085,9 +1095,9 @@ const handleBulkDelete = async () => {
           badge={workspaceNames.get(formValues.workspace) ?? ""}
           imageUrl={photoPreview || undefined}
           onBack={closeForm}
-          onEdit={() => setViewing(false)}
+          onEdit={canUpdate ? () => setViewing(false) : undefined}
           actions={
-            editingId ? (
+            editingId && canUpdate ? (
               <>
                 <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "leads" })} className="inline-flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Move to lead</button>
                 <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "customers" })} className="inline-flex h-10 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">Move to customer</button>
@@ -1153,16 +1163,16 @@ const handleBulkDelete = async () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {!viewing && <button type="button" onClick={() => handleSaveAndAdd("leads")} disabled={isSaving} className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">
+                {!viewing && canUpdate && (editingId || canCreate) && <button type="button" onClick={() => handleSaveAndAdd("leads")} disabled={isSaving} className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">
                   Move to lead
                 </button>}
-                {!viewing && <button type="button" onClick={() => handleSaveAndAdd("customers")} disabled={isSaving} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                {!viewing && canUpdate && (editingId || canCreate) && <button type="button" onClick={() => handleSaveAndAdd("customers")} disabled={isSaving} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                   Move to customer
                 </button>}
                 <button type="button" onClick={closeForm} disabled={isSaving} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
                   Cancel
                 </button>
-                {!viewing && <button type="submit" form="contact-form" disabled={isSaving} className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600">
+                {!viewing && (editingId ? canUpdate : canCreate) && <button type="submit" form="contact-form" disabled={isSaving} className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600">
                   {isSaving ? "Saving..." : "Save contact"}
                 </button>}
               </div>

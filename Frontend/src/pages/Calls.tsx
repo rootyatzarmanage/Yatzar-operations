@@ -9,7 +9,7 @@ import {
 } from "@/api/calls";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
-import { useAuth } from "@/context/AuthContext";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
@@ -109,6 +109,9 @@ type FormErrors = { contactId?: string; startTime?: string; duration?: string };
 
 export default function Calls({ embed }: EmbedProps = {}) {
   const { user } = useAuth();
+  const canCreate = hasPermission(user, "Calls", "create");
+  const canUpdate = hasPermission(user, "Calls", "update");
+  const canDelete = hasPermission(user, "Calls", "delete");
   const { currentWorkspace } = useWorkspace();
   const callOwner = user?.display_name || user?.employee_name || user?.username || "";
 
@@ -206,7 +209,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
   const allSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const bulkDelete = async () => {
-    if (!selectedIds.length || !window.confirm(`Delete ${selectedIds.length} calls?`)) return;
+    if (!canDelete || !selectedIds.length || !window.confirm(`Delete ${selectedIds.length} calls?`)) return;
     try {
       await Promise.all(selectedIds.map((id) => deleteCall(id)));
       setCalls((current) => current.filter((call) => !selectedIds.includes(call.id)));
@@ -218,6 +221,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
 
   // ---------- actions ----------
   const openAdd = (kind: CallKind) => {
+    if (!canCreate) return;
     setMenuOpen(false);
     setEditingId(null);
     setErrors({});
@@ -230,6 +234,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
   };
 
   const openEdit = (call: Call) => {
+    if (!canUpdate) return;
     const mins = call.durationSeconds === null ? "" : String(Math.floor(call.durationSeconds / 60));
     const secs = call.durationSeconds === null ? "" : String(call.durationSeconds % 60);
     setEditingId(call.id);
@@ -261,6 +266,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
 
   const handleSave = async (event: FormEvent) => {
     event.preventDefault();
+    if (editingId ? !canUpdate : !canCreate) return;
     const next: FormErrors = {};
 
     let durationSeconds: number | null = null;
@@ -320,7 +326,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
   };
 
   const confirmDelete = async () => {
-    if (!deleteId) return;
+    if (!canDelete || !deleteId) return;
     try {
       setApiError("");
       await deleteCall(deleteId);
@@ -369,7 +375,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Log, schedule and track calls in one place.</p>
             </div>
 
-            <div ref={menuRef} className="relative">
+            {canCreate && <div ref={menuRef} className="relative">
               <button
                 type="button"
                 onClick={() => setMenuOpen((open) => !open)}
@@ -390,7 +396,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
 
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -422,7 +428,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
             </label>
           </div>
 
-          {selectedIds.length > 0 && (
+          {canDelete && selectedIds.length > 0 && (
             <div className="flex items-center justify-between border-b border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
               <span>{selectedIds.length} selected</span>
               <div className="flex gap-2">
@@ -436,7 +442,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
             <table className="w-full min-w-[1000px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>
+                  {canDelete && <th className="w-12 px-5 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])} className="size-4 accent-brand-500" aria-label="Select all" /></th>}
                   <th className={thClass}>Subject</th>
                   <th className={thClass}>Call type</th>
                   <th className={thClass}>Call start time</th>
@@ -444,13 +450,13 @@ export default function Calls({ embed }: EmbedProps = {}) {
                   <th className={thClass}>Related to</th>
                   <th className={thClass}>Contact name</th>
                   <th className={thClass}>Call owner</th>
-                  <th className={thClass}>Actions</th>
+                  {(canUpdate || canDelete) && <th className={thClass}>Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {visible.map((call) => (
                   <tr key={call.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
-                    <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(call.id)} onChange={() => setSelectedIds((current) => current.includes(call.id) ? current.filter((id) => id !== call.id) : [...current, call.id])} className="size-4 accent-brand-500" aria-label={`Select ${call.subject}`} /></td>
+                    {canDelete && <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(call.id)} onChange={() => setSelectedIds((current) => current.includes(call.id) ? current.filter((id) => id !== call.id) : [...current, call.id])} className="size-4 accent-brand-500" aria-label={`Select ${call.subject}`} /></td>}
                     <td className="px-3 py-4 text-sm font-medium whitespace-nowrap text-gray-800 sm:px-5 dark:text-white/90">
                       {call.subject}
                       <span className={`ml-3 rounded-full px-2.5 py-1 text-xs font-normal ${statusBadge[call.status]}`}>{call.status}</span>
@@ -461,16 +467,16 @@ export default function Calls({ embed }: EmbedProps = {}) {
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.account || "—"}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.contactName || "—"}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.owner || callOwner}</td>
-                    <td className="px-3 py-4 sm:px-5">
+                    {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => openEdit(call)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
+                        {canUpdate && <button type="button" onClick={() => openEdit(call)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" /><path d="m13.5 6.5 4 4" /></svg>
-                        </button>
-                        <button type="button" onClick={() => setDeleteId(call.id)} title="Delete" aria-label="Delete" className="rounded-md p-1.5 text-error-500 hover:bg-error-50">
+                        </button>}
+                        {canDelete && <button type="button" onClick={() => setDeleteId(call.id)} title="Delete" aria-label="Delete" className="rounded-md p-1.5 text-error-500 hover:bg-error-50">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M7 7l1 12h8l1-12" /><path d="M10 11v5M14 11v5" /></svg>
-                        </button>
+                        </button>}
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -507,9 +513,9 @@ export default function Calls({ embed }: EmbedProps = {}) {
               <button type="button" onClick={closeForm} className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300">
                 Cancel
               </button>
-              <button type="submit" className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
+              {(editingId ? canUpdate : canCreate) && <button type="submit" className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
                 {submitLabel}
-              </button>
+              </button>}
             </div>
           </div>
 

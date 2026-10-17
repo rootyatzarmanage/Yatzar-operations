@@ -19,6 +19,7 @@ import {
 } from "@/icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 type Permission = "create" | "view" | "update" | "delete";
 type PermissionMap = Record<string, Record<Permission, boolean>>;
@@ -74,6 +75,10 @@ const tableInputClass =
 
 export default function AppPermission() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const canCreateRole = hasPermission(user, "App Permission", "create");
+  const canUpdateRole = hasPermission(user, "App Permission", "update");
+  const canDeleteRole = hasPermission(user, "App Permission", "delete");
   const [roles, setRoles] = useState<Role[]>([]);
   const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -88,22 +93,29 @@ export default function AppPermission() {
     useState<PermissionMap>(createPermissions());
   const editingRole = roles.find((role) => role.id === editingRoleId);
 
-  const roleFromApi = (record: RoleRecord): Role => ({
-    id: record.id,
-    name: record.name,
-    isSystem: record.is_system,
-    permissions: Object.fromEntries(
-      record.permissions.map((permission) => [
-        permission.menu,
-        {
-          create: permission.create,
-          view: permission.view,
-          update: permission.update,
-          delete: permission.delete,
-        },
-      ]),
-    ),
-  });
+  const roleFromApi = (record: RoleRecord): Role => {
+    const mappedPermissions = createPermissions();
+    for (const permission of record.permissions) {
+      const normalizedMenu = permission.menu.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const menu = menuItems.find(
+        (item) => item.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedMenu,
+      );
+      if (!menu) continue;
+      mappedPermissions[menu.name] = {
+        create: permission.create,
+        view: permission.view,
+        update: permission.update,
+        delete: permission.delete,
+      };
+    }
+
+    return {
+      id: record.id,
+      name: record.name,
+      isSystem: record.is_system,
+      permissions: mappedPermissions,
+    };
+  };
 
   const refreshPermissionData = async () => {
     try {
@@ -163,6 +175,7 @@ export default function AppPermission() {
   };
 
   const saveRole = async () => {
+    if (editingRoleId === null ? !canCreateRole : !canUpdateRole) return;
     const trimmedName = roleName.trim();
     if (!trimmedName) return;
 
@@ -177,6 +190,7 @@ export default function AppPermission() {
         await updateRole(String(editingRoleId), payload);
       }
       await refreshPermissionData();
+      window.dispatchEvent(new Event("auth:permissions-updated"));
       setIsEditorOpen(false);
     } catch (error) {
       setApiError(
@@ -314,14 +328,14 @@ export default function AppPermission() {
                   Permissions are configured on roles. Each account inherits the permissions of its assigned role.
                 </p>
               </div>
-              <button
+              {canCreateRole && <button
                 type="button"
                 onClick={openCreate}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
               >
                 <span className="text-lg leading-none">+</span>
                 Create role
-              </button>
+              </button>}
             </div>
             <div className="p-4 sm:p-5">
               <input
@@ -364,12 +378,12 @@ export default function AppPermission() {
                             <button type="button" onClick={() => openView(role)} aria-label={`View ${role.name} permissions`} title="View" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
                               <EyeIcon className="size-4" />
                             </button>
-                            <button type="button" onClick={() => openEdit(role)} aria-label={`Edit ${role.name} permissions`} title="Edit" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
+                            {canUpdateRole && <button type="button" onClick={() => openEdit(role)} aria-label={`Edit ${role.name} permissions`} title="Edit" className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-white/5">
                               <EditIcon className="size-4" />
-                            </button>
-                            <button type="button" onClick={() => setDeleteTarget(role)} disabled={role.isSystem} aria-label={`Delete ${role.name}`} title={role.isSystem ? "System roles cannot be deleted" : "Delete role"} className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-error-500/10">
+                            </button>}
+                            {canDeleteRole && <button type="button" onClick={() => setDeleteTarget(role)} disabled={role.isSystem} aria-label={`Delete ${role.name}`} title={role.isSystem ? "System roles cannot be deleted" : "Delete role"} className="rounded-lg p-2 text-gray-400 hover:bg-error-50 hover:text-error-500 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-error-500/10">
                               <TrashIcon className="size-4" />
-                            </button>
+                            </button>}
                           </div>
                         </td>
                       </tr>
@@ -416,9 +430,11 @@ export default function AppPermission() {
                 type="button"
                 onClick={() => {
                   void (async () => {
+                    if (!canDeleteRole) return;
                     try {
                       await deleteRole(String(deleteTarget.id));
                       await refreshPermissionData();
+                      window.dispatchEvent(new Event("auth:permissions-updated"));
                       setDeleteTarget(null);
                     } catch (error) {
                       setApiError(

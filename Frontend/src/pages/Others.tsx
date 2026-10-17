@@ -16,8 +16,11 @@ import {
 } from "@/api/tags";
 import { EditIcon, TrashIcon } from "@/icons";
 import { useEffect, useState } from "react";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 export default function Others() {
+  const { user } = useAuth();
+  const canUpdate = hasPermission(user, "Teams", "update");
   const [departments, setDepartments] = useState<DropdownOption[]>([]);
   const [reportingManagers, setReportingManagers] = useState<DropdownOption[]>(
     [],
@@ -67,6 +70,7 @@ export default function Others() {
   const fail = (fallback: string) => (error: unknown) =>
     setApiError(error instanceof Error ? error.message : fallback);
   const saveValue = async () => {
+    if (!canUpdate) return;
     const trimmed = value.trim();
     if (!trimmed) return;
     try {
@@ -131,7 +135,7 @@ export default function Others() {
           ))}
         </div>
         <div className="p-5">
-          <div className="flex flex-col gap-3 sm:flex-row">
+          {canUpdate && <div className="flex flex-col gap-3 sm:flex-row">
             <input
               value={value}
               onChange={(event) => setValue(event.target.value)}
@@ -145,7 +149,7 @@ export default function Others() {
             >
               {editingId === null ? "Add" : "Update"}
             </button>
-          </div>
+          </div>}
           <div className="mt-5 divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800">
             {values.map((item) => (
               <div
@@ -156,7 +160,7 @@ export default function Others() {
                   {item.value}
                 </span>
                 <div className="flex items-center gap-1">
-                  {isTags && (
+                  {canUpdate && isTags && (
                     <button
                       type="button"
                       onClick={() =>
@@ -172,7 +176,7 @@ export default function Others() {
                       {item.status === 1 ? "Active" : "Inactive"}
                     </button>
                   )}
-                  <button
+                  {canUpdate && <button
                     type="button"
                     onClick={() => {
                       setValue(item.value);
@@ -183,8 +187,8 @@ export default function Others() {
                     title="Edit"
                   >
                     <EditIcon className="size-4" />
-                  </button>
-                  <button
+                  </button>}
+                  {canUpdate && <button
                     type="button"
                     onClick={() =>
                       void (isTags ? deleteTag(item.id) : deleteOption(item.id))
@@ -202,7 +206,7 @@ export default function Others() {
                     title="Delete"
                   >
                     <TrashIcon className="size-4" />
-                  </button>
+                  </button>}
                 </div>
               </div>
             ))}

@@ -1,8 +1,4 @@
-type ApiEnvelope<T> = {
-  success: boolean;
-  message: string;
-  data: T;
-};
+import { API_BASE, request } from "@/api/client";
 
 export type WorkspaceStatus = "Enabled" | "Disabled";
 
@@ -13,6 +9,7 @@ export type Workspace = {
   status: WorkspaceStatus;
   created_at: string;
   updated_at: string;
+  image: string | null;
 };
 
 export type WorkspacePayload = Pick<
@@ -20,40 +17,11 @@ export type WorkspacePayload = Pick<
   "name" | "description" | "status"
 >;
 
-const apiOrigin = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
-const apiPrefix = `${apiOrigin}/api/v1`;
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiPrefix}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
-  const body = (await response.json()) as
-    ApiEnvelope<T> | { detail?: string | { msg: string }[]; message?: string };
-
-  if (!response.ok) {
-    const detail = "detail" in body ? body.detail : undefined;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((item) => item.msg).join("; ")
-          : "message" in body && body.message
-            ? body.message
-            : `Request failed (${response.status})`;
-    throw new Error(message);
-  }
-  if (!("success" in body) || !body.success) {
-    throw new Error(
-      "message" in body && body.message
-        ? body.message
-        : "The server returned an invalid response.",
-    );
-  }
-  return body.data;
+export function getWorkspaceImageUrl(image: string | null | undefined): string {
+  if (!image) return "";
+  if (/^https?:\/\//i.test(image) || image.startsWith("data:")) return image;
+  const backendOrigin = API_BASE.replace(/\/api\/v1\/?$/, "");
+  return `${backendOrigin}/${image.replace(/^\/+/, "")}`;
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {
@@ -86,6 +54,23 @@ export function updateWorkspace(
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function uploadWorkspaceImage(
+  workspaceId: string,
+  file: File,
+  replace = false,
+): Promise<{ workspace_id: string; image: string | null }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<{ workspace_id: string; image: string | null }>(`/workspaces/${workspaceId}/image`, {
+    method: replace ? "PUT" : "POST",
+    body: formData,
+  });
+}
+
+export function deleteWorkspaceImage(workspaceId: string): Promise<null> {
+  return request<null>(`/workspaces/${workspaceId}/image`, { method: "DELETE" });
 }
 
 export function deleteWorkspace(

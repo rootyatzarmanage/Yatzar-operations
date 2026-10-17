@@ -36,6 +36,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 type Field = {
   name: string;
@@ -831,6 +832,10 @@ function FieldControl({
 
 export default function Teams() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const canCreate = hasPermission(user, "Teams", "create");
+  const canUpdate = hasPermission(user, "Teams", "update");
+  const canDelete = hasPermission(user, "Teams", "delete");
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
@@ -1040,6 +1045,7 @@ export default function Teams() {
     `EMP-${new Date().getFullYear()}-${String(nextEmployeeCodeNumber ?? 1).padStart(4, "0")}`;
 
   const handleCreate = async () => {
+    if (editingCode ? !canUpdate : !canCreate) return;
     const requiredErrors: Record<string, boolean> = {};
     fieldGroups.forEach((group) => {
       group.fields.forEach((field) => {
@@ -1133,6 +1139,7 @@ export default function Teams() {
   };
 
   const handleSaveDraft = async () => {
+    if (!canCreate) return;
     try {
       // Keep the password and the preview employee code out of the draft
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1169,6 +1176,7 @@ export default function Teams() {
   };
 
   const handleBulkDelete = async () => {
+    if (!canDelete) return;
     const teamsToDelete = teams.filter((team) =>
       selectedCodes.includes(team.code),
     );
@@ -1233,7 +1241,7 @@ export default function Teams() {
                 Manage employee records and access in one place.
               </p>
             </div>
-            <button
+            {canCreate && <button
               type="button"
               onClick={() => {
                 setEditingCode(null);
@@ -1248,10 +1256,10 @@ export default function Teams() {
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
             >
               <span className="text-lg leading-none">+</span>Add employee
-            </button>
+            </button>}
           </div>
 
-          {drafts.length > 0 && (
+          {canCreate && drafts.length > 0 && (
             <div className="border-b border-gray-200 p-4 sm:p-5 dark:border-gray-800">
               {/* <h4 className="mb-3 text-sm font-semibold text-gray-800 dark:text-white/90">
                 Drafts ({drafts.length})
@@ -1339,7 +1347,7 @@ export default function Teams() {
               </span>
             </div>
           </div>
-          {selectedCount > 0 && (
+          {canDelete && selectedCount > 0 && (
             <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 <strong>{selectedCount}</strong> selected
@@ -1368,7 +1376,7 @@ export default function Teams() {
             <table className="w-full min-w-full text-start sm:min-w-165 lg:min-w-full">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3">
+                  {canDelete && <th className="w-12 px-5 py-3">
                     <input
                       type="checkbox"
                       checked={allVisibleSelected}
@@ -1392,7 +1400,7 @@ export default function Teams() {
                       className="size-4 rounded accent-brand-500"
                       aria-label="Select all visible team members"
                     />
-                  </th>
+                  </th>}
                   {[
                     ["Employee", "name", ""],
                     ["Employee code", "code", "hidden sm:table-cell"],
@@ -1434,9 +1442,9 @@ export default function Teams() {
                     )
                     .filter(Boolean)
                     .map((heading) => heading)}
-                  <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
+                  {(canUpdate || canDelete) && <th className="px-3 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400">
                     Actions
-                  </th>
+                  </th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1445,7 +1453,7 @@ export default function Teams() {
                     key={team.code}
                     className="transition hover:bg-gray-50 dark:hover:bg-white/2"
                   >
-                    <td className="px-5 py-4">
+                    {canDelete && <td className="px-5 py-4">
                       <input
                         type="checkbox"
                         checked={selectedCodes.includes(team.code)}
@@ -1459,7 +1467,7 @@ export default function Teams() {
                         className="size-4 rounded accent-brand-500"
                         aria-label={`Select ${team.name}`}
                       />
-                    </td>
+                    </td>}
                     <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
                       {team.name}
                     </td>
@@ -1485,9 +1493,9 @@ export default function Teams() {
                     <td className="hidden px-3 py-4 text-sm text-gray-500 sm:px-5 lg:table-cell dark:text-gray-400">
                       {team.email}
                     </td>
-                    <td className="px-3 py-4 sm:px-5">
+                    {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center gap-1 text-sm font-medium sm:gap-3">
-                        <button
+                        {canUpdate && <button
                           type="button"
                           onClick={() => {
                             void (async () => {
@@ -1523,8 +1531,8 @@ export default function Teams() {
                           title="Edit"
                         >
                           <EditIcon className="size-4" />
-                        </button>
-                        <button
+                        </button>}
+                        {canDelete && <button
                           type="button"
                           onClick={() => setDeleteTarget(team)}
                           className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10"
@@ -1532,9 +1540,9 @@ export default function Teams() {
                           title="Delete"
                         >
                           <TrashIcon className="size-4" />
-                        </button>
+                        </button>}
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -1602,7 +1610,7 @@ export default function Teams() {
               >
                 Cancel
               </button>
-              {!editingCode && (
+              {!editingCode && canCreate && (
                 <button
                   type="button"
                   onClick={() => void handleSaveDraft()}
@@ -1611,14 +1619,14 @@ export default function Teams() {
                   Save as draft
                 </button>
               )}
-              <button
+              {(editingCode ? canUpdate : canCreate) && <button
                 type="button"
                 onClick={handleCreate}
                 disabled={isLoadingEmployee}
                 className="h-10 flex-1 rounded-lg bg-brand-500 px-3 text-sm font-medium text-white hover:bg-brand-600 sm:flex-none sm:px-4"
               >
                 {isLoadingEmployee ? "Loading..." : "Submit"}
-              </button>
+              </button>}
             </div>
           </div>
           <div className="max-w-full overflow-x-auto border-b border-gray-200 px-4 sm:px-5 dark:border-gray-800">

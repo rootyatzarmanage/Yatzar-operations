@@ -107,6 +107,7 @@ export type AuthUser = {
   display_name: string | null;
   role: string;
   photo: string | null;
+  permissions: Array<PermissionValues & { menu: string }>;
   token?: string | null;
 };
 

@@ -5,6 +5,7 @@ import RecordView from "@/components/records/RecordView";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { EmbedConfig } from "@/components/records/embed";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 export type FieldDef = {
   key: string;
@@ -52,6 +53,7 @@ const toolBtn =
   "inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5";
 
 type Props<T extends StoredRecord> = {
+  permissionMenu: string;
   moves?: RecordMove<T>[];
   filters?: FilterDef<T>[];
   sorts?: SortDef<T>[];
@@ -99,6 +101,7 @@ export function validateCoordinate(
 }
 
 export default function RecordPage<T extends StoredRecord>({
+  permissionMenu,
   pageTitle,
   parent,
   heading,
@@ -120,6 +123,10 @@ export default function RecordPage<T extends StoredRecord>({
   embed,
 }: Props<T>) {
   const { currentWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const canCreate = hasPermission(user, permissionMenu, "create");
+  const canUpdate = hasPermission(user, permissionMenu, "update");
+  const canDelete = hasPermission(user, permissionMenu, "delete");
   const allFields = useMemo(
     () => sections.flatMap((section) => section.fields),
     [sections],
@@ -156,6 +163,7 @@ export default function RecordPage<T extends StoredRecord>({
   const [panel, setPanel] = useState<"filter" | "sort" | null>(null);
   const [filterValues, setFilterValues] = useState<Record<number, string>>({});
   const [sortState, setSortState] = useState<{ i: number; dir: "asc" | "desc" } | null>(null);
+  const canSave = editingId ? canUpdate : canCreate;
 
   useEffect(() => {
     let active = true;
@@ -208,6 +216,7 @@ export default function RecordPage<T extends StoredRecord>({
   const recordToDelete = records.find((record) => record.id === deleteId) ?? null;
 
   const openAdd = () => {
+    if (!canCreate) return;
     setViewing(false);
     setNotice("");
     setPageError("");
@@ -219,6 +228,7 @@ export default function RecordPage<T extends StoredRecord>({
   };
 
   const openEdit = (record: T) => {
+    if (!canUpdate) return;
     setViewing(false);
     setNotice("");
     setPageError("");
@@ -250,6 +260,7 @@ export default function RecordPage<T extends StoredRecord>({
     );
 
   const runMove = async (record: T, move: RecordMove<T>) => {
+    if (!canUpdate) return;
     setBusy(true);
     try {
       await move.run(record);
@@ -267,6 +278,7 @@ export default function RecordPage<T extends StoredRecord>({
   };
 
   const saveAndMove = async (move: RecordMove<T>) => {
+    if (editingId ? !canUpdate : !canCreate) return;
     const found = validate();
     setErrors(found);
     setFormError("");
@@ -301,6 +313,7 @@ export default function RecordPage<T extends StoredRecord>({
   };
 
   const bulkDelete = async () => {
+    if (!canDelete) return;
     const ids = selectedIds.filter((id) => records.some((r) => r.id === id));
     if (!ids.length || !window.confirm(`Delete ${ids.length} selected ${plural}? This cannot be undone.`)) return;
     try {
@@ -324,7 +337,7 @@ export default function RecordPage<T extends StoredRecord>({
     }));
 
   const moveButtons = (record: T, size: "sm" | "lg") =>
-    moves.map((move) => (
+    (canUpdate ? moves : []).map((move) => (
       <button
         key={move.label}
         type="button"
@@ -372,6 +385,7 @@ export default function RecordPage<T extends StoredRecord>({
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canSave) return;
     const found = validate();
     setErrors(found);
     setFormError("");
@@ -407,6 +421,7 @@ export default function RecordPage<T extends StoredRecord>({
   };
 
   const confirmDelete = async () => {
+    if (!canDelete) return;
     if (!deleteId) return;
     try {
       await store.remove(deleteId);
@@ -514,8 +529,8 @@ export default function RecordPage<T extends StoredRecord>({
   useEffect(() => {
     if (!embed || embedInit.current) return;
     embedInit.current = true;
-    openAdd();
-  });
+    if (canCreate) openAdd();
+  }, [embed, canCreate]);
 
   return (
     <>
@@ -540,10 +555,10 @@ export default function RecordPage<T extends StoredRecord>({
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">{heading}</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
             </div>
-            <button type="button" onClick={openAdd} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
+            {canCreate && <button type="button" onClick={openAdd} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
               <span className="text-lg leading-none">+</span>
               {addLabel}
-            </button>
+            </button>}
           </div>
 
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -630,7 +645,7 @@ export default function RecordPage<T extends StoredRecord>({
             </label>
           </div>
 
-          {selectedCount > 0 && (
+          {canDelete && selectedCount > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-blue-50 px-5 py-3 text-sm dark:border-gray-800 dark:bg-white/5">
               <span><b>{selectedCount}</b> selected</span>
               <div className="flex gap-2">
@@ -643,9 +658,9 @@ export default function RecordPage<T extends StoredRecord>({
             <table className="w-full min-w-[900px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-5 py-3">
+                  {canDelete && <th className="w-12 px-5 py-3">
                     <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} className="size-4 rounded accent-brand-500" aria-label={`Select all ${plural} on this page`} />
-                  </th>
+                  </th>}
                   {columns.map((column) => (
                     <th key={column.header} className={headerClass}>{column.header}</th>
                   ))}
@@ -655,7 +670,7 @@ export default function RecordPage<T extends StoredRecord>({
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {visible.map((record) => (
                   <tr key={record.id} className="transition hover:bg-gray-50 dark:hover:bg-white/2">
-                    <td className="px-5 py-4">
+                    {canDelete && <td className="px-5 py-4">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(record.id)}
@@ -669,7 +684,7 @@ export default function RecordPage<T extends StoredRecord>({
                         className="size-4 rounded accent-brand-500"
                         aria-label={`Select ${recordName(record)}`}
                       />
-                    </td>
+                    </td>}
                     {columns.map((column) => (
                       <td key={column.header} className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
                         {column.render(record)}
@@ -684,20 +699,20 @@ export default function RecordPage<T extends StoredRecord>({
                             <circle cx="12" cy="12" r="2.5" />
                           </svg>
                         </button>
-                        <button type="button" onClick={() => openEdit(record)} className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10" aria-label={`Edit ${recordName(record)}`} title="Edit">
+                        {canUpdate && <button type="button" onClick={() => openEdit(record)} className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50 hover:text-brand-600 dark:text-brand-400 dark:hover:bg-brand-500/10" aria-label={`Edit ${recordName(record)}`} title="Edit">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                             <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
                             <path d="m13.5 6.5 4 4" />
                           </svg>
-                        </button>
-                        <button type="button" onClick={() => { setNotice(""); setDeleteId(record.id); }} className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10" aria-label={`Delete ${recordName(record)}`} title="Delete">
+                        </button>}
+                        {canDelete && <button type="button" onClick={() => { setNotice(""); setDeleteId(record.id); }} className="rounded-md p-1.5 text-error-500 hover:bg-error-50 hover:text-error-600 dark:text-error-400 dark:hover:bg-error-500/10" aria-label={`Delete ${recordName(record)}`} title="Delete">
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                             <path d="M4 7h16" />
                             <path d="M9 7V4h6v3" />
                             <path d="M7 7l1 12h8l1-12" />
                             <path d="M10 11v5M14 11v5" />
                           </svg>
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -756,10 +771,10 @@ export default function RecordPage<T extends StoredRecord>({
           blocks={viewBlocks(viewRecord)}
           actions={moveButtons(viewRecord, "lg")}
           onBack={() => setViewId(null)}
-          onEdit={() => {
+          onEdit={canUpdate ? () => {
             setViewId(null);
             openEdit(viewRecord);
-          }}
+          } : undefined}
         />
       )}
 
@@ -779,12 +794,12 @@ export default function RecordPage<T extends StoredRecord>({
                 <button type="button" onClick={closeForm} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
                   Cancel
                 </button>
-                {!viewing && moves.map((move) => (
+                {!viewing && canUpdate && canSave && moves.map((move) => (
                   <button key={move.label} type="button" disabled={busy} onClick={() => saveAndMove(move)} className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50 ${toneClass[move.tone]}`}>
                     Save &amp; {move.label.toLowerCase()}
                   </button>
                 ))}
-                {!viewing && (
+                {!viewing && canSave && (
                   <button type="submit" form="record-form" className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600">
                     Save {singular.toLowerCase()}
                   </button>

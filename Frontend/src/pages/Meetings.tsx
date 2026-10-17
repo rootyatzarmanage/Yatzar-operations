@@ -13,6 +13,7 @@ import {
 } from "@/api/meetings";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
@@ -127,6 +128,10 @@ function toApiDateTime(value: string, allDay: boolean) {
 }
 
 export default function Meetings({ embed }: EmbedProps = {}) {
+  const { user } = useAuth();
+  const canCreate = hasPermission(user, "Meetings", "create");
+  const canUpdate = hasPermission(user, "Meetings", "update");
+  const canDelete = hasPermission(user, "Meetings", "delete");
   const { currentWorkspace } = useWorkspace();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -317,6 +322,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   const clearSelection = () => setSelectedIds([]);
 
   const handleBulkDelete = async () => {
+    if (!canDelete) return;
     const idsToDelete = selectedIds.filter((id) =>
       meetings.some((meeting) => meeting.id === id),
     );
@@ -406,6 +412,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   };
 
   const openAdd = () => {
+    if (!canCreate) return;
     setEditingId(null);
     setForm(makeEmptyForm());
     setApiError("");
@@ -414,6 +421,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   };
 
   const openEdit = (m: Meeting) => {
+    if (!canUpdate) return;
     setEditingId(m.id);
     const { id: _id, ...rest } = m;
     void _id;
@@ -431,6 +439,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   };
 
   const handleSave = async (event: FormEvent) => {
+    if (editingId ? !canUpdate : !canCreate) return;
     event.preventDefault();
 
     const payload: MeetingPayload = {
@@ -480,6 +489,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   };
 
   const confirmDelete = async () => {
+    if (!canDelete) return;
     if (!deleteId) return;
 
     try {
@@ -593,14 +603,14 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                 Schedule and manage meetings in one place.
               </p>
             </div>
-            <button
+            {canCreate && <button
               type="button"
               onClick={openAdd}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
             >
               <span className="text-lg leading-none">+</span>
               Create Meeting
-            </button>
+            </button>}
           </div>
 
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -635,7 +645,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
           </div>
 
           {/* Bulk action toolbar */}
-          {selectedCount > 0 && (
+          {canDelete && selectedCount > 0 && (
             <div className="flex flex-col gap-3 border-y border-gray-200 bg-blue-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-white/5">
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 <strong>{selectedCount}</strong> selected
@@ -682,7 +692,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
             <table className="w-full min-w-[950px] text-start">
               <thead className="border-y border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/2">
                 <tr>
-                  <th className="w-12 px-4 py-3">
+                  {canDelete && <th className="w-12 px-4 py-3">
                     <input
                       type="checkbox"
                       checked={allVisibleSelected}
@@ -690,14 +700,14 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                       aria-label="Select all visible meetings"
                       className="size-4 cursor-pointer accent-brand-500"
                     />
-                  </th>
+                  </th>}
                   <th className={thClass}>Title</th>
                   <th className={thClass}>From</th>
                   <th className={thClass}>To</th>
                   <th className={thClass}>Related to</th>
                   <th className={thClass}>Contact Name</th>
                   <th className={thClass}>Host</th>
-                  <th className={thClass}>Actions</th>
+                  {(canUpdate || canDelete) && <th className={thClass}>Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -706,7 +716,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                     key={m.id}
                     className="transition hover:bg-gray-50 dark:hover:bg-white/2"
                   >
-                    <td className="px-4 py-4">
+                    {canDelete && <td className="px-4 py-4">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(m.id)}
@@ -714,7 +724,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                         aria-label={`Select meeting ${m.title}`}
                         className="size-4 cursor-pointer accent-brand-500"
                       />
-                    </td>
+                    </td>}
                     <td className="px-3 py-4 text-sm font-medium text-gray-800 sm:px-5 dark:text-white/90">
                       {m.title || "Untitled meeting"}
                     </td>
@@ -733,9 +743,9 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
                       {m.relatedTo || "—"}
                     </td>
-                    <td className="px-3 py-4 sm:px-5">
+                    {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center gap-1">
-                        <button
+                        {canUpdate && <button
                           type="button"
                           onClick={() => openEdit(m)}
                           title="Edit"
@@ -752,8 +762,8 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                             <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17l-1 3Z" />
                             <path d="m13.5 6.5 4 4" />
                           </svg>
-                        </button>
-                        <button
+                        </button>}
+                        {canDelete && <button
                           type="button"
                           onClick={() => setDeleteId(m.id)}
                           title="Delete"
@@ -772,9 +782,9 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                             <path d="M7 7l1 12h8l1-12" />
                             <path d="M10 11v5M14 11v5" />
                           </svg>
-                        </button>
+                        </button>}
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -840,12 +850,12 @@ export default function Meetings({ embed }: EmbedProps = {}) {
               >
                 Cancel
               </button>
-              <button
+              {(editingId ? canUpdate : canCreate) && <button
                 type="submit"
                 className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
               >
                 Save meeting
-              </button>
+              </button>}
             </div>
           </div>
 

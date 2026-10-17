@@ -12,6 +12,7 @@ import Customers from "@/pages/Customers";
 import Tasks from "@/pages/Task";
 import Meetings from "@/pages/Meetings";
 import Calls from "@/pages/Calls";
+import { hasPermission, useAuth } from "@/context/AuthContext";
 
 /* ------------------------------------------------------------------ types */
 type View = "day" | "week" | "month" | "year";
@@ -109,6 +110,18 @@ function Swatch({ color }: { color: string }) {
 
 /* ------------------------------------------------------------------- page */
 export default function Calendar() {
+  const { user } = useAuth();
+  const canCreateContacts = hasPermission(user, "Contacts", "create");
+  const canCreateTasks = hasPermission(user, "Tasks", "create");
+  const canCreateMeetings = hasPermission(user, "Meetings", "create");
+  const canCreateCalls = hasPermission(user, "Calls", "create");
+  const canCreateEvents = hasPermission(user, "Event Webinar", "create");
+  const canUpdateEvents = hasPermission(user, "Event Webinar", "update");
+  const canDeleteEvents = hasPermission(user, "Event Webinar", "delete");
+  const canViewTasks = hasPermission(user, "Tasks", "view");
+  const canViewMeetings = hasPermission(user, "Meetings", "view");
+  const canViewCalls = hasPermission(user, "Calls", "view");
+  const canViewEvents = hasPermission(user, "Event Webinar", "view");
   const [calD, setCalD] = useState(() => new Date());
   const [view, setView] = useState<View>("month");
   const [menu, setMenu] = useState<MenuKey>(null);
@@ -168,8 +181,8 @@ export default function Calendar() {
   /* ---- all calendar items */
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
-    events.forEach((e) => out.push({ k: "ev", id: e.id, t: e.title, s: e.date, e: e.end || e.date, y: e.type }));
-    meetings.forEach((m) => {
+    if (canViewEvents) events.forEach((e) => out.push({ k: "ev", id: e.id, t: e.title, s: e.date, e: e.end || e.date, y: e.type }));
+    if (canViewMeetings) meetings.forEach((m) => {
       if (!m.starts_at) return;
       out.push({
         k: "meetings",
@@ -183,11 +196,11 @@ export default function Calendar() {
         ad: m.all_day,
       });
     });
-    tasks.forEach((x) => {
+    if (canViewTasks) tasks.forEach((x) => {
       if (!x.due_date) return;
       out.push({ k: "tasks", id: x.id, t: x.subject, s: x.due_date.slice(0, 10), e: x.due_date.slice(0, 10), y: "Task" });
     });
-    calls.forEach((c) => {
+    if (canViewCalls) calls.forEach((c) => {
       if (!c.call_start_time) return;
       out.push({
         k: "calls",
@@ -201,7 +214,7 @@ export default function Calendar() {
       });
     });
     return out.filter((i) => filters[(i.k === "ev" ? "Event" : i.y) as FilterKey]);
-  }, [events, tasks, meetings, calls, filters]);
+  }, [events, tasks, meetings, calls, filters, canViewEvents, canViewTasks, canViewMeetings, canViewCalls]);
 
   const today = ymd(new Date());
 
@@ -265,6 +278,7 @@ export default function Calendar() {
 
   /* ---- quick event modal */
   const evOpen = (id?: string, a?: string, b?: string, ft?: string, tt?: string, ty?: string) => {
+    if (id ? !canUpdateEvents : (ty === "Meeting" ? !canCreateMeetings : !canCreateEvents)) return;
     const ed = id ? events.find((e) => e.id === id) : undefined;
     const from = a || today;
     setEv({
@@ -293,7 +307,7 @@ export default function Calendar() {
   const evPatch = (p: Partial<EvForm>) => setEv((cur) => (cur ? { ...cur, ...p } : cur));
 
   const evDelete = () => {
-    if (!ev?.editId || !window.confirm("Delete this event?")) return;
+    if (!canDeleteEvents || !ev?.editId || !window.confirm("Delete this event?")) return;
     const next = events.filter((e) => e.id !== ev.editId);
     setEvents(next);
     writeEvents(next);
@@ -304,6 +318,16 @@ export default function Calendar() {
   const evSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!ev || saving) return;
+    const allowed = ev.editId
+      ? (ev.type === "Meeting" ? hasPermission(user, "Meetings", "update") : canUpdateEvents)
+      : ev.type === "Task"
+        ? canCreateTasks
+        : ev.type === "Meeting"
+          ? canCreateMeetings
+          : ev.type === "Call"
+            ? canCreateCalls
+            : canCreateEvents;
+    if (!allowed) return;
     const t = ev.title.trim();
     const y = ev.type;
     if (!t || !ev.from || !ev.to) {
@@ -633,27 +657,27 @@ export default function Calendar() {
               <button type="button" aria-label="Previous" onClick={() => step(-1)} className={iconBtn}><ChevronLeft size={17} /></button>
               <button type="button" aria-label="Next" onClick={() => step(1)} className={iconBtn}><ChevronRight size={17} /></button>
 
-              <div className="relative">
+              {(canCreateContacts) && <div className="relative">
                 <button type="button" onClick={() => setMenu(menu === "engagement" ? null : "engagement")} className={btnPrimary}><Plus size={15} /> Engagement <ChevronDown size={14} /></button>
                 {menu === "engagement" && (
                   <div className={`${menuBox} left-0 w-44 p-1`}>
                     <button type="button" className={menuItem} onClick={() => openForm("contacts")}><Swatch color={EVC.Contact} />Add Contact</button>
-                    <button type="button" className={menuItem} onClick={() => openForm("leads")}><Swatch color={EVC.Lead} />Add Leads</button>
-                    <button type="button" className={menuItem} onClick={() => openForm("customers")}><Swatch color={EVC.Customer} />Add Customer</button>
+                    {canCreateContacts && <button type="button" className={menuItem} onClick={() => openForm("leads")}><Swatch color={EVC.Lead} />Add Leads</button>}
+                    {canCreateContacts && <button type="button" className={menuItem} onClick={() => openForm("customers")}><Swatch color={EVC.Customer} />Add Customer</button>}
                   </div>
                 )}
-              </div>
+              </div>}
 
-              <div className="relative">
+              {(canCreateTasks || canCreateMeetings || canCreateCalls) && <div className="relative">
                 <button type="button" onClick={() => setMenu(menu === "activities" ? null : "activities")} className={btnPrimary}><Plus size={15} /> Activities <ChevronDown size={14} /></button>
                 {menu === "activities" && (
                   <div className={`${menuBox} left-0 w-44 p-1`}>
-                    <button type="button" className={menuItem} onClick={() => openForm("tasks")}><Swatch color={EVC.Task} />Add Task</button>
-                    <button type="button" className={menuItem} onClick={() => openForm("meetings")}><Swatch color={EVC.Meeting} />Add Meetings</button>
-                    <button type="button" className={menuItem} onClick={() => openForm("calls")}><Swatch color={EVC.Call} />Add Calls</button>
+                    {canCreateTasks && <button type="button" className={menuItem} onClick={() => openForm("tasks")}><Swatch color={EVC.Task} />Add Task</button>}
+                    {canCreateMeetings && <button type="button" className={menuItem} onClick={() => openForm("meetings")}><Swatch color={EVC.Meeting} />Add Meetings</button>}
+                    {canCreateCalls && <button type="button" className={menuItem} onClick={() => openForm("calls")}><Swatch color={EVC.Call} />Add Calls</button>}
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="relative">
                 <button type="button" onClick={() => setMenu(menu === "filter" ? null : "filter")} className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 px-4 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
