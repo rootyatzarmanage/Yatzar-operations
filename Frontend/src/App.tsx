@@ -19,6 +19,7 @@ import EmailMarketing from "./pages/EmailMarketing";
 import Campaign from "./pages/Campaigns";
 import EventWebinar from "./pages/EventWebinar";
 import { hasPermission, useAuth } from "./context/AuthContext";
+import { useWorkspace } from "./context/WorkspaceContext";
 import { Navigate, useLocation } from "react-router";
 import type { ReactNode } from "react";
 
@@ -38,12 +39,37 @@ function PermissionRoute({ menu, children }: { menu: string | string[]; children
   return allowed ? children : <Navigate to="/" replace />;
 }
 
+function ContactsScopeRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const isSuperAdmin = user?.role === "Super Admin";
+
+  if (!isSuperAdmin && !currentWorkspace) {
+    return (
+      <Navigate
+        to={hasPermission(user, "Workspace") ? "/workspace" : "/"}
+        replace
+      />
+    );
+  }
+
+  return hasPermission(user, "Contacts") ? (
+    children
+  ) : (
+    <Navigate to="/" replace />
+  );
+}
+
 function DefaultAppRoute() {
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const canOpenContactsGlobally = user?.role === "Super Admin";
   const firstAllowedPath = [
     ["Teams", "/teams"],
     ["Workspace", "/workspace"],
-    ["Contacts", "/contacts"],
+    ...(canOpenContactsGlobally || currentWorkspace
+      ? [["Contacts", "/contacts"]]
+      : []),
     ["Tasks", "/task"],
     ["Meetings", "/meetings"],
     ["Calls", "/calls"],
@@ -76,12 +102,12 @@ export default function App() {
             <Route path="/workspace" element={<PermissionRoute menu="Workspace"><Workspace /></PermissionRoute>} />
 
             {/* Contacts */}
-            <Route path="/contacts" element={<PermissionRoute menu="Contacts"><Contacts /></PermissionRoute>} />
+            <Route path="/contacts" element={<ContactsScopeRoute><Contacts /></ContactsScopeRoute>} />
             <Route path="/profile" element={<Profile />} />
 
             {/* Workspace menu: Engagement */}
-            <Route path="/leads" element={<PermissionRoute menu="Contacts"><Leads /></PermissionRoute>} />
-            <Route path="/customers" element={<PermissionRoute menu="Contacts"><Customers /></PermissionRoute>} />
+            <Route path="/leads" element={<ContactsScopeRoute><Leads /></ContactsScopeRoute>} />
+            <Route path="/customers" element={<ContactsScopeRoute><Customers /></ContactsScopeRoute>} />
             <Route path="/task" element={<PermissionRoute menu="Tasks"><Task /></PermissionRoute>} />
             <Route path="/meetings" element={<PermissionRoute menu="Meetings"><Meetings /></PermissionRoute>} />
             <Route path="/calls" element={<PermissionRoute menu="Calls"><Calls /></PermissionRoute>} />
