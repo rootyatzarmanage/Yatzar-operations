@@ -137,6 +137,7 @@ const thClass =
 
 export default function Campaign() {
   const { user } = useAuth();
+  const canView = hasPermission(user, "Campaigns", "view");
   const canCreate = hasPermission(user, "Campaigns", "create");
   const canUpdate = hasPermission(user, "Campaigns", "update");
   const canDelete = hasPermission(user, "Campaigns", "delete");
@@ -144,6 +145,7 @@ export default function Campaign() {
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
   const [showAddCampaign, setShowAddCampaign] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [viewingCampaign, setViewingCampaign] = useState(false);
   const [owners, setOwners] = useState<CampaignOwnerOption[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -253,11 +255,16 @@ export default function Campaign() {
   if (showAddCampaign || editingCampaign) {
     return (
       <AddCampaign
-        onCancel={() => setShowAddCampaign(false)}
+        onCancel={() => {
+          setShowAddCampaign(false);
+          setEditingCampaign(null);
+          setViewingCampaign(false);
+        }}
         onSave={handleSaveCampaign}
         initialForm={editingCampaign ? toForm(editingCampaign) : emptyForm}
         owners={owners}
         saving={saving}
+        readOnly={viewingCampaign}
       />
     );
   }
@@ -435,15 +442,16 @@ export default function Campaign() {
                     {campaign.actualCost}
                   </td>
 
-                  {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
+                  {(canView || canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                     <div className="flex items-center gap-1">
-                      {canUpdate && <button
+                      {canView && <button
                         type="button"
                         title="View"
                         onClick={() => {
                           void getCampaign(campaign.id)
                             .then((source) => {
                               setEditingCampaign(source);
+                              setViewingCampaign(true);
                               setShowAddCampaign(false);
                             })
                             .catch((reason: unknown) =>
@@ -462,6 +470,7 @@ export default function Campaign() {
                           void getCampaign(campaign.id)
                             .then((source) => {
                               setEditingCampaign(source);
+                              setViewingCampaign(false);
                               setShowAddCampaign(false);
                             })
                             .catch((reason: unknown) =>
@@ -552,6 +561,7 @@ type AddCampaignProps = {
   initialForm?: CampaignForm;
   owners: CampaignOwnerOption[];
   saving: boolean;
+  readOnly?: boolean;
 };
 
 function AddCampaign({
@@ -560,6 +570,7 @@ function AddCampaign({
   initialForm = emptyForm,
   owners,
   saving,
+  readOnly = false,
 }: AddCampaignProps) {
   const [form, setForm] = useState<CampaignForm>(initialForm);
   const [formError, setFormError] = useState("");
@@ -581,6 +592,7 @@ function AddCampaign({
     event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
+    if (readOnly) return;
 
     setFormError("");
     void onSave(form).catch((reason: unknown) => {
@@ -610,8 +622,8 @@ function AddCampaign({
       >
         {/* Form Header */}
         <div className="flex items-center justify-between border-b border-gray-200 p-5 dark:border-gray-800">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            {initialForm === emptyForm ? "Add campaign" : "Edit campaign"}
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            {readOnly ? "View campaign" : initialForm === emptyForm ? "Add campaign" : "Edit campaign"}
           </h2>
 
           <div className="flex gap-3">
@@ -623,12 +635,12 @@ function AddCampaign({
               Cancel
             </button>
 
-            <button
+            {!readOnly && <button
               type="submit"
               className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
             >
               {saving ? "Saving..." : "Save"}
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -641,7 +653,7 @@ function AddCampaign({
           </div>
         )}
 
-        <div className="space-y-6 p-5 sm:p-6">
+        <fieldset disabled={readOnly} className="space-y-6 p-5 sm:p-6">
           {/* Campaign Details */}
           <FormSection title="Campaign details">
             <div className="grid gap-5 md:grid-cols-2">
@@ -775,7 +787,7 @@ function AddCampaign({
               />
             </div>
           </FormSection>
-        </div>
+        </fieldset>
       </form>
     </div>
   );

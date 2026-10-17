@@ -387,7 +387,44 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 
   const openViewForm = (contact: LocalContact) => {
-    openEditForm(contact);
+    clearMessages();
+    setEditingId(contact.id);
+    setFormValues({
+      contactOwner: contact.contactOwner,
+      workspace: contact.workspace,
+      secondaryEmail: contact.secondaryEmail,
+      homePhone: contact.homePhone,
+      mobile: contact.mobile,
+      dateOfBirth: contact.dateOfBirth,
+      emailOptOut: contact.emailOptOut,
+      description: contact.description,
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      email: contact.email,
+      phone: contact.phone,
+      otherPhone: contact.otherPhone,
+      department: contact.department,
+      leadSource: contact.leadSource,
+      tagId: contact.tagId,
+      addressLine1: contact.addressLine1,
+      addressLine2: contact.addressLine2,
+      city: contact.city,
+      state: contact.state,
+      country: contact.country,
+      pincode: contact.pincode,
+      otherAddressLine1: contact.otherAddressLine1,
+      otherAddressLine2: contact.otherAddressLine2,
+      otherCity: contact.otherCity,
+      otherState: contact.otherState,
+      otherCountry: contact.otherCountry,
+      otherPincode: contact.otherPincode,
+    });
+    setSelectedPhoto(null);
+    setPhotoPreview(contact.photoUrl);
+    setFormErrors({});
+    setFormError("");
+    setShowForm(true);
+    setWorkspaceIds(contact.workspace ? [contact.workspace] : []);
     setViewing(true);
   };
 

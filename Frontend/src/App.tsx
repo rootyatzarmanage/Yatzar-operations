@@ -30,9 +30,12 @@ function ProtectedApp() {
   return <AppLayout />;
 }
 
-function PermissionRoute({ menu, children }: { menu: string; children: ReactNode }) {
+function PermissionRoute({ menu, children }: { menu: string | string[]; children: ReactNode }) {
   const { user } = useAuth();
-  return hasPermission(user, menu) ? children : <Navigate to="/" replace />;
+  const allowed = Array.isArray(menu)
+    ? menu.some((permissionMenu) => hasPermission(user, permissionMenu))
+    : hasPermission(user, menu);
+  return allowed ? children : <Navigate to="/" replace />;
 }
 
 function DefaultAppRoute() {
@@ -82,7 +85,7 @@ export default function App() {
             <Route path="/task" element={<PermissionRoute menu="Tasks"><Task /></PermissionRoute>} />
             <Route path="/meetings" element={<PermissionRoute menu="Meetings"><Meetings /></PermissionRoute>} />
             <Route path="/calls" element={<PermissionRoute menu="Calls"><Calls /></PermissionRoute>} />
-            <Route path="/calendar" element={<PermissionRoute menu="Meetings"><Calendar /></PermissionRoute>} />
+            <Route path="/calendar" element={<PermissionRoute menu={["Tasks", "Meetings", "Calls", "Event Webinar"]}><Calendar /></PermissionRoute>} />
             <Route path="/email-marketing" element={<PermissionRoute menu="Email Marketing"><EmailMarketing /></PermissionRoute>} />
             <Route path="/campaigns" element={<PermissionRoute menu="Campaigns"><Campaign /></PermissionRoute>} />
             <Route path="/event-webinar" element={<PermissionRoute menu="Event Webinar"><EventWebinar /></PermissionRoute>} />
