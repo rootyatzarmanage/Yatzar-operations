@@ -56,6 +56,10 @@ export default function Others() {
   }, []);
 
   const isTags = activeType === "tag";
+  const maxValueLength = isTags ? 100 : 150;
+  const valueError = value.length > maxValueLength
+    ? `Use ${maxValueLength} characters or fewer.`
+    : "";
   const typeLabel =
     activeType === "departments"
       ? "department"
@@ -72,7 +76,7 @@ export default function Others() {
   const saveValue = async () => {
     if (!canUpdate) return;
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (!trimmed || valueError) return;
     try {
       if (isTags) {
         if (editingId) await updateTag(editingId, { name: trimmed });
@@ -139,9 +143,11 @@ export default function Others() {
             <input
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              className="h-14 min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs sm:h-11 sm:text-sm dark:border-gray-800 dark:text-white/90"
+              aria-invalid={Boolean(valueError)}
+              className={`h-14 min-w-0 flex-1 rounded-lg border bg-transparent px-3 text-base text-gray-800 shadow-theme-xs sm:h-11 sm:text-sm dark:text-white/90 ${valueError ? "border-error-500" : "border-gray-200 dark:border-gray-800"}`}
               placeholder={`Enter ${typeLabel}`}
             />
+            {valueError && <span className="self-center text-xs text-error-500 sm:basis-full">{valueError}</span>}
             <button
               type="button"
               onClick={saveValue}

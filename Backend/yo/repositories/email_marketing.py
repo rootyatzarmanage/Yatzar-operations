@@ -16,13 +16,15 @@ class EmailMarketingRepository:
         self.session = session
         self.workspace_id = workspace_id
 
-    async def get_campaign(self, campaign_id: UUID):
-        result = await self.session.execute(
-            select(EmailMarketing).where(
-                EmailMarketing.id == campaign_id,
-                EmailMarketing.deleted_at.is_(None), or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
-            )
+    async def get_campaign(self, campaign_id: UUID, *, for_update: bool = False):
+        query = select(EmailMarketing).where(
+            EmailMarketing.id == campaign_id,
+            EmailMarketing.deleted_at.is_(None),
+            or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def list_campaigns(

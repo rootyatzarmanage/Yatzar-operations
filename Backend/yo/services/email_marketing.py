@@ -1,17 +1,22 @@
 import hashlib
 import hmac
 import logging
-import os
+from datetime import datetime, timezone
 
 from urllib.parse import quote
 from uuid import UUID
 
 from bs4 import BeautifulSoup
+from sqlalchemy import delete, or_, select
 
 from yo.services.workspace import WorkspaceService
+from yo.core.config import settings
+from yo.core.email import send_email
 from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.schemas.requests.email_marketing import EmailMarketingCreateRequest
+from yo.models.email_marketing import EmailMarketingRecipient
+from yo.models.mail_delivery import MailDelivery
 
 
 logger = logging.getLogger(__name__)
@@ -22,11 +27,8 @@ class EmailMarketingService:
     def __init__(self, repository: EmailMarketingRepository, user_id: UUID | None = None):
         self.repository = repository
         self.user_id = user_id
-        self.tracking_base_url = os.environ.get(
-            "EMAIL_TRACKING_BASE_URL",
-            "http://localhost:8000/api/v1/email-marketing",
-        ).rstrip("/")
-        self.tracking_secret = os.environ.get("EMAIL_TRACKING_SECRET", "")
+        self.tracking_base_url = settings.EMAIL_TRACKING_BASE_URL.rstrip("/")
+        self.tracking_secret = settings.EMAIL_TRACKING_SECRET or settings.SESSION_SECRET
 
     async def get_campaign(self, campaign_id: UUID):
         await WorkspaceService(self.repository.session).ensure_access(
@@ -138,137 +140,99 @@ class EmailMarketingService:
 
         return str(soup)
 
-    async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+    async def _prepare_campaign(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
         await WorkspaceService(self.repository.session).ensure_access(
             self.user_id, self.repository.workspace_id,
         )
-        mail_type = payload.mail_type.strip().lower()
-
-        values = payload.model_dump(
-            exclude={"selection_mode", "selected_user_ids"}
-        )
-
+        values = payload.model_dump(exclude={"selection_mode", "selected_user_ids"})
         values["from_email"] = str(payload.from_email)
-
-        if payload.to_email:
-            values["to_email"] = str(payload.to_email)
-
-        values["created_by"] = logged_user_id
-        values["updated_by"] = logged_user_id
-        values["status"] = "Sending"
-
-        if mail_type == "test email":
-            if not payload.to_email:
-                raise AppException("Recipient email is required for test email", 400)
-
-            campaign = await self.repository.create_campaign(values)
-
-            recipient = await self.repository.create_recipient(
-                campaign_id=campaign.id,
-                user_id=logged_user_id,
-                email=str(payload.to_email),
+        values["to_email"] = str(payload.to_email) if payload.to_email else None
+        values.update(created_by=logged_user_id, updated_by=logged_user_id,
+                      status="Scheduled" if payload.scheduled_at else "Queued")
+        if payload.mail_type == "Test Email":
+            recipients_data = [{"user_id": logged_user_id, "email": str(payload.to_email)}]
+        else:
+            recipients_data = await self.repository.get_recipients_by_tag(
+                tag_id=payload.tag_id, selection_mode=payload.selection_mode,
+                selected_contact_ids=payload.selected_user_ids, user_id=logged_user_id,
             )
+            if not recipients_data:
+                raise AppException("No eligible recipients found for selected tag", 400)
+            if payload.selection_mode == "selected" and (
+                {item["user_id"] for item in recipients_data} != set(payload.selected_user_ids)
+            ):
+                raise AppException("Some selected contacts are not eligible for this tag", 400)
+        return values, recipients_data
 
-            html = self.prepare_email_content(
-                payload.content,
-                campaign.id,
-                recipient.user_id,
-            )
-
-            await self.send_email(
-                from_email=str(payload.from_email),
-                to_email=recipient.email,
-                subject=payload.subject,
-                html_content=html,
-            )
-
-            await self.repository.mark_recipient_sent(recipient)
-
-            return await self.repository.mark_campaign_sent(campaign, 1)
-
-        if mail_type != "bulk email":
-            raise AppException("mail_type must be Test Email or Bulk Email", 400)
-
-        if not payload.tag_id:
-            raise AppException("Tag ID is required for bulk email", 400)
-
-        if payload.selection_mode not in ("all", "selected"):
-            raise AppException("selection_mode must be all or selected", 400)
-
-        if payload.selection_mode == "selected" and not payload.selected_user_ids:
-            raise AppException("Select at least one recipient", 400)
-
-        if payload.selection_mode == "all" and payload.selected_user_ids:
-            raise AppException("selected_user_ids must be empty for Select All", 400)
-
-        recipients_data = await self.repository.get_recipients_by_tag(
-            tag_id=payload.tag_id,
-            selection_mode=payload.selection_mode,
-            selected_contact_ids=payload.selected_user_ids,
-            user_id=logged_user_id,
-        )
-
-        if not recipients_data:
-            raise AppException("No eligible recipients found for selected tag", 400)
-
-        if payload.selection_mode == "selected":
-            found_ids = {recipient["user_id"] for recipient in recipients_data}
-            requested_ids = set(payload.selected_user_ids)
-
-            if found_ids != requested_ids:
-                raise AppException(
-                    "Some selected users do not belong to this tag or are not eligible",
-                    400,
-                )
-
+    async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+        """Persist recipients before the worker performs any external delivery."""
+        values, recipients_data = await self._prepare_campaign(payload, logged_user_id)
         campaign = await self.repository.create_campaign(values)
+        await self.repository.create_recipients(campaign.id, recipients_data)
+        return campaign
 
-        recipients = await self.repository.create_recipients(
-            campaign.id,
-            recipients_data,
+    async def edit_campaign(self, campaign_id: UUID, payload: EmailMarketingCreateRequest):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
         )
-
-        sent_count = 0
-
-        for recipient in recipients:
-            if not recipient.is_enabled:
-                continue
-
-            if recipient.user_id is None:
-                logger.warning(
-                    "Skipping recipient without user ID",
-                    extra={"recipient_id": str(recipient.id)},
-                )
-                continue
-
-            try:
-                html = self.prepare_email_content(
-                    payload.content,
-                    campaign.id,
-                    recipient.user_id,
-                )
-
-                await self.send_email(
-                    from_email=str(payload.from_email),
-                    to_email=recipient.email,
-                    subject=payload.subject,
-                    html_content=html,
-                )
-
-                await self.repository.mark_recipient_sent(recipient)
-                sent_count += 1
-
-            except Exception:
-                logger.exception(
-                    "Failed to send marketing email",
-                    extra={"recipient_id": str(recipient.id)},
-                )
-                continue
-
-        return await self.repository.mark_campaign_sent(campaign, sent_count)
+        # The worker holds this lock across SMTP delivery. Re-check the status
+        # after acquiring it, rather than trusting a previous API/UI response.
+        campaign = await self.repository.get_campaign(campaign_id, for_update=True)
+        if not campaign:
+            raise NotFoundException("Email marketing campaign", str(campaign_id))
+        attempted = await self.repository.session.scalar(select(or_(
+            select(MailDelivery.id).where(
+                MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
+                MailDelivery.attempts > 0,
+            ).exists(),
+            select(EmailMarketingRecipient.id).where(
+                EmailMarketingRecipient.email_marketing_id == campaign.id,
+                EmailMarketingRecipient.sent.is_(True),
+            ).exists(),
+        )))
+        if campaign.status not in {"Draft", "Queued", "Scheduled"} or campaign.sent_count or attempted:
+            raise AppException("Campaigns can only be edited before sending starts. Replicate a sent campaign instead.", 409)
+        values, recipients_data = await self._prepare_campaign(payload, self.user_id)
+        values.pop("created_by", None)
+        for field, value in values.items():
+            setattr(campaign, field, value)
+        await self.repository.session.execute(delete(EmailMarketingRecipient).where(
+            EmailMarketingRecipient.email_marketing_id == campaign.id,
+        ))
+        await self.repository.create_recipients(campaign.id, recipients_data)
+        await self.repository.session.flush()
+        return campaign
 
     async def send_email(self, from_email: str, to_email: str, subject: str, html_content: str):
-        raise NotImplementedError("Connect existing email sender here")
+        await send_email(to_email, subject, html_content, reply_to=from_email)
+
+    async def schedule_campaign(self, campaign_id: UUID, scheduled_at: datetime):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
+        # The sender takes the same row lock before SMTP delivery, so changing
+        # the time cannot race with a worker that has already begun sending.
+        campaign = await self.repository.get_campaign(campaign_id, for_update=True)
+        if not campaign:
+            raise NotFoundException("Email marketing campaign", str(campaign_id))
+        if campaign.status not in {"Queued", "Scheduled"} or campaign.sent_count:
+            raise AppException("Only queued or scheduled campaigns can be rescheduled before sending starts.", 409)
+        if scheduled_at <= datetime.now(timezone.utc):
+            raise AppException("scheduled_at must be a future date and time.", 400)
+        has_recipients = await self.repository.session.scalar(select(
+            select(EmailMarketingRecipient.id).where(
+                EmailMarketingRecipient.email_marketing_id == campaign.id,
+                EmailMarketingRecipient.is_enabled.is_(True),
+                EmailMarketingRecipient.sent.is_(False),
+            ).exists()
+        ))
+        if not has_recipients:
+            raise AppException("The campaign has no enabled recipients to send to.", 400)
+        campaign.scheduled_at = scheduled_at
+        campaign.status = "Scheduled"
+        campaign.updated_by = self.user_id
+        await self.repository.session.flush()
+        return campaign
 
     async def track_open(self, campaign_id: UUID, user_id: UUID, signature: str) -> bool:
         if not self.verify_signature(campaign_id, user_id, signature):

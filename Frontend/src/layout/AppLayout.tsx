@@ -1,5 +1,5 @@
 import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
-import { WorkspaceProvider } from "@/context/WorkspaceContext";
+import { WorkspaceProvider, useWorkspace } from "@/context/WorkspaceContext";
 import { cn } from "@/utils";
 import { Outlet } from "react-router";
 import AppHeader from "./AppHeader";
@@ -8,6 +8,7 @@ import Backdrop from "./Backdrop";
 
 const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { currentWorkspace } = useWorkspace();
 
   return (
     <div className="min-h-screen xl:flex">
@@ -17,7 +18,9 @@ const LayoutContent: React.FC = () => {
       <div
         className={cn(
           "min-w-0 flex-1 transition-[margin] duration-300 ease-in-out",
-          isExpanded || isHovered ? "xl:ms-72.5" : "xl:ms-22.5",
+          currentWorkspace || isExpanded || isHovered
+            ? "xl:ms-72.5"
+            : "xl:ms-22.5",
           isMobileOpen ? "ms-0" : "",
         )}
       >

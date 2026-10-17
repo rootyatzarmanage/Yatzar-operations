@@ -71,6 +71,7 @@ export type ContactPayload = {
 
 export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   id: string;
+  customer_id?: string | null;
   first_name: string | null;
   email: string | null;
   phone: string | null;
@@ -131,7 +132,9 @@ export function getContactPhotoUrl(photo: string | null): string {
   if (!photo) return "";
   if (/^https?:\/\//i.test(photo)) return photo;
 
-  const backendOrigin = API_BASE.replace(/\/api\/v1\/?$/, "");
+  const backendOrigin = API_BASE.startsWith("/")
+    ? ""
+    : API_BASE.replace(/\/api\/v1\/?$/, "");
   return `${backendOrigin}/${photo.replace(/^\/+/, "")}`;
 }
 
@@ -201,8 +204,12 @@ export function uploadContactPhoto(
 export function moveContact(
   contactId: string,
   stage: Exclude<ContactStage, "contact">,
+  workspaceId?: string,
 ): Promise<Contact> {
-  return request<Contact>(`/contacts/${contactId}/move-to-${stage}`, {
+  const query = workspaceId
+    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
+    : "";
+  return request<Contact>(`/contacts/${contactId}/move-to-${stage}${query}`, {
     method: "POST",
   });
 }

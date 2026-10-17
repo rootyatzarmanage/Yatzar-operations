@@ -79,6 +79,22 @@ Run migrations from the `Backend` directory:
 alembic upgrade head
 ```
 
+The active history is consolidated into `20261017_baseline`. It creates a fresh
+database or reconciles existing tables without dropping application data. It
+also applies the SMTP schedule/delivery schema and annual customer numbers.
+Existing recognized legacy revision markers are adopted transactionally during
+upgrade; do not run `alembic stamp head` to bypass schema changes.
+
+Historical scripts are preserved in `alembic/legacy_versions/` and are not
+executed. The baseline uses a frozen JSON schema snapshot, not live ORM models.
+Future changes should be new revisions following this baseline. The baseline
+itself refuses destructive downgrades. Backups provide recovery across the
+consolidation boundary.
+
+Run migrations before starting the API. Startup now validates the schema instead
+of creating tables outside Alembic. `alembic heads` should report one head;
+`alembic current` after upgrading should report `20261017_baseline`.
+
 The `users` table stores login accounts and hashed passwords. The `employees` table stores employee details and links each Teams employee to one user account. Employee deletes are soft deletes and deactivate the linked account.
 Authentication uses an HttpOnly signed session cookie. Set `SESSION_SECRET` to a strong private value in `.env` before deployment.
 `FRONTEND_ORIGINS` must include the exact origin used by the Vite frontend so browsers can send the session cookie.
@@ -196,6 +212,12 @@ npm run build
 
 For local development, keep `Frontend/.env` aligned with the backend URL and keep `FRONTEND_ORIGINS` aligned with the browser origin. Update the relevant README section immediately so configuration and behavior are never documented only in source code.
 
+# Alembic 
+
+alembic upgrade head
+
+alembic current
+
 # To Run use this 
 
 # Create virtual environment
@@ -217,22 +239,10 @@ python run.py
 
 ## Employee drafts and employee codes
 
-For an existing database without an Alembic revision, run the targeted upgrade
-from `Backend` before starting the API:
-
-```bash
-venv/bin/python -m yo.core.database.upgrade_employee_status
-```
-
-This applies only the employee status migration in a transaction and can be
-rerun. It does not stamp or replay historical migrations. Do not run the full
-Alembic history on an unversioned existing database: revision `b7f3d7f0a1c2`
-drops and recreates ORM tables. For databases with an established migration
-history, use `alembic upgrade head` through the normal migration process.
-
-`create_all()` does not alter existing tables. The new migration merges the
-existing migration heads, marks existing employees as saved, and permits
-incomplete drafts in the `employees` table. The legacy
+Run `alembic upgrade head` from `Backend` before starting the API, including for
+existing databases without a recorded revision. The consolidated baseline adds
+missing employee status fields, marks older rows as saved when that field is
+newly added, and permits incomplete drafts in the `employees` table. The legacy
 `employee_drafts` table is retained as an archive; its old JSON records are not
 exposed or automatically converted by these endpoints.
 

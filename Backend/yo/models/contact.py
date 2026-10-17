@@ -6,6 +6,8 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Integer,
+    Index,
     String,
     Text,
 )
@@ -17,8 +19,10 @@ from yo.core.database.base import Base
 
 class Contact(Base):
     __tablename__ = "contacts"
+    __table_args__ = (Index("uq_contacts_customer_id", "customer_id", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
+    customer_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True),ForeignKey("workspaces.id"),nullable=True,index=True)
     owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True),ForeignKey("users.id"),nullable=True,index=True)
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -56,3 +60,10 @@ class Contact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),default=lambda: datetime.now().astimezone(),nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),nullable=True,index=True)
+
+
+class CustomerNumberCounter(Base):
+    __tablename__ = "customer_number_counters"
+
+    year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_number: Mapped[int] = mapped_column(Integer, nullable=False)

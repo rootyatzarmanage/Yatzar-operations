@@ -23,6 +23,7 @@ class EmailMarketingResponse(BaseModel):
     open_count: int
     click_count: int
     sent_at: datetime | None = None
+    scheduled_at: datetime | None = None
     created_by: UUID | None = None
     updated_by: UUID | None = None
     created_at: datetime
@@ -39,6 +40,7 @@ class EmailMarketingListItemResponse(BaseModel):
     subject: str
     status: str
     sent_count: int
+    scheduled_at: datetime | None = None
     open_count: int
     click_count: int
     updated_at: datetime | None = None

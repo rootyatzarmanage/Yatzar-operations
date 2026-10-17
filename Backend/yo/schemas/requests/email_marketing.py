@@ -1,6 +1,18 @@
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
-from typing import Literal
+from datetime import datetime, timezone
+from yo.core.mail_schedule import aware
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, model_validator
+from typing import Annotated, Literal
+
+
+def future_schedule(value: datetime) -> datetime:
+    value = aware(value)
+    if value <= datetime.now(timezone.utc):
+        raise ValueError("scheduled_at must be a future date and time.")
+    return value
+
+
+ScheduledDateTime = Annotated[datetime, AfterValidator(future_schedule)]
 
 class EmailMarketingCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -13,12 +25,20 @@ class EmailMarketingCreateRequest(BaseModel):
     to_email: EmailStr | None = None
     tag_id: UUID | None = None
     selection_mode: Literal["all", "selected"] | None = None
-    selected_user_ids: list[UUID] = Field(default_factory=list)
+    selected_user_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Selected contact UUIDs in the chosen tag. Only these contacts receive the bulk email when selection_mode is selected.",
+    )
     subject: str = Field(min_length=1,max_length=500)
     content: str = Field(min_length=1)
+    scheduled_at: ScheduledDateTime | None = Field(
+        default=None,
+        description="Future send date and time with timezone, e.g. 2030-01-01T10:00:00+05:30. Without an offset, MAIL_TIMEZONE applies. Null queues immediate delivery. Recipients and message content are saved when this request is created.",
+    )
     
     @model_validator(mode="after")
     def validate_recipients(self):
+        self.scheduled_at = aware(self.scheduled_at)
         if self.mail_type == "Test Email":
             if not self.to_email:
                 raise ValueError("to_email is required for Test Email")
@@ -42,6 +62,14 @@ class EmailMarketingCreateRequest(BaseModel):
             if self.to_email:
                 raise ValueError("to_email is not used for Bulk Email")
         return self
+
+
+class EmailMarketingScheduleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scheduled_at: ScheduledDateTime = Field(
+        description="New future send date/time. Only campaigns whose sending has not started can be rescheduled.",
+    )
 
 class EmailMarketingReplicateRequest(BaseModel):
     campaign_name: str | None = Field(default=None,max_length=255)

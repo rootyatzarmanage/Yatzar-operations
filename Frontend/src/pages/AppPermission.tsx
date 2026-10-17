@@ -43,7 +43,7 @@ const operations: { key: Permission; label: string }[] = [
   { key: "delete", label: "Delete" },
 ];
 
-const menuItems: MenuItem[] = [
+const knownMenuItems: MenuItem[] = [
   { name: "Teams", icon: UsersIcon },
   { name: "App Permission", icon: ShieldIcon },
   { name: "Workspace", icon: WorkspaceIcon },
@@ -56,9 +56,12 @@ const menuItems: MenuItem[] = [
   { name: "Event Webinar", icon: ShieldIcon },
 ];
 
-const createPermissions = (enabled = false): PermissionMap =>
+const createPermissions = (
+  enabled = false,
+  items: MenuItem[] = knownMenuItems,
+): PermissionMap =>
   Object.fromEntries(
-    menuItems.map(({ name }) => [
+    items.map(({ name }) => [
       name,
       operations.reduce(
         (permissions, operation) => ({
@@ -80,6 +83,7 @@ export default function AppPermission() {
   const canUpdateRole = hasPermission(user, "App Permission", "update");
   const canDeleteRole = hasPermission(user, "App Permission", "delete");
   const [roles, setRoles] = useState<Role[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(knownMenuItems);
   const [apiError, setApiError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -93,15 +97,10 @@ export default function AppPermission() {
     useState<PermissionMap>(createPermissions());
   const editingRole = roles.find((role) => role.id === editingRoleId);
 
-  const roleFromApi = (record: RoleRecord): Role => {
-    const mappedPermissions = createPermissions();
+  const roleFromApi = (record: RoleRecord, menuCatalog: MenuItem[]): Role => {
+    const mappedPermissions = createPermissions(false, menuCatalog);
     for (const permission of record.permissions) {
-      const normalizedMenu = permission.menu.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const menu = menuItems.find(
-        (item) => item.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedMenu,
-      );
-      if (!menu) continue;
-      mappedPermissions[menu.name] = {
+      mappedPermissions[permission.menu] = {
         create: permission.create,
         view: permission.view,
         update: permission.update,
@@ -120,7 +119,29 @@ export default function AppPermission() {
   const refreshPermissionData = async () => {
     try {
       const roleRecords = await listRoles();
-      setRoles(roleRecords.map(roleFromApi));
+      const names = new Set(
+        [
+          ...(user?.permissions ?? []).map(({ menu }) => menu),
+          ...roleRecords.flatMap((role) => role.permissions.map(({ menu }) => menu)),
+        ],
+      );
+      const iconByName = new Map<string, MenuItem["icon"]>(
+        knownMenuItems.map(({ name, icon }) => [
+          name.toLowerCase().replace(/[^a-z0-9]/g, ""),
+          icon,
+        ] as const),
+      );
+      const menuNames = [...names];
+      const menuCatalog = menuNames
+        .sort((first, second) => first.localeCompare(second))
+        .map((name) => ({
+          name,
+          icon:
+            iconByName.get(name.toLowerCase().replace(/[^a-z0-9]/g, "")) ??
+            ShieldIcon,
+        }));
+      setMenuItems(menuCatalog);
+      setRoles(roleRecords.map((role) => roleFromApi(role, menuCatalog)));
       setApiError("");
     } catch (error) {
       setApiError(
@@ -144,7 +165,7 @@ export default function AppPermission() {
     setIsReadOnly(false);
     setEditingRoleId(null);
     setRoleName("");
-    setPermissions(createPermissions());
+    setPermissions(createPermissions(false, menuItems));
     setIsEditorOpen(true);
   };
 
@@ -168,8 +189,13 @@ export default function AppPermission() {
     setPermissions((current) => ({
       ...current,
       [menuName]: {
-        ...current[menuName],
-        [operation]: !current[menuName][operation],
+        ...(current[menuName] ?? {
+          create: false,
+          view: false,
+          update: false,
+          delete: false,
+        }),
+        [operation]: !(current[menuName]?.[operation] ?? false),
       },
     }));
   };
@@ -177,12 +203,22 @@ export default function AppPermission() {
   const saveRole = async () => {
     if (editingRoleId === null ? !canCreateRole : !canUpdateRole) return;
     const trimmedName = roleName.trim();
-    if (!trimmedName) return;
+    if (!trimmedName || roleName.length > 100) return;
 
     try {
       const payload = {
         name: trimmedName,
-        permissions: permissions as Record<string, PermissionValues>,
+        permissions: Object.fromEntries(
+          menuItems.map(({ name }) => [
+            name,
+            permissions[name] ?? {
+              create: false,
+              view: false,
+              update: false,
+              delete: false,
+            },
+          ]),
+        ) as Record<string, PermissionValues>,
       };
       if (editingRoleId === null) {
         await createRole(payload);
@@ -220,14 +256,18 @@ export default function AppPermission() {
           <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
             <div className="border-b border-gray-200 px-5 py-5 sm:px-6 dark:border-gray-800">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <input
-                  value={roleName}
-                  onChange={(event) => setRoleName(event.target.value)}
-                  readOnly={isReadOnly || Boolean(editingRole?.isSystem)}
-                  placeholder="Role name"
-                  aria-label="Role name"
-                  className={`h-11 w-full max-w-sm border-0 bg-transparent px-0 text-xl font-semibold outline-none placeholder:text-gray-400 focus:ring-0 dark:text-white/90 dark:placeholder:text-gray-500 ${isReadOnly ? "cursor-default text-gray-500 dark:text-gray-400" : "border-b border-gray-300 text-gray-800 focus:border-brand-500 dark:border-gray-700"}`}
-                />
+                <div className="w-full max-w-sm">
+                  <input
+                    value={roleName}
+                    onChange={(event) => setRoleName(event.target.value)}
+                    readOnly={isReadOnly || Boolean(editingRole?.isSystem)}
+                    placeholder="Role name"
+                    aria-label="Role name"
+                    aria-invalid={roleName.length > 100}
+                    className={`h-11 w-full border-0 bg-transparent px-0 text-xl font-semibold outline-none placeholder:text-gray-400 focus:ring-0 dark:text-white/90 dark:placeholder:text-gray-500 ${isReadOnly ? "cursor-default text-gray-500 dark:text-gray-400" : "border-b border-gray-300 text-gray-800 focus:border-brand-500 dark:border-gray-700"}`}
+                  />
+                  {roleName.length > 100 && <p className="mt-1 text-xs text-error-500">Use 100 characters or fewer.</p>}
+                </div>
                 <div className="flex gap-3">
                   {isReadOnly ? (
                     <button
@@ -249,7 +289,7 @@ export default function AppPermission() {
                       <button
                         type="button"
                         onClick={saveRole}
-                        disabled={!roleName.trim()}
+                        disabled={!roleName.trim() || roleName.length > 100}
                         className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {editingRoleId === null ? "Create role" : "Update role"}
@@ -299,7 +339,7 @@ export default function AppPermission() {
                         >
                           <input
                             type="checkbox"
-                            checked={permissions[name][operation.key]}
+                            checked={permissions[name]?.[operation.key] ?? false}
                             disabled={isReadOnly}
                             onChange={() =>
                               togglePermission(name, operation.key)
