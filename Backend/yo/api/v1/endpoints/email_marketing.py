@@ -126,7 +126,7 @@ async def track_email_click(
     "",
     response_model=SuccessResponse[EmailMarketingResponse],
     status_code=status.HTTP_201_CREATED,
-    summary="Create and send email marketing campaign",
+    summary="Queue email campaign for immediate or scheduled SMTP delivery",
     dependencies=[Depends(require_permission("emailMarketing", "create"))],
 )
 async def create_email_campaign(
@@ -148,7 +148,7 @@ async def create_email_campaign(
 
     return SuccessResponse(
         success=True,
-        message="Email marketing campaign processed successfully",
+        message="Email marketing campaign queued for delivery",
         data=EmailMarketingResponse.model_validate(campaign),
     )
 

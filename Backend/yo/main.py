@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,7 @@ from yo.repositories.contact import ContactRepository
 from yo.repositories.workspace import WorkspaceRepository
 from yo.services.role import RoleService
 from sqlalchemy import select
+from yo.services.mail_worker import run_mail_worker
 
 
 @asynccontextmanager
@@ -29,8 +31,15 @@ async def lifespan(application: FastAPI):
         await connection.run_sync(Base.metadata.create_all)
     async with AsyncSessionLocal() as session:
         await seed_default_data(session)
-    yield
-    await engine.dispose()
+    stop = asyncio.Event()
+    worker = asyncio.create_task(run_mail_worker(stop)) if settings.MAIL_WORKER_ENABLED else None
+    try:
+        yield
+    finally:
+        stop.set()
+        if worker:
+            await worker
+        await engine.dispose()
 
 
 app = FastAPI(
