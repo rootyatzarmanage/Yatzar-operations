@@ -87,8 +87,8 @@ export const deleteLead = async (id: string) => {
   await deleteContact(id);
 };
 
-export const addContactToLeads = (contactId: string, workspaceId?: string) =>
-  moveContact(contactId, "lead", workspaceId);
+export const addContactToLeads = (contactId: string) =>
+  moveContact(contactId, "lead");
 
 export const addLeadToCustomers = (leadId: string) =>
   moveContact(leadId, "customer");

@@ -203,7 +203,7 @@ export default function AppPermission() {
   const saveRole = async () => {
     if (editingRoleId === null ? !canCreateRole : !canUpdateRole) return;
     const trimmedName = roleName.trim();
-    if (!trimmedName || roleName.length > 100) return;
+    if (!trimmedName) return;
 
     try {
       const payload = {
@@ -256,18 +256,14 @@ export default function AppPermission() {
           <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
             <div className="border-b border-gray-200 px-5 py-5 sm:px-6 dark:border-gray-800">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="w-full max-w-sm">
-                  <input
-                    value={roleName}
-                    onChange={(event) => setRoleName(event.target.value)}
-                    readOnly={isReadOnly || Boolean(editingRole?.isSystem)}
-                    placeholder="Role name"
-                    aria-label="Role name"
-                    aria-invalid={roleName.length > 100}
-                    className={`h-11 w-full border-0 bg-transparent px-0 text-xl font-semibold outline-none placeholder:text-gray-400 focus:ring-0 dark:text-white/90 dark:placeholder:text-gray-500 ${isReadOnly ? "cursor-default text-gray-500 dark:text-gray-400" : "border-b border-gray-300 text-gray-800 focus:border-brand-500 dark:border-gray-700"}`}
-                  />
-                  {roleName.length > 100 && <p className="mt-1 text-xs text-error-500">Use 100 characters or fewer.</p>}
-                </div>
+                <input
+                  value={roleName}
+                  onChange={(event) => setRoleName(event.target.value)}
+                  readOnly={isReadOnly || Boolean(editingRole?.isSystem)}
+                  placeholder="Role name"
+                  aria-label="Role name"
+                  className={`h-11 w-full max-w-sm border-0 bg-transparent px-0 text-xl font-semibold outline-none placeholder:text-gray-400 focus:ring-0 dark:text-white/90 dark:placeholder:text-gray-500 ${isReadOnly ? "cursor-default text-gray-500 dark:text-gray-400" : "border-b border-gray-300 text-gray-800 focus:border-brand-500 dark:border-gray-700"}`}
+                />
                 <div className="flex gap-3">
                   {isReadOnly ? (
                     <button
@@ -289,7 +285,7 @@ export default function AppPermission() {
                       <button
                         type="button"
                         onClick={saveRole}
-                        disabled={!roleName.trim() || roleName.length > 100}
+                        disabled={!roleName.trim()}
                         className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {editingRoleId === null ? "Create role" : "Update role"}

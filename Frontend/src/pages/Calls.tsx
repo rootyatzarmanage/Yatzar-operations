@@ -642,7 +642,6 @@ export default function Calls({ embed }: EmbedProps = {}) {
                 <div>
                   <label htmlFor="call-subject" className={labelClass}>Subject</label>
                   <input
-                  maxLength={255}
                     id="call-subject"
                     value={subjectValue}
                     onChange={(e) => setForm({ ...form, subject: e.target.value, subjectEdited: true })}

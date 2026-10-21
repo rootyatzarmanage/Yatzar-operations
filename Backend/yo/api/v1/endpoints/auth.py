@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Cookie, Depends, Header, Response
 
-from yo.core.auth.dependencies import CurrentUser, SessionToken
 from yo.core.config import settings
 from yo.core.database import DatabaseSession
 from yo.core.security import encode_session
@@ -33,6 +32,33 @@ async def _user_response(user: User, session: DatabaseSession, token: str | None
     )
 
 
+async def _get_session_user(session: DatabaseSession, session_token: str | None) -> User:
+    return await AuthService(session).get_session_user(session_token)
+
+
+async def get_token_from_request(
+    authorization: str | None = Header(default=None),
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+    yatzar_session: str | None = Cookie(default=None, alias=settings.SESSION_COOKIE_NAME),
+) -> str | None:
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1]
+        elif len(parts) == 1:
+            return parts[0]
+    if x_session_token:
+        return x_session_token
+    return yatzar_session
+
+
+async def require_user(
+    session: DatabaseSession,
+    token: str | None = Depends(get_token_from_request),
+) -> User:
+    return await _get_session_user(session, token)
+
+
 @router.post("/login", response_model=SuccessResponse[AuthUserResponse])
 async def login(
     request: LoginRequest, response: Response, session: DatabaseSession
@@ -54,8 +80,8 @@ async def login(
 @router.get("/me", response_model=SuccessResponse[AuthUserResponse])
 async def current_user(
     session: DatabaseSession,
-    user: CurrentUser,
-    token: SessionToken,
+    user: User = Depends(require_user),
+    token: str | None = Depends(get_token_from_request),
 ) -> SuccessResponse[AuthUserResponse]:
     return SuccessResponse(message="Current user retrieved successfully", data=await _user_response(user, session, token=token))
 

@@ -71,7 +71,6 @@ export type ContactPayload = {
 
 export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   id: string;
-  customer_id?: string | null;
   first_name: string | null;
   email: string | null;
   phone: string | null;
@@ -204,12 +203,8 @@ export function uploadContactPhoto(
 export function moveContact(
   contactId: string,
   stage: Exclude<ContactStage, "contact">,
-  workspaceId?: string,
 ): Promise<Contact> {
-  const query = workspaceId
-    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
-    : "";
-  return request<Contact>(`/contacts/${contactId}/move-to-${stage}${query}`, {
+  return request<Contact>(`/contacts/${contactId}/move-to-${stage}`, {
     method: "POST",
   });
 }

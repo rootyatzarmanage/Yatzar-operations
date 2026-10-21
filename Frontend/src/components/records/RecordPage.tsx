@@ -12,9 +12,6 @@ export type FieldDef = {
   label: string;
   type?: "text" | "email" | "tel" | "number" | "date" | "select" | "textarea" | "checkbox";
   required?: boolean;
-  minLength?: number;
-  maxLength?: number;
-  maxDigits?: number;
   options?: string[];
   placeholder?: string;
   defaultValue?: string;
@@ -370,34 +367,18 @@ export default function RecordPage<T extends StoredRecord>({
     setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
-  const validateField = (field: FieldDef, rawValue: string) => {
-    const value = rawValue.trim();
-    if (field.required && !value) return `${field.label} is required.`;
-    if (!value) return undefined;
-    if (field.type === "email" && !emailPattern.test(value)) {
-      return "Enter a valid email address.";
-    }
-    if (field.maxDigits && /\D/.test(value)) {
-      return `Enter digits only (up to ${field.maxDigits}).`;
-    }
-    if (field.maxDigits && value.length > field.maxDigits) {
-      return `Enter no more than ${field.maxDigits} digits.`;
-    }
-    if (field.maxLength && value.length > field.maxLength) {
-      return `Use ${field.maxLength} characters or fewer.`;
-    }
-    if (field.minLength && value.length < field.minLength) {
-      return `Enter at least ${field.minLength} characters.`;
-    }
-    return field.validate?.(value);
-  };
-
   const validate = () => {
     const found: Record<string, string | undefined> = {};
     for (const field of allFields) {
       if (field.type === "checkbox") continue;
       const value = String(values[field.key] ?? "").trim();
-      found[field.key] = validateField(field, value);
+      if (field.required && !value) {
+        found[field.key] = `${field.label} is required.`;
+      } else if (value && field.type === "email" && !emailPattern.test(value)) {
+        found[field.key] = "Enter a valid email address.";
+      } else if (value && field.validate) {
+        found[field.key] = field.validate(value);
+      }
     }
     return found;
   };
@@ -514,10 +495,6 @@ export default function RecordPage<T extends StoredRecord>({
           value={current}
           placeholder={field.placeholder}
           onChange={(event) => setField(field.key, event.target.value)}
-          onBlur={() => setErrors((currentErrors) => ({
-            ...currentErrors,
-            [field.key]: validateField(field, String(values[field.key] ?? "")),
-          }))}
           className={`${inputClass}${errorClass}`}
         />
       );
@@ -530,10 +507,6 @@ export default function RecordPage<T extends StoredRecord>({
           value={current}
           placeholder={field.placeholder}
           onChange={(event) => setField(field.key, event.target.value)}
-          onBlur={() => setErrors((currentErrors) => ({
-            ...currentErrors,
-            [field.key]: validateField(field, String(values[field.key] ?? "")),
-          }))}
           aria-invalid={Boolean(error)}
           className={`${inputClass}${errorClass}`}
         />

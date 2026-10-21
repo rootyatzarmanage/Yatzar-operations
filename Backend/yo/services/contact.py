@@ -99,6 +99,8 @@ class ContactService:
         values = request.model_dump(exclude_unset=True)
         values.pop("owner_id", None)
         if "workspace_id" in values:
+            # A workspace-scoped edit must not move a contact outside the
+            # workspace whose permission was used to open the record.
             if workspace_id is not None and values["workspace_id"] != workspace_id:
                 raise AppException(
                     "Contacts can only be edited within the selected workspace.",
@@ -129,17 +131,17 @@ class ContactService:
         if stage not in {"lead", "customer"}:
             raise AppException("Invalid contact stage.", 400)
         contact = await self.get_by_id(contact_id, user_id, workspace_id)
-        contact = await self.repository.get_detail(contact_id, user_id, for_update=True)
-        if not contact or (workspace_id is not None and contact.workspace_id != workspace_id):
-            raise NotFoundException("Contact", str(contact_id))
         if contact.stage == stage:
             raise ConflictException(
                 f"Record is already a {stage}."
             )
-        values = {"stage": stage, "updated_by": user_id}
-        if stage == "customer" and not contact.customer_id:
-            values["customer_id"] = await self.repository.next_customer_id()
-        await self.repository.update_by_id(contact_id, values)
+        await self.repository.update_by_id(
+            contact_id,
+            {
+                "stage": stage,
+                "updated_by": user_id,
+            },
+        )
         return await self.get_by_id(contact_id, user_id, workspace_id)
  
     async def delete(
@@ -157,6 +159,7 @@ class ContactService:
         user_id: UUID,
         workspace_id: UUID | None = None,
     ) -> int:
+        # Validate the complete batch before writing any row.
         for contact_id in set(ids):
             await self.get_by_id(contact_id, user_id, workspace_id)
         return await self.repository.soft_delete_many(ids,user_id)

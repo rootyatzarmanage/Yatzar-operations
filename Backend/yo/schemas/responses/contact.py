@@ -8,7 +8,6 @@ class ContactResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    customer_id: str | None = None
     workspace_id: UUID | None = None
     owner_id: UUID | None = None
     first_name: str | None = None

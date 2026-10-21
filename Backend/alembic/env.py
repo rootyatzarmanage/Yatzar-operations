@@ -1,24 +1,16 @@
 import asyncio
-import importlib
-import json
-import logging
-from pathlib import Path
-import pkgutil
 from logging.config import fileConfig
 
-from sqlalchemy import pool, text
+from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
 from yo.core.config import settings
-from yo.core.database.base import Base
-import yo.models
-
-# Autogenerate must see every model, not just users and employees.
-for module in pkgutil.iter_modules(yo.models.__path__):
-    importlib.import_module(f"yo.models.{module.name}")
+from yo.models.base import Base
+import yo.models.employee  # noqa
+import yo.models.user  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -30,7 +22,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Overwrite sqlalchemy.url with dynamic app settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata
 
@@ -43,7 +35,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        version_table_schema="public",
     )
 
     with context.begin_transaction():
@@ -51,26 +42,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata,
-                      version_table_schema="public", compare_type=True)
+    context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
-        migration_context = context.get_context()
-        command_fn = migration_context.opts.get("fn")
-        if getattr(command_fn, "__name__", None) == "upgrade":
-            # Serialize migrations, including adoption of legacy version rows.
-            connection.execute(text("SELECT pg_advisory_xact_lock(20261017, 1)"))
-            if connection.scalar(text("SELECT to_regclass('public.alembic_version')")):
-                recorded = set(connection.scalars(text("SELECT version_num FROM public.alembic_version")))
-                legacy = set(json.loads(Path(__file__).with_name("legacy_revisions.json").read_text()))
-                if recorded and recorded.issubset(legacy):
-                    logging.getLogger("alembic.runtime.migration").info(
-                        "Adopting archived migration history through the non-destructive baseline: %s",
-                        ", ".join(sorted(recorded)),
-                    )
-                    # This is transactional. A failed baseline restores these
-                    # rows; no database is stamped past unexecuted schema work.
-                    connection.execute(text("DELETE FROM public.alembic_version"))
         context.run_migrations()
 
 

@@ -561,7 +561,6 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                 <label htmlFor="task-subject" className={labelClass}>Subject</label>
                 <input
                   id="task-subject"
-                  maxLength={255}
                   value={form.subject}
                   onChange={(e) => {
                     setForm({ ...form, subject: e.target.value });

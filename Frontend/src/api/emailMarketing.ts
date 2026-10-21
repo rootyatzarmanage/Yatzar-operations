@@ -110,16 +110,6 @@ export function createEmailMarketingCampaign(payload: EmailMarketingCreatePayloa
   });
 }
 
-export function updateEmailMarketingCampaign(
-  campaignId: string,
-  payload: EmailMarketingCreatePayload,
-) {
-  return request<EmailMarketingCampaign>(`/email-marketing/${campaignId}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-}
-
 export function scheduleEmailMarketingCampaign(campaignId: string, scheduledAt: string) {
   return request<EmailMarketingCampaign>(`/email-marketing/${campaignId}/schedule`, {
     method: "PATCH",

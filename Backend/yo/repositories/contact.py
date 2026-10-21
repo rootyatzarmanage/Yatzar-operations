@@ -1,12 +1,9 @@
 import uuid
-from datetime import datetime
-from zoneinfo import ZoneInfo
  
 from sqlalchemy import and_, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.postgresql import insert
  
-from yo.models.contact import Contact, CustomerNumberCounter
+from yo.models.contact import Contact
 from yo.repositories.workspace import WorkspaceRepository
 from yo.repositories.base import BaseRepository
  
@@ -27,27 +24,15 @@ class ContactRepository(BaseRepository[Contact]):
         self,
         contact_id: uuid.UUID,
         user_id: uuid.UUID,
-        *, for_update: bool = False,
     ) -> Contact | None:
         query = select(Contact).where(
             Contact.id == contact_id,
             self.access_condition(user_id),
             Contact.deleted_at.is_(None),
         )
-        if for_update:
-            query = query.with_for_update().execution_options(populate_existing=True)
  
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
-
-    async def next_customer_id(self) -> str:
-        year = datetime.now(ZoneInfo("Asia/Kolkata")).year
-        statement = insert(CustomerNumberCounter).values(year=year, last_number=1)
-        number = await self.session.scalar(statement.on_conflict_do_update(
-            index_elements=[CustomerNumberCounter.year],
-            set_={"last_number": CustomerNumberCounter.last_number + 1},
-        ).returning(CustomerNumberCounter.last_number))
-        return f"CUS-{year}-{number:04d}"
  
     async def list_by_stage(
         self,
@@ -77,7 +62,6 @@ class ContactRepository(BaseRepository[Contact]):
                     Contact.company.ilike(search_term),
                     Contact.email.ilike(search_term),
                     Contact.phone.ilike(search_term),
-                    Contact.customer_id.ilike(search_term),
                 )
             )
  

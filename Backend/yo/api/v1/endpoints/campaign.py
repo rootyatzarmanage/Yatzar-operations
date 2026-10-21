@@ -1,9 +1,9 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from yo.services.role import RoleService
+from yo.core.auth.permissions import require_permission
 from yo.core.exceptions import AppException
 from yo.core.auth.dependencies import CurrentUser
 from yo.core.database.dependencies import DatabaseSession
@@ -29,9 +29,8 @@ def get_service(session: DatabaseSession, workspace_id: UUID | None, user_id: UU
     return CampaignService(CampaignRepository(session, workspace_id), user_id)
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("campaigns", "create"))])
 async def create_campaign(payload: CampaignCreateRequest,session: DatabaseSession,current_user: CurrentUser):
-    await RoleService(session).check_permission(current_user, "campaigns", "create")
     try:
         campaign = await get_service(session, payload.workspace_id, current_user.id).create_campaign(payload, current_user.id)
 
@@ -51,7 +50,7 @@ async def create_campaign(payload: CampaignCreateRequest,session: DatabaseSessio
         )
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_permission("campaigns", "view"))])
 async def get_campaigns(
     session: DatabaseSession,
     current_user: CurrentUser,
@@ -62,7 +61,6 @@ async def get_campaigns(
     per_page: int = Query(default=5, ge=1, le=100),
     include_options: bool = Query(default=False),
 ):
-    await RoleService(session).check_permission(current_user, "campaigns", "view")
     try:
         service = get_service(session, workspace_id, current_user.id)
 
@@ -111,7 +109,7 @@ async def get_campaigns(
         )
 
 
-@router.put("/{campaign_id}")
+@router.put("/{campaign_id}", dependencies=[Depends(require_permission("campaigns", "update"))])
 async def update_campaign(
     campaign_id: UUID,
     payload: CampaignUpdateRequest,
@@ -119,7 +117,6 @@ async def update_campaign(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
-    await RoleService(session).check_permission(current_user, "campaigns", "update")
     try:
         campaign = await get_service(session, workspace_id, current_user.id).update_campaign(
             campaign_id,
@@ -143,14 +140,13 @@ async def update_campaign(
         )
 
 
-@router.delete("/{campaign_id}")
+@router.delete("/{campaign_id}", dependencies=[Depends(require_permission("campaigns", "delete"))])
 async def delete_campaign(
     campaign_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
-    await RoleService(session).check_permission(current_user, "campaigns", "delete")
     try:
         await get_service(session, workspace_id, current_user.id).delete_campaign(
             campaign_id,
@@ -173,14 +169,13 @@ async def delete_campaign(
         )
 
 
-@router.post("/bulk-delete")
+@router.post("/bulk-delete", dependencies=[Depends(require_permission("campaigns", "delete"))])
 async def bulk_delete_campaigns(
     payload: CampaignBulkDeleteRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
-    await RoleService(session).check_permission(current_user, "campaigns", "delete")
     try:
         result = await get_service(session, workspace_id, current_user.id).bulk_delete_campaigns(
             payload.ids,

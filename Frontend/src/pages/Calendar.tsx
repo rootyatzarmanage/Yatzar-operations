@@ -46,14 +46,7 @@ type EvForm = {
   tt: string;
   desc: string;
   contactId: string;
-  errors: {
-    title?: boolean;
-    from?: boolean;
-    to?: boolean;
-    fromTime?: boolean;
-    toTime?: boolean;
-    contact?: boolean;
-  };
+  errors: { title?: boolean; from?: boolean; to?: boolean; contact?: boolean };
 };
 
 /* -------------------------------------------------------------- constants */
@@ -337,26 +330,19 @@ export default function Calendar() {
     if (!allowed) return;
     const t = ev.title.trim();
     const y = ev.type;
-    const needsTitle = y === "Task" || y === "Meeting" || y === "Call";
-    const needsStart = y === "Meeting" || y === "Call";
-    const needsEnd = y === "Meeting";
-    const errors = {
-      title: needsTitle && !t,
-      from: needsStart && !ev.from,
-      to: needsEnd && !ev.to,
-      fromTime: needsStart && !ev.ft,
-      toTime: needsEnd && !ev.tt,
-      contact: y === "Call" && !ev.contactId,
-    };
-    if (Object.values(errors).some(Boolean)) {
-      evPatch({ errors });
-      return showToast("Fill in the fields required for this record type");
+    if (!t || !ev.from || !ev.to) {
+      evPatch({ errors: { title: !t, from: !ev.from, to: !ev.to } });
+      return showToast("Title and dates are required");
     }
-    if (needsEnd && ev.from && ev.to && ev.to < ev.from) {
+    if (ev.to < ev.from) {
       evPatch({ errors: { to: true } });
       return showToast("To date must be on or after From date");
     }
     if (y === "Meeting" && ev.to === ev.from && ev.tt <= ev.ft) return showToast("End time must be after start time");
+    if (y === "Call" && !ev.contactId) {
+      evPatch({ errors: { contact: true } });
+      return showToast("Select a contact for the call");
+    }
     const desc = ev.desc.trim();
     const existing = ev.editId ? events.find((x) => x.id === ev.editId) : undefined;
     const keep = !!existing && (y === existing.type || y === "Event" || y === "Workshop");
@@ -769,25 +755,25 @@ export default function Calendar() {
                   {["Event", "Workshop", "Task", "Meeting", "Call"].map((t) => <option key={t}>{t}</option>)}
                 </select>
               </label>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Title{(ev.type === "Task" || ev.type === "Meeting" || ev.type === "Call") && <span className="text-red-500"> *</span>}
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Title<span className="text-red-500"> *</span>
                 <input autoFocus value={ev.title} onChange={(e) => evPatch({ title: e.target.value, errors: { ...ev.errors, title: false } })} placeholder="Enter title" className={`${fieldCls} ${errCls(ev.errors.title)}`} />
               </label>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From date{(ev.type === "Meeting" || ev.type === "Call") && <span className="text-red-500"> *</span>}
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From date<span className="text-red-500"> *</span>
                 <input type="date" value={ev.from} onChange={(e) => evPatch({ from: e.target.value, errors: { ...ev.errors, from: false } })} className={`${fieldCls} ${errCls(ev.errors.from)}`} />
               </label>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To date{ev.type === "Meeting" && <span className="text-red-500"> *</span>}
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To date<span className="text-red-500"> *</span>
                 <input type="date" value={ev.to} onChange={(e) => evPatch({ to: e.target.value, errors: { ...ev.errors, to: false } })} className={`${fieldCls} ${errCls(ev.errors.to)}`} />
               </label>
             </div>
             {timesVisible && (
               <div className="grid grid-cols-2 gap-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From time<span className="text-red-500"> *</span>
-                  <input type="time" value={ev.ft} onChange={(e) => evPatch({ ft: e.target.value, errors: { ...ev.errors, fromTime: false } })} className={`${fieldCls} ${errCls(ev.errors.fromTime)}`} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From time
+                  <input type="time" value={ev.ft} onChange={(e) => evPatch({ ft: e.target.value })} className={`${fieldCls} ${errCls()}`} />
                 </label>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To time{ev.type === "Meeting" && <span className="text-red-500"> *</span>}
-                  <input type="time" value={ev.tt} onChange={(e) => evPatch({ tt: e.target.value, errors: { ...ev.errors, toTime: false } })} className={`${fieldCls} ${errCls(ev.errors.toTime)}`} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To time
+                  <input type="time" value={ev.tt} onChange={(e) => evPatch({ tt: e.target.value })} className={`${fieldCls} ${errCls()}`} />
                 </label>
               </div>
             )}
