@@ -31,12 +31,12 @@ const columns: Column<CustomerRecord>[] = [
 const addressFields = (prefix: "" | "other"): FieldDef[] => {
   const k = (name: string) => (prefix ? `${prefix}${name}` : name[0].toLowerCase() + name.slice(1));
   return [
-    { key: k("AddressLine1"), label: "Flat / House no. / Building", required: true },
+    { key: k("AddressLine1"), label: "Flat / House no. / Building" },
     { key: k("AddressLine2"), label: "Street address" },
-    { key: k("City"), label: "City", required: true },
-    { key: k("State"), label: "State", required: true },
-    { key: k("Country"), label: "Country", required: true },
-    { key: k("Pincode"), label: "Pincode", required: true },
+    { key: k("City"), label: "City" },
+    { key: k("State"), label: "State" },
+    { key: k("Country"), label: "Country" },
+    { key: k("Pincode"), label: "Pincode" },
   ];
 };
 
@@ -80,13 +80,13 @@ export default function Customers({ embed }: EmbedProps = {}) {
       {
         title: "Customer information",
         fields: [
-          { key: "firstName", label: "First name", required: true, placeholder: "Enter first name" },
-          { key: "lastName", label: "Last name", placeholder: "Enter last name" },
+          { key: "firstName", label: "First name", maxLength: 100, placeholder: "Enter first name" },
+          { key: "lastName", label: "Last name", maxLength: 100, placeholder: "Enter last name" },
           { key: "email", label: "Email", type: "email", placeholder: "name@example.com" },
-          { key: "phone", label: "Phone", type: "tel", required: true },
+          { key: "phone", label: "Phone", type: "tel", maxDigits: 10 },
           { key: "otherPhone", label: "Other phone", type: "tel" },
-          { key: "department", label: "Department" },
-          { key: "leadSource", label: "Lead source", type: "select", required: true, options: sources, placeholder: "Select lead source" },
+          { key: "department", label: "Department", maxLength: 150 },
+          { key: "leadSource", label: "Lead source", type: "select", maxLength: 100, options: sources, placeholder: "Select lead source" },
         ],
       },
       { title: "Address", subtitle: "Mailing address", fields: addressFields("") },

@@ -870,6 +870,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                   Title
                 </label>
                 <input
+                  maxLength={255}
                   id="meeting-title"
                   value={form.title}
                   onChange={(e) =>

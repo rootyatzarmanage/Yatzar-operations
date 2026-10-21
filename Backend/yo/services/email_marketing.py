@@ -7,7 +7,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from bs4 import BeautifulSoup
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 
 from yo.services.workspace import WorkspaceService
 from yo.core.config import settings
@@ -16,6 +16,7 @@ from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.schemas.requests.email_marketing import EmailMarketingCreateRequest
 from yo.models.email_marketing import EmailMarketingRecipient
+from yo.models.mail_delivery import MailDelivery
 
 
 logger = logging.getLogger(__name__)
@@ -139,8 +140,7 @@ class EmailMarketingService:
 
         return str(soup)
 
-    async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
-        """Persist recipients before the worker performs any external delivery."""
+    async def _prepare_campaign(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
         await WorkspaceService(self.repository.session).ensure_access(
             self.user_id, self.repository.workspace_id,
         )
@@ -162,8 +162,45 @@ class EmailMarketingService:
                 {item["user_id"] for item in recipients_data} != set(payload.selected_user_ids)
             ):
                 raise AppException("Some selected contacts are not eligible for this tag", 400)
+        return values, recipients_data
+
+    async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+        """Persist recipients before the worker performs any external delivery."""
+        values, recipients_data = await self._prepare_campaign(payload, logged_user_id)
         campaign = await self.repository.create_campaign(values)
         await self.repository.create_recipients(campaign.id, recipients_data)
+        return campaign
+
+    async def edit_campaign(self, campaign_id: UUID, payload: EmailMarketingCreateRequest):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
+        # The worker holds this lock across SMTP delivery. Re-check the status
+        # after acquiring it, rather than trusting a previous API/UI response.
+        campaign = await self.repository.get_campaign(campaign_id, for_update=True)
+        if not campaign:
+            raise NotFoundException("Email marketing campaign", str(campaign_id))
+        attempted = await self.repository.session.scalar(select(or_(
+            select(MailDelivery.id).where(
+                MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
+                MailDelivery.attempts > 0,
+            ).exists(),
+            select(EmailMarketingRecipient.id).where(
+                EmailMarketingRecipient.email_marketing_id == campaign.id,
+                EmailMarketingRecipient.sent.is_(True),
+            ).exists(),
+        )))
+        if campaign.status not in {"Draft", "Queued", "Scheduled"} or campaign.sent_count or attempted:
+            raise AppException("Campaigns can only be edited before sending starts. Replicate a sent campaign instead.", 409)
+        values, recipients_data = await self._prepare_campaign(payload, self.user_id)
+        values.pop("created_by", None)
+        for field, value in values.items():
+            setattr(campaign, field, value)
+        await self.repository.session.execute(delete(EmailMarketingRecipient).where(
+            EmailMarketingRecipient.email_marketing_id == campaign.id,
+        ))
+        await self.repository.create_recipients(campaign.id, recipients_data)
+        await self.repository.session.flush()
         return campaign
 
     async def send_email(self, from_email: str, to_email: str, subject: str, html_content: str):

@@ -1,9 +1,9 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from yo.core.auth.permissions import require_permission
+from yo.services.role import RoleService
 from yo.core.exceptions import AppException
 from yo.core.auth.dependencies import CurrentUser
 from yo.core.database import DatabaseSession
@@ -30,12 +30,13 @@ def get_service(session: DatabaseSession, workspace_id: UUID | None, user_id: UU
     return EventWebinarService(repository, user_id)
 
 
-@router.post("", dependencies=[Depends(require_permission("eventWebinar", "create"))])
+@router.post("")
 async def create_event(
     payload: EventWebinarCreateRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
 ):
+    await RoleService(session).check_permission(current_user, "eventWebinar", "create")
     try:
         service = get_service(session, payload.workspace_id, current_user.id)
         event = await service.create_event(payload, current_user.id)
@@ -55,7 +56,7 @@ async def create_event(
         )
 
 
-@router.get("", dependencies=[Depends(require_permission("eventWebinar", "view"))])
+@router.get("")
 async def get_events(
     session: DatabaseSession,
     current_user: CurrentUser,
@@ -66,6 +67,7 @@ async def get_events(
     per_page: int = Query(default=10, ge=1, le=100),
     include_options: bool = Query(default=False),
 ):
+    await RoleService(session).check_permission(current_user, "eventWebinar", "view")
     try:
         service = get_service(session, workspace_id, current_user.id)
 
@@ -111,7 +113,7 @@ async def get_events(
         )
 
 
-@router.put("/{event_id}", dependencies=[Depends(require_permission("eventWebinar", "update"))])
+@router.put("/{event_id}")
 async def update_event(
     event_id: UUID,
     payload: EventWebinarUpdateRequest,
@@ -119,6 +121,7 @@ async def update_event(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
+    await RoleService(session).check_permission(current_user, "eventWebinar", "update")
     try:
         service = get_service(session, workspace_id, current_user.id)
         event = await service.update_event(
@@ -142,13 +145,14 @@ async def update_event(
         )
 
 
-@router.delete("/{event_id}", dependencies=[Depends(require_permission("eventWebinar", "delete"))])
+@router.delete("/{event_id}")
 async def delete_event(
     event_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
+    await RoleService(session).check_permission(current_user, "eventWebinar", "delete")
     try:
         service = get_service(session, workspace_id, current_user.id)
         data = await service.delete_event(event_id, current_user.id)
@@ -168,13 +172,14 @@ async def delete_event(
         )
 
 
-@router.post("/bulk-delete", dependencies=[Depends(require_permission("eventWebinar", "delete"))])
+@router.post("/bulk-delete")
 async def bulk_delete_events(
     payload: EventWebinarBulkDeleteRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ):
+    await RoleService(session).check_permission(current_user, "eventWebinar", "delete")
     try:
         service = get_service(session, workspace_id, current_user.id)
         data = await service.bulk_delete_events(

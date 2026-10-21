@@ -869,6 +869,7 @@ function EventForm({
                   onChange={onChange}
                   placeholder="Enter campaign name"
                   className={inputClass}
+                  maxLength={255}
                   required
                 />
               </div>

@@ -23,6 +23,7 @@ import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
 import type { EmbedProps } from "@/components/records/embed";
 import { hasPermission, useAuth } from "@/context/AuthContext";
+import { getEmployeeWorkspaceIds } from "@/utils/workspaceAccess";
 import {
   useEffect,
   useMemo,
@@ -73,7 +74,42 @@ type StringFieldKey = {
 }[keyof ContactFields];
 type FieldErrors = Partial<Record<FieldKey, string>>;
 type ContactGroup = { contact: LocalContact; workspaceIds: string[] };
+function contactSignature(contact: LocalContact): string {
+  const {
+    workspace: _workspace,
+    id: _id,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    photoUrl: _photoUrl,
+    ...fields
+  } = contact;
+  return JSON.stringify(fields);
+}
+const contactFieldLimits: Partial<Record<StringFieldKey, { maxLength?: number; maxDigits?: number }>> = {
+  firstName: { maxLength: 100 },
+  lastName: { maxLength: 100 },
+  company: { maxLength: 255 },
+  phone: { maxLength: 30, maxDigits: 10 },
+  otherPhone: { maxLength: 30, maxDigits: 10 },
+  homePhone: { maxLength: 30, maxDigits: 10 },
+  mobile: { maxLength: 30, maxDigits: 10 },
+  leadSource: { maxLength: 100 },
+  department: { maxLength: 150 },
+};
 const maxContactPhotoSize = 5 * 1024 * 1024;
+
+function contactFieldError(field: StringFieldKey, value: string) {
+  const limits = contactFieldLimits[field];
+  if (!limits || !value) return "";
+  if (limits.maxDigits && /\D/.test(value)) return "Enter digits only.";
+  if (limits.maxDigits && value.length > limits.maxDigits) {
+    return `Enter no more than ${limits.maxDigits} digits.`;
+  }
+  if (limits.maxLength && value.length > limits.maxLength) {
+    return `Use ${limits.maxLength} characters or fewer.`;
+  }
+  return "";
+}
 
 const inputClass =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
@@ -156,6 +192,7 @@ export default function Contacts({ embed }: EmbedProps = {}) {
   const [moveRequest, setMoveRequest] = useState<{
     id: string;
     to: MoveTarget;
+    workspaceIds: string[];
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [page, setPage] = useState(1);
@@ -167,6 +204,10 @@ export default function Contacts({ embed }: EmbedProps = {}) {
   [workspaces],
 );
 const [workspaceIds, setWorkspaceIds] = useState<string[]>([])
+const assignedWorkspaceIds = getEmployeeWorkspaceIds(user?.email ?? "");
+const availableWorkspaces = assignedWorkspaceIds
+  ? workspaces.filter((workspace) => assignedWorkspaceIds.includes(workspace.id))
+  : workspaces;
 const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
 const workspaceMenuRef = useRef<HTMLDivElement>(null);
 useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
@@ -258,15 +299,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   const groupedContacts = useMemo<ContactGroup[]>(() => {
     const groups = new Map<string, ContactGroup>();
     for (const contact of contacts) {
-      const {
-        workspace: _workspace,
-        id: _id,
-        createdAt: _createdAt,
-        updatedAt: _updatedAt,
-        photoUrl: _photoUrl,
-        ...fields
-      } = contact;
-      const signature = JSON.stringify(fields);
+      const signature = contactSignature(contact);
       const existing = groups.get(signature);
       if (existing && !existing.workspaceIds.includes(contact.workspace)) {
         existing.workspaceIds.push(contact.workspace);
@@ -465,6 +498,14 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   };
 
   const saveContact = async (): Promise<LocalContact | null> => {
+    const lengthErrors: FieldErrors = {};
+    for (const field of Object.keys(contactFieldLimits) as StringFieldKey[]) {
+      const error = contactFieldError(field, formValues[field]);
+      if (error) lengthErrors[field] = error;
+    }
+    setFormErrors(lengthErrors);
+    if (Object.values(lengthErrors).some(Boolean)) return null;
+
     try {
       let savedAll: LocalContact[] = [];
       let saved: LocalContact | undefined;
@@ -602,16 +643,49 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       return;
     }
     setIsSaving(true);
+    const movedIds: string[] = [];
     try {
-      if (moveRequest.to === "leads") await addContactToLeads(contact.id);
-      else await addContactToCustomers(contact.id);
-      setContacts((current) => current.filter((item) => item.id !== contact.id));
-      setSelectedIds((current) => current.filter((id) => id !== contact.id));
+      if (moveRequest.to === "leads" && !currentWorkspace) {
+        const targets = [...new Set(moveRequest.workspaceIds)];
+        if (!targets.length) throw new Error("Select at least one workspace.");
+        const signature = contactSignature(contact);
+        for (const workspaceId of targets) {
+          const existing = contacts.find(
+            (item) => item.workspace === workspaceId && contactSignature(item) === signature,
+          );
+          if (existing) {
+            await addContactToLeads(existing.id, workspaceId);
+            movedIds.push(existing.id);
+          } else {
+            const copy = await createContact(
+              toContactPayload({ ...contact, workspace: workspaceId }),
+            );
+            try {
+              await addContactToLeads(copy.id, workspaceId);
+            } catch (error) {
+              await deleteContact(copy.id).catch(() => undefined);
+              throw error;
+            }
+          }
+        }
+      } else if (moveRequest.to === "leads") {
+        await addContactToLeads(contact.id, currentWorkspace.id);
+        movedIds.push(contact.id);
+      } else {
+        await addContactToCustomers(contact.id);
+        movedIds.push(contact.id);
+      }
+      setContacts((current) => current.filter((item) => !movedIds.includes(item.id)));
+      setSelectedIds((current) => current.filter((id) => !movedIds.includes(id)));
       setPageError("");
       setNotice(
-        `${contactName(contact)} moved to ${moveRequest.to === "leads" ? "Leads" : "Customers"}.`,
+        `${contactName(contact)} moved to ${moveRequest.to === "leads" ? "Leads" : "Customers"}${moveRequest.to === "leads" && !currentWorkspace ? ` in ${moveRequest.workspaceIds.length} workspace(s)` : ""}.`,
       );
     } catch (error) {
+      if (movedIds.length) {
+        setContacts((current) => current.filter((item) => !movedIds.includes(item.id)));
+        setSelectedIds((current) => current.filter((id) => !movedIds.includes(id)));
+      }
       setPageError(
         error instanceof Error ? error.message : "Unable to move this contact.",
       );
@@ -673,13 +747,14 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
     field: StringFieldKey,
     label: string,
     options: {
-      required?: boolean;
       type?: string;
       inputMode?: "text" | "email" | "tel" | "decimal";
       fullWidth?: boolean;
       placeholder?: string;
     } = {},
-  ) => (
+  ) => {
+    const error = formErrors[field] || contactFieldError(field, formValues[field]);
+    return (
     <div className={options.fullWidth ? "md:col-span-2" : undefined}>
       <label
         htmlFor={`contact-${field}`}
@@ -694,17 +769,22 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
         placeholder={options.placeholder}
         value={formValues[field]}
         onChange={(event) => updateField(field, event.target.value)}
-        aria-invalid={Boolean(formErrors[field])}
-        aria-describedby={formErrors[field] ? `error-${field}` : undefined}
-        className={`${inputClass}${formErrors[field] ? " border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`}
+        onBlur={() => {
+          const fieldError = contactFieldError(field, formValues[field]);
+          setFormErrors((current) => ({ ...current, [field]: fieldError || undefined }));
+        }}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `error-${field}` : undefined}
+        className={`${inputClass}${error ? " border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`}
       />
-      {formErrors[field] && (
+      {error && (
         <p id={`error-${field}`} className="mt-1 text-xs text-red-600">
-          {formErrors[field]}
+          {error}
         </p>
       )}
     </div>
-  );
+    );
+  };
 
   const renderSectionTitle = (title: string) => (
     <div className="border-b border-gray-100 pb-3 dark:border-gray-800">
@@ -721,26 +801,21 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
     return (
       <div className="grid gap-5 md:grid-cols-2">
         {renderInput(field("AddressLine1"), "Flat / House no. / Building", {
-          required: true,
           placeholder: "Enter flat, house number or building",
         })}
         {renderInput(field("AddressLine2"), "Street address", {
           placeholder: "Enter street address",
         })}
         {renderInput(field("City"), "City", {
-          required: true,
           placeholder: "Enter city",
         })}
         {renderInput(field("State"), "State", {
-          required: true,
           placeholder: "Enter state",
         })}
         {renderInput(field("Country"), "Country", {
-          required: true,
           placeholder: "Enter country",
         })}
         {renderInput(field("Pincode"), "Pincode", {
-          required: true,
           placeholder: "Enter pincode",
         })}
       </div>
@@ -979,7 +1054,7 @@ const handleBulkDelete = async () => {
                           type="button"
                           onClick={() => {
                             clearMessages();
-                            setMoveRequest({ id: contact.id, to: "leads" });
+                            setMoveRequest({ id: contact.id, to: "leads", workspaceIds: workspaceIds.filter((id) => availableWorkspaces.some((workspace) => workspace.id === id)) });
                           }}
                           className="rounded-md p-1.5 text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10"
                           aria-label={`Move ${contactName(contact)} to leads`}
@@ -995,7 +1070,7 @@ const handleBulkDelete = async () => {
                           type="button"
                           onClick={() => {
                             clearMessages();
-                            setMoveRequest({ id: contact.id, to: "customers" });
+                            setMoveRequest({ id: contact.id, to: "customers", workspaceIds: [] });
                           }}
                           className="rounded-md p-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-500/10"
                           aria-label={`Move ${contactName(contact)} to customers`}
@@ -1136,8 +1211,8 @@ const handleBulkDelete = async () => {
           actions={
             editingId && canUpdate ? (
               <>
-                <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "leads" })} className="inline-flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Move to lead</button>
-                <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "customers" })} className="inline-flex h-10 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">Move to customer</button>
+                <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "leads", workspaceIds: currentWorkspace ? [currentWorkspace.id] : (workspaceIds.length ? workspaceIds : (formValues.workspace ? [formValues.workspace] : [])) })} className="inline-flex h-10 items-center rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Move to lead</button>
+                <button type="button" onClick={() => setMoveRequest({ id: editingId, to: "customers", workspaceIds: [] })} className="inline-flex h-10 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">Move to customer</button>
               </>
             ) : null
           }
@@ -1344,7 +1419,6 @@ const handleBulkDelete = async () => {
                       </select>
                     </div>
                     {renderInput("firstName", "First Name", {
-                      required: true,
                       placeholder: "Enter first name",
                     })}
                     {renderInput("lastName", "Last Name", {
@@ -1357,7 +1431,6 @@ const handleBulkDelete = async () => {
                     })}
                     {renderInput("secondaryEmail", "Secondary email", { type: "email", inputMode: "email", placeholder: "secondary@example.com" })}
                     {renderInput("phone", "Phone", {
-                      required: true,
                       type: "tel",
                       inputMode: "tel",
                       placeholder: "Enter phone number",
@@ -1466,9 +1539,37 @@ const handleBulkDelete = async () => {
             <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
               {(() => {
                 const contact = contacts.find((item) => item.id === moveRequest.id);
-                return `${contact ? contactName(contact) : "This contact"} will be added to ${moveRequest.to === "leads" ? "Leads" : "Customers"} and removed from Contacts.`;
+                const name = contact ? contactName(contact) : "This contact";
+                if (moveRequest.to === "leads" && !currentWorkspace) {
+                  return `${name} will be moved to Leads in ${moveRequest.workspaceIds.length} selected workspace(s).`;
+                }
+                return `${name} will be added to ${moveRequest.to === "leads" ? "Leads" : "Customers"} and removed from Contacts.`;
               })()}
             </p>
+            {moveRequest.to === "leads" && !currentWorkspace && (
+              <fieldset className="mt-5 max-h-56 overflow-y-auto rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-200">Workspaces</legend>
+                <div className="space-y-2">
+                  {availableWorkspaces.map((workspace) => (
+                    <label key={workspace.id} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={moveRequest.workspaceIds.includes(workspace.id)}
+                        onChange={(event) => setMoveRequest((current) => current ? {
+                          ...current,
+                          workspaceIds: event.target.checked
+                            ? [...new Set([...current.workspaceIds, workspace.id])]
+                            : current.workspaceIds.filter((id) => id !== workspace.id),
+                        } : current)}
+                        className="size-4 rounded accent-brand-500"
+                      />
+                      {workspace.name}
+                    </label>
+                  ))}
+                  {!availableWorkspaces.length && <p className="text-sm text-gray-500">No workspaces are available to assign.</p>}
+                </div>
+              </fieldset>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
@@ -1481,7 +1582,7 @@ const handleBulkDelete = async () => {
               <button
                 type="button"
                 onClick={confirmMove}
-                disabled={isSaving}
+                disabled={isSaving || (moveRequest.to === "leads" && !currentWorkspace && moveRequest.workspaceIds.length === 0)}
                 className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-50"
               >
                 {isSaving ? "Moving…" : "Move"}

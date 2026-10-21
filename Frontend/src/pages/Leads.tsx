@@ -1,5 +1,6 @@
 import { listOptions } from "@/api/options";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   addLeadToCustomers,
   createLead,
@@ -33,6 +34,8 @@ const columns: Column<LeadRecord>[] = [
 
 export default function Leads({ embed }: EmbedProps = {}) {
   const { currentWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const currentUserName = user?.display_name || user?.employee_name || user?.username || "";
   const [sources, setSources] = useState<string[]>(fallbackSources);
 
   const store = useMemo(
@@ -42,15 +45,17 @@ export default function Leads({ embed }: EmbedProps = {}) {
 
         const leads = await listLeads();
 
-        return leads.filter(
-          (lead) => lead.workspaceId === currentWorkspace.id,
-        );
+        return leads
+          .filter((lead) => lead.workspaceId === currentWorkspace.id)
+          .map((lead) => lead.leadOwner === user?.id
+            ? { ...lead, leadOwner: currentUserName }
+            : lead);
       },
       create: createLead,
       update: updateLead,
       remove: deleteLead,
     }),
-    [currentWorkspace],
+    [currentWorkspace, user?.id, currentUserName],
   );
 
   useEffect(() => {
@@ -71,17 +76,17 @@ export default function Leads({ embed }: EmbedProps = {}) {
       {
         title: "Lead information",
         fields: [
-          { key: "leadOwner", label: "Lead owner", type: "select", options: ["superadmin"], placeholder: "Select owner", defaultValue: "superadmin" },
-          { key: "company", label: "Company", required: true, placeholder: "Enter company" },
-          { key: "firstName", label: "First name", required: true, placeholder: "Enter first name" },
-          { key: "lastName", label: "Last name", placeholder: "Enter last name" },
+          { key: "leadOwner", label: "Lead owner", type: "select", options: currentUserName ? [currentUserName] : [], placeholder: "Current user", defaultValue: currentUserName },
+          { key: "company", label: "Company", maxLength: 255, placeholder: "Enter company" },
+          { key: "firstName", label: "First name", maxLength: 100, placeholder: "Enter first name" },
+          { key: "lastName", label: "Last name", maxLength: 100, placeholder: "Enter last name" },
           { key: "title", label: "Title", placeholder: "Enter title" },
           { key: "email", label: "Email", type: "email", placeholder: "name@example.com" },
-          { key: "phone", label: "Phone", type: "tel", placeholder: "Enter phone number" },
+          { key: "phone", label: "Phone", type: "tel", maxDigits: 10, placeholder: "Enter phone number" },
           { key: "fax", label: "Fax", placeholder: "Enter fax number"},
           { key: "mobile", label: "Mobile", type: "tel", placeholder: "Enter mobile number" },
           { key: "website", label: "Website", placeholder: "https://" },
-          { key: "leadSource", label: "Lead source", type: "select", options: sources },
+          { key: "leadSource", label: "Lead source", type: "select", maxLength: 100, options: sources },
           { key: "leadStatus", label: "Lead status", type: "select", options: ["Not contacted", "Attempted", "Contacted", "Qualified", "Lost"], defaultValue: "Not contacted" },
           { key: "industry", label: "Industry", type: "select", options: ["Technology", "Finance", "Manufacturing", "Retail", "Healthcare", "Education"] },
           { key: "employees", label: "No. of employees", type: "number", placeholder: "0" },
@@ -111,7 +116,7 @@ export default function Leads({ embed }: EmbedProps = {}) {
         fields: [{ key: "description", label: "Description", type: "textarea", placeholder: "Add notes about this lead" }],
       },
     ],
-    [sources],
+    [sources, currentUserName],
   );
 
   return (
