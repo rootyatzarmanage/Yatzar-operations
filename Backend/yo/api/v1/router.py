@@ -14,6 +14,7 @@ from yo.api.v1.endpoints.campaign import router as campaigns_router
 from yo.api.v1.endpoints.event_webinar import router as event_webinar_router
 from yo.api.v1.endpoints.email_marketing import router as email_marketing_router
 from yo.api.v1.endpoints.mail import router as mail_router
+from yo.api.v1.endpoints.calendar_event import router as calendar_event_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(employee_router)
@@ -30,3 +31,4 @@ api_v1_router.include_router(campaigns_router)
 api_v1_router.include_router(event_webinar_router)
 api_v1_router.include_router(email_marketing_router)
 api_v1_router.include_router(mail_router)
+api_v1_router.include_router(calendar_event_router)

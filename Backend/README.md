@@ -93,7 +93,8 @@ consolidation boundary.
 
 Run migrations before starting the API. Startup now validates the schema instead
 of creating tables outside Alembic. `alembic heads` should report one head;
-`alembic current` after upgrading should report `20261017_baseline`.
+`alembic current` after upgrading should report `20261022_calendar_events`,
+which adds calendar events and guests after the baseline.
 
 The `users` table stores login accounts and hashed passwords. The `employees` table stores employee details and links each Teams employee to one user account. Employee deletes are soft deletes and deactivate the linked account.
 Authentication uses an HttpOnly signed session cookie. Set `SESSION_SECRET` to a strong private value in `.env` before deployment.

@@ -83,6 +83,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       "/campaigns",
       "/event-webinars",
       "/email-marketing",
+      "/calendar-events",
     ];
     const root = roots.find(
       (candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`),
@@ -103,6 +104,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         "/campaigns",
         "/event-webinars",
         "/email-marketing",
+        "/calendar-events",
       ];
       if (
         createRoots.includes(root) &&

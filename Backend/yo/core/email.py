@@ -21,7 +21,7 @@ def smtp_configured() -> bool:
     return bool(settings.MAIL_HOST and settings.MAIL_FROM_ADDRESS)
 
 
-def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_id: str | None):
+def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_id: str | None, calendar=None):
     if settings.MAIL_MAILER.lower() != "smtp" or not smtp_configured():
         raise RuntimeError("Configure MAIL_MAILER=smtp, MAIL_HOST and MAIL_FROM_ADDRESS.")
     encryption = settings.MAIL_ENCRYPTION.lower()
@@ -36,6 +36,10 @@ def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_i
         message["Reply-To"] = reply_to
     message.set_content("This message contains an HTML version. Please use an HTML-capable email client.")
     message.add_alternative(html_body, subtype="html")
+    if calendar:
+        method, ics = calendar
+        message.add_alternative(ics, subtype="calendar", params={"method": method})
+        message.add_attachment(ics.encode(), maintype="application", subtype="ics", filename="invite.ics")
     context = ssl.create_default_context()
     implicit_tls = encryption in {"ssl", "smtps"}
     smtp_class = smtplib.SMTP_SSL if implicit_tls else smtplib.SMTP
@@ -51,10 +55,9 @@ def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_i
 
 
 async def send_email(to: str, subject: str, html_body: str, *, reply_to: str | None = None,
-                     message_id: str | None = None) -> None:
+                     message_id: str | None = None, calendar=None) -> None:
     try:
-        await run_in_threadpool(_send, to, subject, html_body, reply_to, message_id)
+        await run_in_threadpool(_send, to, subject, html_body, reply_to, message_id, calendar)
     except Exception:
-        # Do not expose SMTP credentials or provider responses to API clients.
         logger.exception("SMTP delivery failed")
         raise AppException("SMTP delivery failed. Check mail configuration and backend logs.", 502) from None
