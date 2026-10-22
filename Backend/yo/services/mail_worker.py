@@ -1,9 +1,3 @@
-"""Database-backed reminders and marketing delivery, resumed after restarts.
-
-Each source row is locked while processing it, preventing concurrent API workers
-from sending the same reminder. SMTP acceptance and a database commit cannot be
-atomic; delivery has at-least-once semantics after a process crash.
-"""
 import asyncio
 import calendar
 import hashlib
@@ -19,6 +13,7 @@ from yo.core.config import settings
 from yo.core.database import AsyncSessionLocal
 from yo.core.email import send_email, smtp_configured
 from yo.core.mail_schedule import aware, reminder_offset
+from yo.models.calendar_event import CalendarEvent
 from yo.models.call import Call
 from yo.models.contact import Contact
 from yo.models.email_marketing import EmailMarketing, EmailMarketingRecipient
@@ -30,6 +25,7 @@ from yo.models.workspace import Workspace
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.repositories.workspace import WorkspaceRepository
 from yo.services.email_marketing import EmailMarketingService
+from yo.core.secret_box import decrypt_secret
 
 logger = logging.getLogger(__name__)
 CAMPAIGN_STATES = ("Queued", "Scheduled", "Sending")
@@ -64,7 +60,20 @@ def occurrence(start, frequency, now, lead=timedelta()):
     return result.astimezone(timezone.utc)
 
 
-async def deliver(session, source, kind, when, recipient, subject, body, reply_to=None):
+async def workspace_smtp(session, workspace_id):
+    """Workspace SMTP settings; None means fall back to the .env settings."""
+    ws = await session.get(Workspace, workspace_id) if workspace_id else None
+    if not ws or ws.mail_status != "Enabled" or not (ws.mail_host and ws.mail_from_address):
+        return None
+    return {
+        "mailer": ws.mail_mailer or "smtp", "host": ws.mail_host, "port": ws.mail_port or 587,
+        "username": ws.mail_username or "", "password": decrypt_secret(ws.mail_password),
+        "encryption": ws.mail_encryption or "TLS", "from_address": ws.mail_from_address,
+        "from_name": ws.mail_from_name or ws.name,
+    }
+
+
+async def deliver(session, source, kind, when, recipient, subject, body, reply_to=None, calendar=None):
     recipient = recipient.strip().lower()
     key = hashlib.sha256(f"{kind}:{source.id}:{when.isoformat()}:{recipient}".encode()).hexdigest()
     delivery = await session.scalar(select(MailDelivery).where(MailDelivery.delivery_key == key))
@@ -83,7 +92,8 @@ async def deliver(session, source, kind, when, recipient, subject, body, reply_t
     delivery.attempts += 1
     try:
         await send_email(recipient, subject[:500], body, reply_to=reply_to,
-                         message_id=f"<{key}@yatzar.operations>")
+                         message_id=f"<{key}@yatzar.operations>", calendar=calendar,
+                         smtp_config=await workspace_smtp(session, source.workspace_id))
     except Exception:
         delivery.status = "Failed" if delivery.attempts >= settings.MAIL_MAX_ATTEMPTS else "Pending"
         delivery.last_error = "SMTP delivery failed; see backend logs."
@@ -150,6 +160,25 @@ async def process_reminder(model, source_id):
                 if email:
                     recipients.append((email, when, "call", event_time))
             title = source.subject
+        elif model is CalendarEvent:
+            title = source.title
+            for offset, audience in ((reminder_offset(source.reminder), "owner"),
+                                     (reminder_offset(source.guests_reminder), "guests")):
+                if offset is None:
+                    continue
+                event_time = occurrence(source.starts_at, source.repeat_frequency, now, offset)
+                end = event_time + (aware(source.ends_at) - aware(source.starts_at))
+                when = event_time - offset
+                if not when <= now < end:
+                    continue
+                if audience == "owner":
+                    email = await user_email(session, source.created_by, source.workspace_id)
+                    if email:
+                        recipients.append((email, when, "calendar", event_time))
+                else:
+                    for guest in source.guests:
+                        if not guest.is_removed and not guest.is_organizer and guest.response != "declined":
+                            recipients.append((guest.email, when, "calendar", event_time))
         else:
             title = source.title
             owner_offset = reminder_offset(source.reminder)
@@ -244,8 +273,14 @@ async def process_campaign(campaign_id):
                 return
             else:
                 eligible = [r for r in recipients if r.is_enabled]
-                campaign.status = "Email Sent" if eligible and all(r.sent for r in eligible) else ("Partially Sent" if sent else "Failed")
-                campaign.sent_at = now if sent else None
+                if campaign.mail_type == "Test Email":
+                    # Test mails are not counted as a send; the campaign stays editable.
+                    campaign.status = "Test" if sent else "Failed"
+                    campaign.sent_count = 0
+                    campaign.sent_at = None
+                else:
+                    campaign.status = "Email Sent" if eligible and all(r.sent for r in eligible) else ("Partially Sent" if sent else "Failed")
+                    campaign.sent_at = now if sent else None
                 return
 
 
@@ -256,6 +291,7 @@ async def tick():
     for model, filters in (
         (Task, [Task.reminder_enabled.is_(True), Task.reminder_at <= now]),
         (Meeting, []),
+        (CalendarEvent, [or_(CalendarEvent.repeat_frequency != "None", CalendarEvent.ends_at >= now)]),
         (Call, [Call.call_status == "Scheduled", Call.call_start_time >= now - timedelta(minutes=5)]),
         (EmailMarketing, [EmailMarketing.status.in_(CAMPAIGN_STATES),
                           or_(EmailMarketing.scheduled_at.is_(None), EmailMarketing.scheduled_at <= now)]),
@@ -270,6 +306,8 @@ async def tick():
                     await process_reminder(model, source_id)
             except Exception:
                 logger.exception("Mail worker could not process %s %s", model.__tablename__, source_id)
+    from yo.services.calendar_mail import sweep_calendar_mail  # local import avoids a circular import
+    await sweep_calendar_mail()
 
 
 async def run_mail_worker(stop: asyncio.Event):

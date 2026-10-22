@@ -166,6 +166,43 @@ class EmailMarketingService:
         await self.repository.create_recipients(campaign.id, recipients_data)
         return campaign
 
+    async def edit_campaign(self, campaign_id: UUID, payload: EmailMarketingCreateRequest):
+        await WorkspaceService(self.repository.session).ensure_access(
+            self.user_id, self.repository.workspace_id,
+        )
+        campaign = await self.repository.get_campaign(campaign_id, for_update=True)
+        if not campaign:
+            raise NotFoundException("Email marketing campaign", str(campaign_id))
+        is_test = campaign.mail_type == "Test Email" and campaign.status in {"Test", "Failed", "Queued", "Draft"}
+        if not is_test:
+            attempted = await self.repository.session.scalar(select(or_(
+                select(MailDelivery.id).where(
+                    MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
+                    MailDelivery.attempts > 0,
+                ).exists(),
+                select(EmailMarketingRecipient.id).where(
+                    EmailMarketingRecipient.email_marketing_id == campaign.id,
+                    EmailMarketingRecipient.sent.is_(True),
+                ).exists(),
+            )))
+            if campaign.status not in {"Draft", "Queued", "Scheduled"} or campaign.sent_count or attempted:
+                raise AppException("Campaigns can only be edited before sending starts. Replicate a sent campaign instead.", 409)
+        else:
+            # Allow a test campaign to be sent again after editing.
+            await self.repository.session.execute(delete(MailDelivery).where(
+                MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
+            ))
+        values, recipients_data = await self._prepare_campaign(payload, self.user_id)
+        values.pop("created_by", None)
+        for field, value in values.items():
+            setattr(campaign, field, value)
+        await self.repository.session.execute(delete(EmailMarketingRecipient).where(
+            EmailMarketingRecipient.email_marketing_id == campaign.id,
+        ))
+        await self.repository.create_recipients(campaign.id, recipients_data)
+        await self.repository.session.flush()
+        return campaign
+
     async def send_email(self, from_email: str, to_email: str, subject: str, html_content: str):
         await send_email(to_email, subject, html_content, reply_to=from_email)
 

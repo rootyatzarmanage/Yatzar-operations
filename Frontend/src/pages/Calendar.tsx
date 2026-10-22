@@ -6,6 +6,10 @@ import { listContacts, type Contact } from "@/api/contacts";
 import { createTask, listTasks, type TaskApi } from "@/api/task";
 import { createMeeting, listMeetings, type MeetingApi } from "@/api/meetings";
 import { createCall, listCalls, type CallApi } from "@/api/calls";
+import {
+  createCalendarEvent, deleteCalendarEvent, downloadCalendarIcs, listCalendarEvents,
+  respondCalendarEvent, updateCalendarEvent, type CalendarEventApi,
+} from "@/api/calendarEvents";
 import Contacts from "@/pages/Contacts";
 import Leads from "@/pages/Leads";
 import Customers from "@/pages/Customers";
@@ -18,7 +22,7 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 type View = "day" | "week" | "month" | "year";
 type FilterKey = "Event" | "Task" | "Meeting" | "Call";
 type FormKind = "contacts" | "leads" | "customers" | "tasks" | "meetings" | "calls";
-type ItemKind = "ev" | "tasks" | "meetings" | "calls";
+type ItemKind = "ev" | "ce" | "tasks" | "meetings" | "calls";
 type MenuKey = "engagement" | "activities" | "filter" | null;
 
 type LocalEvent = { id: string; title: string; date: string; end?: string; type: string; desc?: string };
@@ -33,6 +37,7 @@ type Item = {
   tt?: string; // end datetime
   ad?: boolean; // all day
   du?: number; // duration in minutes
+  rm?: number | null; // my reminder lead time in minutes
 };
 type Timed = Item & { a: number; z: number; c: number; w: number };
 
@@ -46,7 +51,23 @@ type EvForm = {
   tt: string;
   desc: string;
   contactId: string;
-  errors: { title?: boolean; from?: boolean; to?: boolean; contact?: boolean };
+  location: string;
+  allDay: boolean;
+  guests: string[];
+  guestInput: string;
+  reminder: string;
+  guestsReminder: string;
+  sendInvites: boolean;
+  repeat: string;
+  ce: CalendarEventApi | null;
+  errors: {
+    title?: boolean;
+    from?: boolean;
+    to?: boolean;
+    fromTime?: boolean;
+    toTime?: boolean;
+    contact?: boolean;
+  };
 };
 
 /* -------------------------------------------------------------- constants */
@@ -61,6 +82,7 @@ const EVC: Record<string, string> = {
   Call: "#06b6d4",
   Event: "#64748b",
   Workshop: "#ec4899",
+  Holiday: "#f97316",
 };
 const colorOf = (y: string) => EVC[y] || "#4361ee";
 
@@ -104,6 +126,30 @@ function writeEvents(list: LocalEvent[]) {
   }
 }
 
+const GUEST_TYPES = ["Event", "Workshop", "Holiday"];
+const REMINDERS = ["None", "At time of meeting", "5 minutes before", "10 minutes before", "30 minutes before", "1 hour before", "1 day before"];
+const REPEATS = ["None", "Daily", "Weekly", "Monthly", "Yearly"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const localIso = (d: Date) => `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+/** Expand a (possibly repeating) calendar event into the occurrences visible in [from, to]. */
+function expand(e: CalendarEventApi, from: string, to: string): { tf: string; tt: string }[] {
+  const st = new Date(e.starts_at);
+  const dur = new Date(e.ends_at).getTime() - st.getTime();
+  const out: { tf: string; tt: string }[] = [];
+  for (let k = 0; k < 800; k++) {
+    if (k > 0 && e.repeat_frequency === "None") break;
+    const months = e.repeat_frequency === "Yearly" ? 12 * k : e.repeat_frequency === "Monthly" ? k : 0;
+    const days = e.repeat_frequency === "Daily" ? k : e.repeat_frequency === "Weekly" ? 7 * k : 0;
+    const d = new Date(st.getFullYear(), st.getMonth() + months, 1, st.getHours(), st.getMinutes());
+    d.setDate(Math.min(st.getDate(), new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()) + days);
+    const end = new Date(d.getTime() + dur);
+    if (ymd(d) > to) break;
+    if (ymd(end) >= from) out.push({ tf: localIso(d), tt: localIso(end) });
+  }
+  return out;
+}
+
 function Swatch({ color }: { color: string }) {
   return <i className="inline-block h-3 w-3 shrink-0 rounded-[3px]" style={{ background: color }} />;
 }
@@ -129,6 +175,7 @@ export default function Calendar() {
   const [events, setEvents] = useState<LocalEvent[]>(readEvents);
   const [tasks, setTasks] = useState<TaskApi[]>([]);
   const [meetings, setMeetings] = useState<MeetingApi[]>([]);
+  const [calEvents, setCalEvents] = useState<CalendarEventApi[]>([]);
   const [calls, setCalls] = useState<CallApi[]>([]);
   const [tick, setTick] = useState(0);
   const [form, setForm] = useState<{ kind: FormKind; editId?: string } | null>(null);
@@ -151,6 +198,13 @@ export default function Calendar() {
     toastTimer.current = window.setTimeout(() => setToast(""), 2600);
   }, []);
 
+  const range = useMemo(() => {
+    const y = calD.getFullYear();
+    return view === "year"
+      ? [`${y}-01-01`, `${y}-12-31`]
+      : [ymd(new Date(y, calD.getMonth() - 1, 1)), ymd(new Date(y, calD.getMonth() + 2, 0))];
+  }, [calD, view]);
+
   /* ---- load Tasks / Meetings / Calls from the API (reload after any form closes) */
   useEffect(() => {
     let active = true;
@@ -167,6 +221,17 @@ export default function Calendar() {
       active = false;
     };
   }, [tick]);
+
+  /* ---- calendar events (own + invited), re-fetched when the visible range changes */
+  useEffect(() => {
+    let active = true;
+    void listCalendarEvents(range[0], range[1])
+      .then((r) => { if (active) setCalEvents(r); })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [tick, range]);
 
   /* ---- close dropdown menus on outside click */
   useEffect(() => {
@@ -213,8 +278,14 @@ export default function Calendar() {
         du: (c.duration_minutes ?? 0) + (c.duration_seconds ?? 0) / 60,
       });
     });
-    return out.filter((i) => filters[(i.k === "ev" ? "Event" : i.y) as FilterKey]);
-  }, [events, tasks, meetings, calls, filters, canViewEvents, canViewTasks, canViewMeetings, canViewCalls]);
+    calEvents.forEach((c) => {
+      const rm = c.my_response === "declined" ? null : c.my_reminder_minutes;
+      expand(c, range[0], range[1]).forEach((o) =>
+        out.push({ k: "ce", id: c.id, t: c.title, s: o.tf.slice(0, 10), e: o.tt.slice(0, 10), y: c.event_type, tf: o.tf, tt: o.tt, ad: c.all_day, rm }),
+      );
+    });
+    return out.filter((i) => filters[(i.k === "ev" || i.k === "ce" ? "Event" : i.y) as FilterKey]);
+  }, [events, calEvents, range, tasks, meetings, calls, filters, canViewEvents, canViewTasks, canViewMeetings, canViewCalls]);
 
   const today = ymd(new Date());
 
@@ -278,19 +349,31 @@ export default function Calendar() {
 
   /* ---- quick event modal */
   const evOpen = (id?: string, a?: string, b?: string, ft?: string, tt?: string, ty?: string) => {
-    if (id ? !canUpdateEvents : (ty === "Meeting" ? !canCreateMeetings : !canCreateEvents)) return;
-    const ed = id ? events.find((e) => e.id === id) : undefined;
+    const ce = id ? calEvents.find((c) => c.id === id) : undefined;
+    if (!ce && (id ? !canUpdateEvents : (ty === "Meeting" ? !canCreateMeetings : !canCreateEvents))) return;
+    const ed = id && !ce ? events.find((e) => e.id === id) : undefined;
     const from = a || today;
+    const s = ce ? localIso(new Date(ce.starts_at)) : "";
+    const z = ce ? localIso(new Date(ce.ends_at)) : "";
     setEv({
-      editId: ed ? ed.id : null,
-      type: ed ? ed.type : ty || "Event",
-      title: ed ? ed.title : "",
-      from: ed ? ed.date : from,
-      to: ed ? ed.end || ed.date : b || from,
-      ft: ft || "09:00",
-      tt: tt || "10:00",
-      desc: ed?.desc || "",
+      editId: ce ? ce.id : ed ? ed.id : null,
+      type: ce ? ce.event_type : ed ? ed.type : ty || "Event",
+      title: ce ? ce.title : ed ? ed.title : "",
+      from: ce ? s.slice(0, 10) : ed ? ed.date : from,
+      to: ce ? z.slice(0, 10) : ed ? ed.end || ed.date : b || from,
+      ft: ce && !ce.all_day ? s.slice(11) : ft || "09:00",
+      tt: ce && !ce.all_day ? z.slice(11) : tt || "10:00",
+      desc: ce ? ce.description || "" : ed?.desc || "",
       contactId: "",
+      location: ce?.location || "",
+      allDay: ce ? ce.all_day : true,
+      guests: ce ? ce.guests.filter((g) => !g.is_organizer).map((g) => g.email) : [],
+      guestInput: "",
+      reminder: ce ? ce.reminder : "10 minutes before",
+      guestsReminder: ce ? ce.guests_reminder : "10 minutes before",
+      sendInvites: true,
+      repeat: ce ? ce.repeat_frequency : "None",
+      ce: ce ?? null,
       errors: {},
     });
     if (!contacts.length) void listContacts().then(setContacts).catch(() => undefined);
@@ -306,7 +389,19 @@ export default function Calendar() {
   };
   const evPatch = (p: Partial<EvForm>) => setEv((cur) => (cur ? { ...cur, ...p } : cur));
 
-  const evDelete = () => {
+  const evDelete = async () => {
+    if (ev?.ce) {
+      if (!ev.ce.is_organizer || !window.confirm("Delete this event? Guests will get a cancellation email.")) return;
+      try {
+        await deleteCalendarEvent(ev.ce.id);
+        setTick((n) => n + 1);
+        evClose();
+        showToast("Event deleted");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Unable to delete event.");
+      }
+      return;
+    }
     if (!canDeleteEvents || !ev?.editId || !window.confirm("Delete this event?")) return;
     const next = events.filter((e) => e.id !== ev.editId);
     setEvents(next);
@@ -315,9 +410,68 @@ export default function Calendar() {
     showToast("Event deleted");
   };
 
+  const addGuests = () => {
+    if (!ev) return;
+    const parts = ev.guestInput.split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+    if (parts.length) evPatch({ guests: [...new Set([...ev.guests, ...parts])], guestInput: "" });
+  };
+
+  const evRespond = async (answer: "accepted" | "declined" | "maybe") => {
+    if (!ev?.ce) return;
+    try {
+      await respondCalendarEvent(ev.ce.id, answer);
+      setTick((n) => n + 1);
+      evClose();
+      showToast("Response saved");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to save response.");
+    }
+  };
+
+  const saveCalendarEvent = async () => {
+    if (!ev) return;
+    const title = ev.title.trim();
+    const typed = ev.guestInput.split(/[,;\s]+/).filter(Boolean);
+    const guests = [...new Set([...ev.guests, ...typed].map((g) => g.trim().toLowerCase()))];
+    const badEmail = guests.some((g) => !EMAIL_RE.test(g));
+    if (!title || !ev.from || !ev.to || badEmail) {
+      evPatch({ errors: { title: !title, from: !ev.from, to: !ev.to } });
+      return showToast(badEmail ? "One of the guest emails is not valid" : "Title and dates are required");
+    }
+    if (ev.to < ev.from || (!ev.allDay && ev.to === ev.from && ev.tt <= ev.ft)) return showToast("End must be after the start");
+    if (!ev.ce && !canCreateEvents) return;
+    const payload = {
+      title,
+      event_type: ev.type,
+      location: ev.location.trim() || null,
+      description: ev.desc.trim() || null,
+      all_day: ev.allDay,
+      starts_at: `${ev.from}T${ev.allDay ? "00:00" : ev.ft}`,
+      ends_at: `${ev.to}T${ev.allDay ? "23:59" : ev.tt}`,
+      repeat_frequency: ev.repeat,
+      reminder: ev.reminder,
+      guests_reminder: ev.guestsReminder,
+      guests: guests.map((email) => ({ email })),
+      send_invites: ev.sendInvites,
+    };
+    try {
+      setSaving(true);
+      if (ev.ce) await updateCalendarEvent(ev.ce.id, payload);
+      else await createCalendarEvent(payload);
+      setTick((n) => n + 1);
+      evClose();
+      showToast(guests.length && ev.sendInvites ? `Saved. Invitations sent to ${guests.length} guest(s)` : "Event saved");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to save event.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const evSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!ev || saving) return;
+    if (GUEST_TYPES.includes(ev.type) && (!ev.editId || ev.ce)) return saveCalendarEvent();
     const allowed = ev.editId
       ? (ev.type === "Meeting" ? hasPermission(user, "Meetings", "update") : canUpdateEvents)
       : ev.type === "Task"
@@ -444,9 +598,32 @@ export default function Calendar() {
     return () => document.removeEventListener("keydown", onKey);
   }, [form, ev, closeForm]);
 
+  /* ---- in-app reminder popup (like Google Calendar) */
+  const shownReminders = useRef(new Set<string>());
+  useEffect(() => {
+    const check = () => {
+      const now = Date.now();
+      items.forEach((it) => {
+        if (it.k !== "ce" || !it.tf || it.rm == null) return;
+        const start = new Date(it.tf).getTime();
+        const key = `${it.id}:${it.tf}`;
+        if (start - it.rm * 60000 <= now && now < start && !shownReminders.current.has(key)) {
+          shownReminders.current.add(key);
+          const msg = `Reminder: ${it.t} starts at ${fmtMin(minutesOf(it.tf))}`;
+          showToast(msg);
+          if ("Notification" in window && Notification.permission === "granted") new Notification(msg);
+        }
+      });
+    };
+    if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
+    check();
+    const timer = window.setInterval(check, 30000);
+    return () => window.clearInterval(timer);
+  }, [items, showToast]);
+
   /* ---- click handlers for items */
   const openItem = (it: Item) => {
-    if (it.k === "ev") evOpen(it.id);
+    if (it.k === "ev" || it.k === "ce") evOpen(it.id);
     else openForm(it.k === "tasks" ? "tasks" : it.k === "meetings" ? "meetings" : "calls", it.id);
   };
 
@@ -640,7 +817,9 @@ export default function Calendar() {
     : view === "day" ? "grid grid-cols-1" : "grid grid-cols-7";
 
   /* ----------------------------------------------------------------- render */
-  const timesVisible = ev ? ev.type === "Meeting" || ev.type === "Call" : false;
+  const guestType = ev ? GUEST_TYPES.includes(ev.type) : false;
+  const timesVisible = ev ? ev.type === "Meeting" || ev.type === "Call" || (guestType && !ev.allDay) : false;
+  const ro = !!ev && !!ev.ce && !ev.ce.is_organizer;
   const errCls = (b?: boolean) => (b ? "border-red-500" : "border-gray-200 dark:border-gray-700");
 
   return (
@@ -746,55 +925,136 @@ export default function Calendar() {
 
       {/* ---------------- quick "Add to calendar" modal ---------------- */}
       {ev && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-gray-900/50 p-4">
-          <form onSubmit={(e) => void evSubmit(e)} noValidate className="w-full max-w-lg space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{ev.editId ? "Edit event" : "Add to calendar"}</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Type
-                <select value={ev.type} onChange={(e) => evPatch({ type: e.target.value })} className={`${fieldCls} ${errCls()}`}>
-                  {["Event", "Workshop", "Task", "Meeting", "Call"].map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Title<span className="text-red-500"> *</span>
-                <input autoFocus value={ev.title} onChange={(e) => evPatch({ title: e.target.value, errors: { ...ev.errors, title: false } })} placeholder="Enter title" className={`${fieldCls} ${errCls(ev.errors.title)}`} />
-              </label>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From date<span className="text-red-500"> *</span>
-                <input type="date" value={ev.from} onChange={(e) => evPatch({ from: e.target.value, errors: { ...ev.errors, from: false } })} className={`${fieldCls} ${errCls(ev.errors.from)}`} />
-              </label>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To date<span className="text-red-500"> *</span>
-                <input type="date" value={ev.to} onChange={(e) => evPatch({ to: e.target.value, errors: { ...ev.errors, to: false } })} className={`${fieldCls} ${errCls(ev.errors.to)}`} />
-              </label>
-            </div>
-            {timesVisible && (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-gray-900/50 p-4">
+          <form onSubmit={(e) => void evSubmit(e)} noValidate className="my-4 w-full max-w-lg space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{ro ? "Event details" : ev.editId ? "Edit event" : "Add to calendar"}</h2>
+            <fieldset disabled={ro} className="m-0 min-w-0 space-y-4 border-0 p-0">
               <div className="grid grid-cols-2 gap-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From time
-                  <input type="time" value={ev.ft} onChange={(e) => evPatch({ ft: e.target.value })} className={`${fieldCls} ${errCls()}`} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Type
+                  <select value={ev.type} onChange={(e) => evPatch({ type: e.target.value })} className={`${fieldCls} ${errCls()}`}>
+                    {["Event", "Workshop", "Holiday", "Task", "Meeting", "Call"].map((t) => <option key={t}>{t}</option>)}
+                  </select>
                 </label>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To time
-                  <input type="time" value={ev.tt} onChange={(e) => evPatch({ tt: e.target.value })} className={`${fieldCls} ${errCls()}`} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Title{(guestType || ev.type === "Task" || ev.type === "Meeting" || ev.type === "Call") && <span className="text-red-500"> *</span>}
+                  <input autoFocus value={ev.title} onChange={(e) => evPatch({ title: e.target.value, errors: { ...ev.errors, title: false } })} placeholder="e.g. Diwali Holiday" className={`${fieldCls} ${errCls(ev.errors.title)}`} />
                 </label>
               </div>
-            )}
-            {ev.type === "Call" && (
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Contact<span className="text-red-500"> *</span>
-                <select value={ev.contactId} onChange={(e) => evPatch({ contactId: e.target.value, errors: { ...ev.errors, contact: false } })} className={`${fieldCls} ${errCls(ev.errors.contact)}`}>
-                  <option value="">Select contact</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>{`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.email || "Unnamed"}</option>
-                  ))}
-                </select>
+              {guestType && (
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                  <input type="checkbox" checked={ev.allDay} onChange={(e) => evPatch({ allDay: e.target.checked })} className="h-4 w-4 accent-brand-500" /> All day
+                </label>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From date{(guestType || ev.type === "Meeting" || ev.type === "Call") && <span className="text-red-500"> *</span>}
+                  <input type="date" value={ev.from} onChange={(e) => evPatch({ from: e.target.value, errors: { ...ev.errors, from: false } })} className={`${fieldCls} ${errCls(ev.errors.from)}`} />
+                </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To date{(guestType || ev.type === "Meeting") && <span className="text-red-500"> *</span>}
+                  <input type="date" value={ev.to} onChange={(e) => evPatch({ to: e.target.value, errors: { ...ev.errors, to: false } })} className={`${fieldCls} ${errCls(ev.errors.to)}`} />
+                </label>
+              </div>
+              {timesVisible && (
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">From time<span className="text-red-500"> *</span>
+                    <input type="time" value={ev.ft} onChange={(e) => evPatch({ ft: e.target.value, errors: { ...ev.errors, fromTime: false } })} className={`${fieldCls} ${errCls(ev.errors.fromTime)}`} />
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">To time<span className="text-red-500"> *</span>
+                    <input type="time" value={ev.tt} onChange={(e) => evPatch({ tt: e.target.value, errors: { ...ev.errors, toTime: false } })} className={`${fieldCls} ${errCls(ev.errors.toTime)}`} />
+                  </label>
+                </div>
+              )}
+              {ev.type === "Call" && (
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Contact<span className="text-red-500"> *</span>
+                  <select value={ev.contactId} onChange={(e) => evPatch({ contactId: e.target.value, errors: { ...ev.errors, contact: false } })} className={`${fieldCls} ${errCls(ev.errors.contact)}`}>
+                    <option value="">Select contact</option>
+                    {contacts.map((c) => (
+                      <option key={c.id} value={c.id}>{`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.email || "Unnamed"}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {guestType && (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Location
+                    <input value={ev.location} onChange={(e) => evPatch({ location: e.target.value })} placeholder="Add location or meeting link" className={`${fieldCls} ${errCls()}`} />
+                  </label>
+                  <div className="text-sm font-medium text-gray-700 dark:text-gray-200">Guests
+                    <div className={`mt-1 flex flex-wrap gap-1.5 rounded-lg border p-2 ${bdr}`}>
+                      {ev.guests.map((g) => {
+                        const st = ev.ce?.guests.find((x) => x.email === g)?.response;
+                        return (
+                          <span key={g} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${EMAIL_RE.test(g) ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200" : "bg-red-50 text-red-600"}`}>
+                            {st === "accepted" ? "✓ " : st === "declined" ? "✗ " : st === "maybe" ? "? " : ""}{g}
+                            {!ro && <button type="button" aria-label={`Remove ${g}`} onClick={() => evPatch({ guests: ev.guests.filter((x) => x !== g) })}>×</button>}
+                          </span>
+                        );
+                      })}
+                      {!ro && (
+                        <input
+                          list="guest-emails"
+                          value={ev.guestInput}
+                          placeholder="Add guest emails"
+                          onChange={(e) => evPatch({ guestInput: e.target.value })}
+                          onKeyDown={(e) => { if (["Enter", ",", " ", ";"].includes(e.key)) { e.preventDefault(); addGuests(); } }}
+                          onBlur={addGuests}
+                          className="min-w-[160px] flex-1 bg-transparent text-sm outline-none dark:text-white"
+                        />
+                      )}
+                    </div>
+                    <datalist id="guest-emails">
+                      {contacts.filter((c) => c.email).map((c) => <option key={c.id} value={c.email ?? ""} />)}
+                    </datalist>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Repeat
+                      <select value={ev.repeat} onChange={(e) => evPatch({ repeat: e.target.value })} className={`${fieldCls} ${errCls()}`}>
+                        {REPEATS.map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">My reminder
+                      <select value={ev.reminder} onChange={(e) => evPatch({ reminder: e.target.value })} className={`${fieldCls} ${errCls()}`}>
+                        {REMINDERS.map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Guests reminder
+                      <select value={ev.guestsReminder} onChange={(e) => evPatch({ guestsReminder: e.target.value })} className={`${fieldCls} ${errCls()}`}>
+                        {REMINDERS.map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                </>
+              )}
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Description
+                <textarea rows={3} value={ev.desc} onChange={(e) => evPatch({ desc: e.target.value })} placeholder="Enter details" className={`${fieldCls} ${errCls()}`} />
+              </label>
+            </fieldset>
+
+            {guestType && !ro && (ev.guests.length > 0 || ev.guestInput.trim() !== "") && (
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                <input type="checkbox" checked={ev.sendInvites} onChange={(e) => evPatch({ sendInvites: e.target.checked })} className="h-4 w-4 accent-brand-500" />
+                Send invitation emails to guests
               </label>
             )}
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Description
-              <textarea rows={3} value={ev.desc} onChange={(e) => evPatch({ desc: e.target.value })} placeholder="Enter details" className={`${fieldCls} ${errCls()}`} />
-            </label>
-            <div className="flex justify-between pt-2">
-              {ev.editId && <button type="button" onClick={evDelete} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-gray-700 dark:hover:bg-gray-800">Delete</button>}
+
+            {ev.ce && !ev.ce.is_organizer && (
+              <div className={`flex items-center justify-between rounded-lg border px-3 py-2 ${bdr}`}>
+                <span className="text-sm text-gray-700 dark:text-gray-200">Going?</span>
+                <span className="flex gap-2">
+                  {([["accepted", "Yes"], ["declined", "No"], ["maybe", "Maybe"]] as const).map(([val, label]) => (
+                    <button key={val} type="button" onClick={() => void evRespond(val)}
+                      className={`rounded-full border px-4 py-1 text-sm ${ev.ce?.my_response === val ? "border-indigo-600 bg-indigo-600 text-white" : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              {ev.editId && (!ev.ce || ev.ce.is_organizer) && <button type="button" onClick={() => void evDelete()} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-gray-700 dark:hover:bg-gray-800">Delete</button>}
+              {ev.ce && <button type="button" onClick={() => { if (ev.ce) void downloadCalendarIcs(ev.ce.id); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">Download .ics</button>}
               <span className="ml-auto flex gap-3">
-                <button type="button" onClick={evClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">Cancel</button>
-                <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">Save</button>
+                <button type="button" onClick={evClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">{ro ? "Close" : "Cancel"}</button>
+                {!ro && <button type="submit" disabled={saving} className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">{guestType && ev.sendInvites && (ev.guests.length > 0 || ev.guestInput.trim() !== "") ? "Send" : "Save"}</button>}
               </span>
             </div>
           </form>

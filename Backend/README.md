@@ -79,6 +79,23 @@ Run migrations from the `Backend` directory:
 alembic upgrade head
 ```
 
+The active history is consolidated into `20261017_baseline`. It creates a fresh
+database or reconciles existing tables without dropping application data. It
+also applies the SMTP schedule/delivery schema and annual customer numbers.
+Existing recognized legacy revision markers are adopted transactionally during
+upgrade; do not run `alembic stamp head` to bypass schema changes.
+
+Historical scripts are preserved in `alembic/legacy_versions/` and are not
+executed. The baseline uses a frozen JSON schema snapshot, not live ORM models.
+Future changes should be new revisions following this baseline. The baseline
+itself refuses destructive downgrades. Backups provide recovery across the
+consolidation boundary.
+
+Run migrations before starting the API. Startup now validates the schema instead
+of creating tables outside Alembic. `alembic heads` should report one head;
+`alembic current` after upgrading should report `20261022_calendar_events`,
+which adds calendar events and guests after the baseline.
+
 The `users` table stores login accounts and hashed passwords. The `employees` table stores employee details and links each Teams employee to one user account. Employee deletes are soft deletes and deactivate the linked account.
 Authentication uses an HttpOnly signed session cookie. Set `SESSION_SECRET` to a strong private value in `.env` before deployment.
 `FRONTEND_ORIGINS` must include the exact origin used by the Vite frontend so browsers can send the session cookie.
