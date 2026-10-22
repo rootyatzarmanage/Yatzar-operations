@@ -15,6 +15,7 @@ from yo.schemas.requests.workspace import (
     WorkspaceCreateRequest,
     WorkspaceUpdateRequest,
 )
+from yo.core.secret_box import encrypt_secret
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,9 @@ class WorkspaceService:
     async def create(self, request: WorkspaceCreateRequest) -> Workspace:
         if await self.repository.get_active_by_name(request.name):
             raise ConflictException("An active workspace with this name already exists.")
-        return await self.repository.create(Workspace(**request.model_dump()))
+        values = request.model_dump()
+        values["mail_password"] = encrypt_secret(values["mail_password"])
+        return await self.repository.create(Workspace(**values))
 
     async def get_by_id(self, workspace_id: UUID) -> Workspace:
         workspace = await self.repository.get_by_id(workspace_id)
@@ -59,6 +62,10 @@ class WorkspaceService:
                 raise ConflictException(
                     "An active workspace with this name already exists."
                 )
+        if "mail_password" in values:
+            password = values.pop("mail_password")
+            if password:  
+                workspace.mail_password = encrypt_secret(password)
         for field_name, value in values.items():
             setattr(workspace, field_name, value)
         return await self.repository.update(workspace)

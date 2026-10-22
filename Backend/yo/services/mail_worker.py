@@ -25,6 +25,7 @@ from yo.models.workspace import Workspace
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.repositories.workspace import WorkspaceRepository
 from yo.services.email_marketing import EmailMarketingService
+from yo.core.secret_box import decrypt_secret
 
 logger = logging.getLogger(__name__)
 CAMPAIGN_STATES = ("Queued", "Scheduled", "Sending")
@@ -59,6 +60,19 @@ def occurrence(start, frequency, now, lead=timedelta()):
     return result.astimezone(timezone.utc)
 
 
+async def workspace_smtp(session, workspace_id):
+    """Workspace SMTP settings; None means fall back to the .env settings."""
+    ws = await session.get(Workspace, workspace_id) if workspace_id else None
+    if not ws or ws.mail_status != "Enabled" or not (ws.mail_host and ws.mail_from_address):
+        return None
+    return {
+        "mailer": ws.mail_mailer or "smtp", "host": ws.mail_host, "port": ws.mail_port or 587,
+        "username": ws.mail_username or "", "password": decrypt_secret(ws.mail_password),
+        "encryption": ws.mail_encryption or "TLS", "from_address": ws.mail_from_address,
+        "from_name": ws.mail_from_name or ws.name,
+    }
+
+
 async def deliver(session, source, kind, when, recipient, subject, body, reply_to=None, calendar=None):
     recipient = recipient.strip().lower()
     key = hashlib.sha256(f"{kind}:{source.id}:{when.isoformat()}:{recipient}".encode()).hexdigest()
@@ -78,7 +92,8 @@ async def deliver(session, source, kind, when, recipient, subject, body, reply_t
     delivery.attempts += 1
     try:
         await send_email(recipient, subject[:500], body, reply_to=reply_to,
-                         message_id=f"<{key}@yatzar.operations>", calendar=calendar)
+                         message_id=f"<{key}@yatzar.operations>", calendar=calendar,
+                         smtp_config=await workspace_smtp(session, source.workspace_id))
     except Exception:
         delivery.status = "Failed" if delivery.attempts >= settings.MAIL_MAX_ATTEMPTS else "Pending"
         delivery.last_error = "SMTP delivery failed; see backend logs."
@@ -258,8 +273,14 @@ async def process_campaign(campaign_id):
                 return
             else:
                 eligible = [r for r in recipients if r.is_enabled]
-                campaign.status = "Email Sent" if eligible and all(r.sent for r in eligible) else ("Partially Sent" if sent else "Failed")
-                campaign.sent_at = now if sent else None
+                if campaign.mail_type == "Test Email":
+                    # Test mails are not counted as a send; the campaign stays editable.
+                    campaign.status = "Test" if sent else "Failed"
+                    campaign.sent_count = 0
+                    campaign.sent_at = None
+                else:
+                    campaign.status = "Email Sent" if eligible and all(r.sent for r in eligible) else ("Partially Sent" if sent else "Failed")
+                    campaign.sent_at = now if sent else None
                 return
 
 

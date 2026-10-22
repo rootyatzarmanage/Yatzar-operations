@@ -175,23 +175,28 @@ class EmailMarketingService:
         await WorkspaceService(self.repository.session).ensure_access(
             self.user_id, self.repository.workspace_id,
         )
-        # The worker holds this lock across SMTP delivery. Re-check the status
-        # after acquiring it, rather than trusting a previous API/UI response.
         campaign = await self.repository.get_campaign(campaign_id, for_update=True)
         if not campaign:
             raise NotFoundException("Email marketing campaign", str(campaign_id))
-        attempted = await self.repository.session.scalar(select(or_(
-            select(MailDelivery.id).where(
+        is_test = campaign.mail_type == "Test Email" and campaign.status in {"Test", "Failed", "Queued", "Draft"}
+        if not is_test:
+            attempted = await self.repository.session.scalar(select(or_(
+                select(MailDelivery.id).where(
+                    MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
+                    MailDelivery.attempts > 0,
+                ).exists(),
+                select(EmailMarketingRecipient.id).where(
+                    EmailMarketingRecipient.email_marketing_id == campaign.id,
+                    EmailMarketingRecipient.sent.is_(True),
+                ).exists(),
+            )))
+            if campaign.status not in {"Draft", "Queued", "Scheduled"} or campaign.sent_count or attempted:
+                raise AppException("Campaigns can only be edited before sending starts. Replicate a sent campaign instead.", 409)
+        else:
+            # Allow a test campaign to be sent again after editing.
+            await self.repository.session.execute(delete(MailDelivery).where(
                 MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
-                MailDelivery.attempts > 0,
-            ).exists(),
-            select(EmailMarketingRecipient.id).where(
-                EmailMarketingRecipient.email_marketing_id == campaign.id,
-                EmailMarketingRecipient.sent.is_(True),
-            ).exists(),
-        )))
-        if campaign.status not in {"Draft", "Queued", "Scheduled"} or campaign.sent_count or attempted:
-            raise AppException("Campaigns can only be edited before sending starts. Replicate a sent campaign instead.", 409)
+            ))
         values, recipients_data = await self._prepare_campaign(payload, self.user_id)
         values.pop("created_by", None)
         for field, value in values.items():
