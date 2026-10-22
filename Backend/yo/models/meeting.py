@@ -24,6 +24,8 @@ class Meeting(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     venue: Mapped[str | None] = mapped_column(String(50), nullable=True)
     location: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    meeting_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    meeting_link: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     all_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

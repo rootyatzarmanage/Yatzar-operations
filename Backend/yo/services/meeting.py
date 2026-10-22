@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
+from yo.core.exceptions import AppException
 from yo.services.workspace import WorkspaceService
 from yo.models.meeting import Meeting
 from yo.repositories.meeting import MeetingRepository
@@ -94,6 +95,13 @@ class MeetingService:
 
         starts_at = values.get("starts_at", meeting.starts_at)
         ends_at = values.get("ends_at", meeting.ends_at)
+        venue = values.get("venue", meeting.venue)
+        if (venue or "").strip().lower() == "online":
+            if not values.get("meeting_provider", meeting.meeting_provider):
+                raise AppException("meeting_provider is required for an online meeting", 400)
+        elif "venue" in values or "meeting_provider" in values or "meeting_link" in values:
+            values["meeting_provider"] = None
+            values["meeting_link"] = None
 
         self._validate_schedule(starts_at, ends_at)
 

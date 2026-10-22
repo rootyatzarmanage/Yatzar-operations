@@ -19,6 +19,8 @@ class MeetingResponse(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     venue: str | None = None
     location: str | None = None
+    meeting_provider: str | None = None
+    meeting_link: str | None = None
     all_day: bool
     starts_at: datetime
     ends_at: datetime
