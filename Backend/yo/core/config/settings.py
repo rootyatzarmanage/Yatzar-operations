@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     SESSION_COOKIE_NAME: str = "yatzar_session"
     SESSION_MAX_AGE: int = 60 * 60 * 8
     FRONTEND_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    FRONTEND_URL: str = "http://localhost:5173"
+    PUBLIC_API_URL: str = "http://localhost:8000/api/v1"
     MAIL_MAILER: str = "smtp"
     MAIL_HOST: str = Field(default="", validation_alias=AliasChoices("MAIL_HOST", "SMTP_HOST"))
     MAIL_PORT: int = Field(default=587, validation_alias=AliasChoices("MAIL_PORT", "SMTP_PORT"))
