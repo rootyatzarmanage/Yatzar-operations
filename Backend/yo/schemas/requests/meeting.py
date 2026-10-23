@@ -42,6 +42,7 @@ class MeetingCreateRequest(BaseModel):
     participants_reminder: str = "None"
     reminder_type: str = "None"
     description: str | None = None
+    assigned_to: UUID | None = None
 
     @field_validator("title", "repeat_frequency", "reminder", "participants_reminder", "reminder_type")
     @classmethod
@@ -89,6 +90,7 @@ class MeetingUpdateRequest(BaseModel):
     participants_reminder: str | None = None
     reminder_type: str | None = None
     description: str | None = None
+    assigned_to: UUID | None = None
 
     @field_validator("title", "repeat_frequency", "reminder", "participants_reminder", "reminder_type")
     @classmethod

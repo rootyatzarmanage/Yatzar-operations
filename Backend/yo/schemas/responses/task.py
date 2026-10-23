@@ -20,6 +20,7 @@ class TaskResponse(BaseModel):
     subject: str
     due_date: date | None = None
     task_owner_id: UUID
+    assigned_to: UUID | None = None
     contact_selection: ContactSelectionResponse
     account: str | None = None
     status: str

@@ -31,6 +31,7 @@ class CallCreateRequest(BaseModel):
     call_purpose: str | None = None
     call_agenda: str | None = None
     reminder: str | None = None
+    assigned_to: UUID | None = None
 
     @field_validator("subject", "call_status", "related_to", "voice_recording", "call_purpose", "call_agenda", "reminder")
     @classmethod
@@ -79,6 +80,7 @@ class CallUpdateRequest(BaseModel):
     call_purpose: str | None = None
     call_agenda: str | None = None
     reminder: str | None = None
+    assigned_to: UUID | None = None
 
     @field_validator("subject", "call_status", "related_to", "voice_recording", "call_purpose", "call_agenda", "reminder")
     @classmethod

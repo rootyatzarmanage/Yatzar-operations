@@ -15,7 +15,6 @@ def utcnow():
 class EmailMarketing(Base):
     __tablename__ = "email_marketing"
 
-    # Existing unassigned rows remain hidden until explicitly backfilled.
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=True, index=True,

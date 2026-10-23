@@ -14,7 +14,6 @@ def utcnow():
 class Meeting(Base):
     __tablename__ = "meetings"
 
-    # Existing unassigned rows remain hidden until explicitly backfilled.
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=True, index=True,
@@ -22,6 +21,7 @@ class Meeting(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     venue: Mapped[str | None] = mapped_column(String(50), nullable=True)
     location: Mapped[str | None] = mapped_column(String(500), nullable=True)
     meeting_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)

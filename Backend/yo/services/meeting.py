@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from yo.core.exceptions import AppException
 from yo.services.workspace import WorkspaceService
+from yo.core.assignee import validate_assignee
 from yo.models.meeting import Meeting
 from yo.repositories.meeting import MeetingRepository
 from yo.repositories.contact import ContactRepository
@@ -68,6 +69,7 @@ class MeetingService:
             self.user_id, self.repository.workspace_id,
         )
         self._validate_schedule(payload.starts_at, payload.ends_at)
+        await validate_assignee(self.repository.session, payload.assigned_to, self.repository.workspace_id)
         await self._validate_participants(payload.participants)
         values = payload.model_dump()
 
@@ -104,6 +106,8 @@ class MeetingService:
             values["meeting_link"] = None
 
         self._validate_schedule(starts_at, ends_at)
+        if values.get("assigned_to") is not None:
+            await validate_assignee(self.repository.session, values["assigned_to"], self.repository.workspace_id)
 
         if "participants" in values and values["participants"] is not None:
             await self._validate_participants(payload.participants)

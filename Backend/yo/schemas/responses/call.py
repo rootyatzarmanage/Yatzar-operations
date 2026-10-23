@@ -11,6 +11,7 @@ class CallResponse(BaseModel):
 
     id: UUID
     contact_id: UUID
+    assigned_to: UUID | None = None
     subject: str
     call_type: str
     call_status: str

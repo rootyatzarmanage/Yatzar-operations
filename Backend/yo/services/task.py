@@ -2,6 +2,7 @@ from uuid import UUID
 from fastapi import HTTPException
 
 from yo.services.workspace import WorkspaceService
+from yo.core.assignee import validate_assignee
 from yo.repositories.task import TaskRepository
 from yo.schemas.requests.task import TaskCreateRequest, TaskUpdateRequest
 
@@ -86,6 +87,7 @@ class TaskService:
             self.user_id, self.repository.workspace_id,
         )
         self._validate_reminder(request.reminder_enabled, request.reminder_at, request.reminder_type)
+        await validate_assignee(self.repository.session, request.assigned_to, self.repository.workspace_id)
         values = request.model_dump(exclude={"contact_selection"})
         values["contact_selection"] = await self._validate_selection(
             request.contact_selection, user_id
@@ -107,6 +109,8 @@ class TaskService:
             values.get("reminder_at", task.reminder_at),
             values.get("reminder_type", task.reminder_type),
         )
+        if values.get("assigned_to") is not None:
+            await validate_assignee(self.repository.session, values["assigned_to"], self.repository.workspace_id)
 
         if "contact_selection" in values:
             selection = request.contact_selection

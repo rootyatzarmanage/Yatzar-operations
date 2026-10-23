@@ -14,8 +14,6 @@ def utcnow():
 
 class Call(Base):
     __tablename__ = "calls"
-
-    # Existing unassigned rows remain hidden until explicitly backfilled.
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=True, index=True,
@@ -23,6 +21,7 @@ class Call(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     contact_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),ForeignKey("contacts.id"),nullable=False,index=True)
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     call_type: Mapped[str] = mapped_column(String(30), nullable=False)
     call_status: Mapped[str] = mapped_column(String(30), default="Completed", nullable=False)

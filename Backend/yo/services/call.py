@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import HTTPException
 
 from yo.services.workspace import WorkspaceService
+from yo.core.assignee import validate_assignee
 from yo.repositories.call import CallRepository
 from yo.schemas.requests.call import CallCreateRequest, CallUpdateRequest
 
@@ -79,6 +80,7 @@ class CallService:
             self.user_id, self.repository.workspace_id,
         )
         await self._validate_contact(payload.contact_id, user_id)
+        await validate_assignee(self.repository.session, payload.assigned_to, self.repository.workspace_id)
         self._validate_status(payload.call_status)
 
         values = payload.model_dump()
@@ -101,6 +103,8 @@ class CallService:
 
         if values.get("contact_id") is not None:
             await self._validate_contact(values["contact_id"], user_id)
+        if values.get("assigned_to") is not None:
+            await validate_assignee(self.repository.session, values["assigned_to"], self.repository.workspace_id)
 
         self._validate_status(values.get("call_status"))
 

@@ -31,6 +31,7 @@ class TaskCreateRequest(BaseModel):
     reminder_type: str | None = None
     repeat_enabled: bool = False
     description: str | None = None
+    assigned_to: UUID | None = None
 
 class TaskUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -51,3 +52,4 @@ class TaskUpdateRequest(BaseModel):
     reminder_type: str | None = None
     repeat_enabled: bool | None = None
     description: str | None = None
+    assigned_to: UUID | None = None

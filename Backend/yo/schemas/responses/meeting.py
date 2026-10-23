@@ -16,6 +16,7 @@ class MeetingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    assigned_to: UUID | None = None
     title: str = Field(..., min_length=1, max_length=200)
     venue: str | None = None
     location: str | None = None
