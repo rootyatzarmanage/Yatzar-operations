@@ -887,7 +887,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                 onClick={closeForm}
                 className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300"
               >
-                Cancel
+                ← Back to table
               </button>
               {(editingId ? canUpdate : canCreate) && <button
                 type="submit"

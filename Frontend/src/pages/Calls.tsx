@@ -523,7 +523,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">{formTitle}</h3>
             <div className="flex gap-3">
               <button type="button" onClick={closeForm} className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300">
-                Cancel
+                ← Back to table
               </button>
               {(editingId ? canUpdate : canCreate) && <button type="submit" className="h-10 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600">
                 {submitLabel}

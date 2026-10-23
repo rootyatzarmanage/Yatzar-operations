@@ -9,6 +9,7 @@ export type EmailMarketingCampaign = {
   mail_type: string;
   to_email: string | null;
   tag_id: string | null;
+  tag_ids: string[];
   subject: string;
   content: string;
   status: string;
@@ -30,6 +31,7 @@ export type EmailMarketingListItem = Pick<
   | "campaign_name"
   | "subject"
   | "mail_type"
+  | "tag_ids"
   | "status"
   | "sent_count"
   | "scheduled_at"
@@ -53,6 +55,7 @@ export type EmailMarketingCreatePayload = {
   mail_type: "Test Email" | "Bulk Email";
   to_email?: string | null;
   tag_id?: string | null;
+  tag_ids?: string[];
   selection_mode?: "all" | "selected" | null;
   selected_user_ids?: string[];
   subject: string;
