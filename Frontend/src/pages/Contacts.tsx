@@ -1280,15 +1280,15 @@ const handleBulkDelete = async () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button type="button" onClick={closeForm} disabled={isSaving} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
+                  ← Back to table
+                </button>
                 {!viewing && canUpdate && (editingId || canCreate) && <button type="button" onClick={() => handleSaveAndAdd("leads")} disabled={isSaving} className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50">
                   Move to lead
                 </button>}
                 {!viewing && canUpdate && (editingId || canCreate) && <button type="button" onClick={() => handleSaveAndAdd("customers")} disabled={isSaving} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                   Move to customer
                 </button>}
-                <button type="button" onClick={closeForm} disabled={isSaving} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
-                  Cancel
-                </button>
                 {!viewing && (editingId ? canUpdate : canCreate) && <button type="submit" form="contact-form" disabled={isSaving} className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-white hover:bg-brand-600">
                   {isSaving ? "Saving..." : "Save contact"}
                 </button>}

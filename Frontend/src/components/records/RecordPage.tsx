@@ -904,7 +904,7 @@ export default function RecordPage<T extends StoredRecord>({
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={closeForm} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
-                  Cancel
+                  ← Back to table
                 </button>
                 {!viewing && canUpdate && canSave && moves.map((move) => (
                   <button key={move.label} type="button" disabled={busy} onClick={() => saveAndMove(move)} className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50 ${toneClass[move.tone]}`}>

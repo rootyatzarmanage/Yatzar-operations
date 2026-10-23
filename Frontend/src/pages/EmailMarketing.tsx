@@ -60,7 +60,7 @@ type EmailCampaign = {
   content: string;
   mailType: MailType;
   testEmail: string;
-  tagId: string;
+  tagIds: string[];
   scheduledAt: string | null;
 };
 
@@ -68,7 +68,7 @@ type EmailCampaignForm = {
   campaignName: string;
   sender: string;
   testEmail: string;
-  tagId: string;
+  tagIds: string[];
   subject: string;
   content: string;
   mailType: MailType;
@@ -92,7 +92,11 @@ function fromApiCampaign(campaign: ApiEmailCampaign): EmailCampaign {
     content: campaign.content,
     mailType: campaign.mail_type === "Test Email" ? "test" : "bulk",
     testEmail: campaign.to_email ?? "",
-    tagId: campaign.tag_id ?? "",
+    tagIds: campaign.tag_ids?.length
+      ? campaign.tag_ids
+      : campaign.tag_id
+        ? [campaign.tag_id]
+        : [],
     scheduledAt: campaign.scheduled_at,
   };
 }
@@ -103,6 +107,7 @@ function fromApiListItem(campaign: {
   subject: string;
   status: string;
   mail_type: string;
+  tag_ids: string[];
   sent_count: number;
   open_count: number;
   click_count: number;
@@ -124,7 +129,7 @@ function fromApiListItem(campaign: {
     content: "",
     mailType: campaign.mail_type === "Test Email" ? "test" : "bulk",
     testEmail: "",
-    tagId: "",
+    tagIds: campaign.tag_ids ?? [],
     scheduledAt: campaign.scheduled_at,
   };
 }
@@ -158,19 +163,20 @@ const thClass =
 /* -------------------------------------------------------------------------- */
 
 function EmailListModal({
-  contacts,
-  tagName,
+  tagGroups,
   onClose,
   onToggleContact,
 }: {
-  contacts: Contact[];
-  tagName: string;
+  tagGroups: Array<{ id: string; name: string; contacts: Contact[] }>;
   onClose: () => void;
   onToggleContact?: (contact: Contact) => Promise<void>;
 }) {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [activeTagId, setActiveTagId] = useState(tagGroups[0]?.id ?? "");
+  const activeTag = tagGroups.find((tag) => tag.id === activeTagId) ?? tagGroups[0];
+  const contacts = activeTag?.contacts ?? [];
 
   const totalPages = Math.max(
     1,
@@ -212,7 +218,7 @@ function EmailListModal({
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {contacts.length}{" "}
               {contacts.length === 1 ? "person" : "people"} in{" "}
-              {tagName}
+              {activeTag?.name}
             </p>
           </div>
 
@@ -227,6 +233,28 @@ function EmailListModal({
         </header>
 
         <div className="max-h-[65vh] overflow-y-auto p-6">
+          <div className="mb-4 flex gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-800" role="tablist" aria-label="Recipient tags">
+            {tagGroups.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTag?.id === tag.id}
+                onClick={() => {
+                  setActiveTagId(tag.id);
+                  setPage(1);
+                }}
+                className={`shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                  activeTag?.id === tag.id
+                    ? "border-brand-500 text-brand-600 dark:text-brand-400"
+                    : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                }`}
+              >
+                {tag.name}
+              </button>
+            ))}
+          </div>
+
           <label className="mb-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
             <select
               value={perPage}
@@ -296,8 +324,8 @@ function EmailListModal({
                         {updatingId === contact.id
                           ? "Saving..."
                           : contact.email_opt_out
-                            ? "Disable"
-                            : "Enable"}
+                            ? "Disabled"
+                            : "Enabled"}
                       </button>
                     </td>}
                   </tr>
@@ -753,7 +781,8 @@ export default function EmailMarketing() {
         from_email: form.sender,
         mail_type: form.mailType === "test" ? "Test Email" : "Bulk Email",
         to_email: form.mailType === "test" ? form.testEmail : null,
-        tag_id: form.mailType === "bulk" ? form.tagId : null,
+        tag_id: form.mailType === "bulk" ? form.tagIds[0] ?? null : null,
+        tag_ids: form.mailType === "bulk" ? form.tagIds : [],
         selection_mode: form.mailType === "bulk" ? (form.selectedUserIds ? "selected" : "all") : null,
         selected_user_ids: form.mailType === "bulk" ? (form.selectedUserIds ?? []) : [],
         subject: form.subject,
@@ -1291,9 +1320,10 @@ function EmailCampaignForm({
       initialCampaign?.testEmail ?? "",
     );
 
-  const [tagId, setTagId] = useState(
-    initialCampaign?.tagId ?? "",
+  const [tagIds, setTagIds] = useState<string[]>(
+    initialCampaign?.tagIds ?? [],
   );
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[] | null>(initialSelectedUserIds);
 
   const [subject, setSubject] = useState(
@@ -1346,17 +1376,15 @@ function EmailCampaignForm({
       });
   }, [currentWorkspace?.id]);
 
-  const selectedTag = tags.find(
-    (tag) => tag.id === tagId,
-  );
+  const selectedTags = tags.filter((tag) => tagIds.includes(tag.id));
 
   const bulkRecipients = useMemo(
     () =>
       contacts.filter(
         (contact) =>
-          contact.tag_id === tagId,
+          tagIds.includes(contact.tag_id),
       ),
-    [contacts, tagId],
+    [contacts, tagIds],
   );
 
   async function toggleEmailOptOut(
@@ -1441,7 +1469,7 @@ function EmailCampaignForm({
           campaignName: campaignName.trim(),
           sender: sender.trim(),
           testEmail: testEmail.trim(),
-          tagId: "",
+          tagIds: [],
           subject: subject.trim(),
           content: content.trim(),
           mailType,
@@ -1459,9 +1487,9 @@ function EmailCampaignForm({
     /* BULK EMAIL                                                      */
     /* -------------------------------------------------------------- */
 
-    if (!selectedTag) {
+    if (selectedTags.length === 0) {
       setError(
-        "Select a tag for the bulk email.",
+        "Select at least one tag for the bulk email.",
       );
 
       return;
@@ -1482,7 +1510,7 @@ function EmailCampaignForm({
         campaignName: campaignName.trim(),
         sender: sender.trim(),
         testEmail: "",
-        tagId,
+        tagIds,
         subject: subject.trim(),
         content: content.trim(),
         mailType,
@@ -1543,6 +1571,13 @@ function EmailCampaignForm({
                   your contacts.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="ml-auto rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+              >
+                ← Back to table
+              </button>
             </div>
 
             {error && (
@@ -1656,43 +1691,69 @@ function EmailCampaignForm({
                 />
               ) : (
                 <>
-                  <select
-                    value={tagId}
-                    onChange={(event) =>
-                      {
-                        setTagId(event.target.value);
-                        setSelectedUserIds(null);
-                      }
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">
-                      Select a recipient tag
-                    </option>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-haspopup="listbox"
+                      aria-expanded={isTagDropdownOpen}
+                      onClick={() => setIsTagDropdownOpen((open) => !open)}
+                      className={`${inputClass} flex items-center justify-between gap-3 text-left`}
+                    >
+                      <span className={selectedTags.length ? "truncate" : "text-gray-400"}>
+                        {selectedTags.length
+                          ? selectedTags.map((tag) => tag.name).join(", ")
+                          : "Select recipient tags"}
+                      </span>
+                      <ChevronRight className={`size-4 shrink-0 transition-transform ${isTagDropdownOpen ? "rotate-90" : ""}`} />
+                    </button>
 
-                    {tags.map((tag) => (
-                      <option
-                        key={tag.id}
-                        value={tag.id}
+                    {isTagDropdownOpen && (
+                      <div
+                        role="listbox"
+                        aria-multiselectable="true"
+                        className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900"
                       >
-                        {tag.name}
-                      </option>
-                    ))}
-                  </select>
+                        {tags.length === 0 ? (
+                          <p className="px-2 py-3 text-sm text-gray-500">No recipient tags are available.</p>
+                        ) : tags.map((tag) => (
+                          <label key={tag.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                            <input
+                              type="checkbox"
+                              checked={tagIds.includes(tag.id)}
+                              onChange={(event) => {
+                                setTagIds((current) => event.target.checked
+                                  ? [...current, tag.id]
+                                  : current.filter((id) => id !== tag.id));
+                                setSelectedUserIds(null);
+                              }}
+                              className="size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                            />
+                            {tag.name}
+                          </label>
+                        ))}
+                        {tags.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setIsTagDropdownOpen(false)}
+                            className="ml-auto mt-1 block w-fit rounded-md px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10"
+                          >
+                            Done
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                  {selectedTag && (
+                  {selectedTags.length > 0 && (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-100 bg-brand-25 px-4 py-3 dark:border-brand-500/20 dark:bg-brand-500/10">
                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {selectedTags.length} tag{selectedTags.length === 1 ? "" : "s"} selected ·{" "}
                         <span className="font-semibold text-brand-600">
                           {
                             bulkRecipients.length
                           }
                         </span>{" "}
-                        {bulkRecipients.length ===
-                        1
-                          ? "person is"
-                          : "people are"}{" "}
-                        present in this tag.
+                        {bulkRecipients.length === 1 ? "eligible contact" : "eligible contacts"} across the selected tags.
                       </p>
 
                       <button
@@ -1759,21 +1820,13 @@ function EmailCampaignForm({
             {/* Buttons */}
 
             <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onCancel}
-                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-              >
-                Cancel
-              </button>
-
               {!isEditing && <button
                 type="button"
                 onClick={() => {
                   setCampaignName("");
                   setSender("");
                   setTestEmail("");
-                  setTagId("");
+                          setTagIds([]);
                   setSubject("");
                   setContent("");
                   setScheduledAt("");
@@ -1822,10 +1875,13 @@ function EmailCampaignForm({
 
       {/* Recipient Modal */}
 
-      {showRecipients && selectedTag && (
+      {showRecipients && selectedTags.length > 0 && (
         <EmailListModal
-          contacts={bulkRecipients}
-          tagName={selectedTag.name}
+          tagGroups={selectedTags.map((tag) => ({
+            id: tag.id,
+            name: tag.name,
+            contacts: contacts.filter((contact) => contact.tag_id === tag.id),
+          }))}
           onClose={() =>
             setShowRecipients(false)
           }
