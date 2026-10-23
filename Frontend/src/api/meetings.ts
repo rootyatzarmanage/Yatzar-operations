@@ -1,6 +1,7 @@
 import { request } from "@/api/client";
 
 export type MeetingParticipantType = "contact" | "lead" | "customer";
+export type MeetingProvider = "Google Meet" | "Zoom" | "Microsoft Teams" | "Webex" | "Skype" | "Other";
 
 export type MeetingParticipant = {
   id: string;
@@ -12,6 +13,8 @@ export type MeetingApi = {
   title: string;
   venue: string | null;
   location: string | null;
+  meeting_provider: MeetingProvider | null;
+  meeting_link: string | null;
   all_day: boolean;
   starts_at: string;
   ends_at: string;
@@ -22,6 +25,7 @@ export type MeetingApi = {
   participants_reminder: string;
   reminder_type: string;
   description: string | null;
+  assigned_to: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -39,8 +43,11 @@ export type MeetingParticipantPayload = MeetingParticipant;
 
 export type MeetingPayload = {
   title: string;
+  assigned_to?: string | null;
   venue?: string | null;
   location?: string | null;
+  meeting_provider?: MeetingProvider | null;
+  meeting_link?: string | null;
   all_day?: boolean;
   starts_at: string;
   ends_at: string;

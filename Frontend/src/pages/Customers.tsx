@@ -18,6 +18,17 @@ import type { EmbedProps } from "@/components/records/embed";
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
 const text = (value: string | boolean | undefined) => String(value ?? "");
 const customerName = (c: CustomerRecord) => `${text(c.firstName)} ${text(c.lastName)}`.trim();
+const purchasedProducts = (value: string | boolean | undefined) => {
+  try {
+    const parsed: unknown = JSON.parse(text(value) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is { name: string; quantity?: number } =>
+      typeof item === "object" && item !== null && typeof item.name === "string" && item.name.trim().length > 0,
+    );
+  } catch {
+    return [];
+  }
+};
 
 const columns: Column<CustomerRecord>[] = [
   { header: "Customer ID", render: (r) => text(r.customerId) || "—" },
@@ -26,6 +37,12 @@ const columns: Column<CustomerRecord>[] = [
   { header: "Phone", render: (r) => text(r.phone) || "—" },
   { header: "Department", render: (r) => text(r.department) || "—" },
   { header: "Lead Source", render: (r) => text(r.leadSource) || "—" },
+  { header: "Purchased Products", render: (r) => {
+    const products = purchasedProducts(r.purchasedProducts);
+    return products.length
+      ? <span>{products.map((product) => `${product.name} × ${product.quantity ?? 1}`).join(", ")}</span>
+      : "—";
+  } },
 ];
 
 const addressFields = (prefix: "" | "other"): FieldDef[] => {
@@ -91,6 +108,11 @@ export default function Customers({ embed }: EmbedProps = {}) {
       },
       { title: "Address", subtitle: "Mailing address", fields: addressFields("") },
       { title: "Other address", fields: addressFields("other") },
+      {
+        title: "Purchased products",
+        subtitle: "Products purchased by this customer",
+        fields: [{ key: "purchasedProducts", label: "Products", type: "purchased-products" }],
+      },
     ],
     [sources],
   );
@@ -109,7 +131,7 @@ export default function Customers({ embed }: EmbedProps = {}) {
       searchPlaceholder="Search customers"
       sections={sections}
       columns={columns}
-      searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource)]}
+      searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource), ...purchasedProducts(r.purchasedProducts).map((product) => product.name)]}
       recordName={customerName}
       store={store}
       showExport={false}

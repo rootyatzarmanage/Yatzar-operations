@@ -2,6 +2,9 @@ import { request } from "@/api/client";
 
 export type EmployeeRecord = {
   id: string;
+  user_id?: string | null;
+  workspaces?: Array<{ id: string; name: string }>;
+  status?: number;
   employee_code: string;
   employee_name: string | null;
   display_name?: string | null;

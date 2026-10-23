@@ -6,6 +6,7 @@ export type CallStatus = "Completed" | "Scheduled" | "Missed";
 export type CallApi = {
   id: string;
   contact_id: string;
+  assigned_to: string | null;
   subject: string;
   call_type: CallType;
   call_status: CallStatus;
@@ -32,6 +33,7 @@ export type CallList = {
 
 export type CallPayload = {
   contact_id: string;
+  assigned_to?: string | null;
   subject: string;
   call_type: CallType;
   call_status?: CallStatus;

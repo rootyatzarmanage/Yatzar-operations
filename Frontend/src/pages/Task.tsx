@@ -8,6 +8,7 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
+import WorkspaceAssigneeField, { useWorkspaceMembers } from "@/components/activities/WorkspaceAssigneeField";
 
 type TaskStatus = "Not Started" | "Deferred" | "In Progress" | "Waiting for input" | "Completed";
 type TaskPriority = "Highest" | "High" | "Normal" | "Low" | "Lowest";
@@ -29,6 +30,8 @@ type Task = {
   priority: TaskPriority;
   account: string;
   owner: string;
+  assignedToId: string;
+  assignedTo: string;
   contactMode: ContactMode;
   tagId: string;
   contactIds: string[];
@@ -59,6 +62,7 @@ const statusBadge: Record<TaskStatus, string> = {
 };
 
 const emptyForm = {
+  taskOwner: "",
   subject: "",
   dueDate: "",
   status: "Not Started" as TaskStatus,
@@ -73,6 +77,7 @@ const emptyForm = {
   reminderNotify: "Email",
   repeat: false,
   description: "",
+  assignedTo: "",
 };
 
 function formatDate(value: string) {
@@ -122,6 +127,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   const canUpdate = hasPermission(user, "Tasks", "update");
   const canDelete = hasPermission(user, "Tasks", "delete");
   const { currentWorkspace } = useWorkspace();
+  const workspaceMembers = useWorkspaceMembers();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
@@ -161,7 +167,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
     void listTasks()
       .then((result) => setTasks(result.map((task) => fromApiTask(task, taskOwner))))
       .catch((error: unknown) => setApiError(error instanceof Error ? error.message : "Unable to load tasks."));
-  }, [currentWorkspace?.id, taskOwner]);
+  }, [currentWorkspace?.id, taskOwner, workspaceMembers]);
 
   const participants = useMemo<Participant[]>(() => [
     ...contacts.map((contact) => ({
@@ -206,6 +212,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
       reminder_type: values.reminder ? values.reminderNotify : null,
       repeat_enabled: values.reminder && values.repeat,
       description: values.description.trim() || null,
+      assigned_to: values.assignedTo || null,
     };
   };
 
@@ -217,7 +224,9 @@ export default function Tasks({ embed }: EmbedProps = {}) {
       status: task.status as TaskStatus,
       priority: task.priority as TaskPriority,
       account: task.account ?? "",
-      owner,
+      owner: workspaceMembers.find((member) => member.id === task.task_owner_id)?.name ?? (task.task_owner_id === user?.id ? owner : task.task_owner_id),
+      assignedToId: task.assigned_to ?? "",
+      assignedTo: workspaceMembers.find((member) => member.id === task.assigned_to)?.name ?? (task.assigned_to === user?.id ? taskOwner : ""),
       contactMode: task.contact_selection.selection_type,
       tagId: task.contact_selection.tag_id ?? "",
       contactIds: task.contact_selection.contact_ids,
@@ -235,7 +244,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return tasks;
     return tasks.filter((t) =>
-      [t.subject, t.account, selectionLabel(t.contactMode, t.contactIds), t.owner, t.status, t.priority].some((v) =>
+      [t.subject, t.account, selectionLabel(t.contactMode, t.contactIds), t.owner, t.assignedTo, t.status, t.priority].some((v) =>
         v.toLowerCase().includes(q),
       ),
     );
@@ -262,7 +271,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
   const openAdd = () => {
     if (!canCreate) return;
     setEditingId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, taskOwner, assignedTo: user?.id ?? "" });
     setErrors({});
     setPickerOpen(false);
     setReminderOpen(false);
@@ -273,6 +282,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
     if (!canUpdate) return;
     setEditingId(task.id);
     setForm({
+      taskOwner: task.owner,
       subject: task.subject,
       dueDate: task.dueDate,
       status: task.status,
@@ -287,6 +297,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
       repeat: task.repeat,
       description: task.description,
       tagId: task.tagId,
+      assignedTo: task.assignedToId,
     });
     setErrors({});
     setPickerOpen(false);
@@ -474,6 +485,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                   <th className={thClass}>Related to</th>
                   <th className={thClass}>Contact name</th>
                   <th className={thClass}>Task owner</th>
+                  <th className={thClass}>Assigned to</th>
                   {(canUpdate || canDelete) && <th className={`${thClass} text-center`}>Actions</th>}
                 </tr>
               </thead>
@@ -492,6 +504,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                       {selectionLabel(task.contactMode, task.contactIds) || "—"}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.owner}</td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{task.assignedTo || "—"}</td>
                     {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center justify-left gap-1">
                         {canUpdate && task.status !== "Completed" && (
@@ -554,9 +567,15 @@ export default function Tasks({ embed }: EmbedProps = {}) {
             <h4 className="text-sm font-semibold text-gray-800 dark:text-white/90">Task information</h4>
             <div className="grid gap-5 md:grid-cols-2">
               <div>
-                <label className={labelClass}>Task owner</label>
-                <input value={taskOwner} readOnly className={`${inputClass} cursor-not-allowed`} />
+                <label htmlFor="task-owner" className={labelClass}>Task owner</label>
+                <input id="task-owner" value={form.taskOwner} readOnly className={`${inputClass} cursor-not-allowed`} />
               </div>
+              <WorkspaceAssigneeField
+                id="task-assigned-to"
+                value={form.assignedTo}
+                members={workspaceMembers}
+                onChange={(assignedTo) => setForm((current) => ({ ...current, assignedTo }))}
+              />
               <div>
                 <label htmlFor="task-subject" className={labelClass}>Subject</label>
                 <input
