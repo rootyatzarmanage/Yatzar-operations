@@ -13,6 +13,7 @@ import {
 } from "@/api/meetings";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -536,16 +537,14 @@ export default function Meetings({ embed }: EmbedProps = {}) {
           {label}
         </label>
       )}
-      <select
+      <SearchableSelect
         id={id}
+        label={label}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
+        options={options}
         className={inputClass}
-      >
-        {options.map((o) => (
-          <option key={o}>{o}</option>
-        ))}
-      </select>
+      />
     </div>
   );
 
@@ -626,20 +625,16 @@ export default function Meetings({ embed }: EmbedProps = {}) {
             />
             <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               Show
-              <select
+              <SearchableSelect
+                size="sm"
                 value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
+                onChange={(val) => {
+                  setEntriesPerPage(Number(val));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
-              >
-                {[5, 10, 25, 50].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
+                options={[5, 10, 25, 50]}
+                className="h-9 w-20"
+              />
               entries
             </label>
           </div>
@@ -1045,19 +1040,18 @@ export default function Meetings({ embed }: EmbedProps = {}) {
 
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
               <div className="flex gap-3">
-                <select
+                <SearchableSelect
+                  size="sm"
                   value={pickerSource}
-                  onChange={(e) =>
-                    setPickerSource(e.target.value as ParticipantType)
+                  onChange={(val) =>
+                    setPickerSource(val as ParticipantType)
                   }
-                  className={`${inputClass} !w-40`}
-                >
-                  {(Object.keys(sourceLabels) as ParticipantType[]).map((t) => (
-                    <option key={t} value={t}>
-                      {sourceLabels[t]}
-                    </option>
-                  ))}
-                </select>
+                  options={(Object.keys(sourceLabels) as ParticipantType[]).map((t) => ({
+                    value: t,
+                    label: sourceLabels[t],
+                  }))}
+                  className="!w-40"
+                />
                 <input
                   value={pickerSearch}
                   onChange={(e) => setPickerSearch(e.target.value)}

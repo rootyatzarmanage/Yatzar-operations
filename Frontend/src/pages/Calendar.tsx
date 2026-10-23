@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Filter, Plus } from "lucide-react";
 import PageMeta from "@/components/common/PageMeta";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { listContacts, type Contact } from "@/api/contacts";
 import { createTask, listTasks, type TaskApi } from "@/api/task";
 import { createMeeting, listMeetings, type MeetingApi } from "@/api/meetings";
@@ -891,16 +892,18 @@ export default function Calendar() {
 
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
 
-            <select
+            <SearchableSelect
+              size="sm"
               value={view}
-              onChange={(e) => setView(e.target.value as View)}
-              className="h-10 w-28 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-            >
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="month">Month</option>
-              <option value="year">Year</option>
-            </select>
+              onChange={(val) => setView(val as View)}
+              options={[
+                { value: "day", label: "Day" },
+                { value: "week", label: "Week" },
+                { value: "month", label: "Month" },
+                { value: "year", label: "Year" },
+              ]}
+              className="h-10 w-28 bg-white dark:bg-gray-900"
+            />
           </div>
 
           {(view === "week" || view === "month") && (
@@ -931,9 +934,12 @@ export default function Calendar() {
             <fieldset disabled={ro} className="m-0 min-w-0 space-y-4 border-0 p-0">
               <div className="grid grid-cols-2 gap-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Type
-                  <select value={ev.type} onChange={(e) => evPatch({ type: e.target.value })} className={`${fieldCls} ${errCls()}`}>
-                    {["Event", "Workshop", "Holiday", "Task", "Meeting", "Call"].map((t) => <option key={t}>{t}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={ev.type}
+                    onChange={(val) => evPatch({ type: val })}
+                    options={["Event", "Workshop", "Holiday", "Task", "Meeting", "Call"]}
+                    className={`${fieldCls} ${errCls()}`}
+                  />
                 </label>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Title{(guestType || ev.type === "Task" || ev.type === "Meeting" || ev.type === "Call") && <span className="text-red-500"> *</span>}
                   <input autoFocus value={ev.title} onChange={(e) => evPatch({ title: e.target.value, errors: { ...ev.errors, title: false } })} placeholder="e.g. Diwali Holiday" className={`${fieldCls} ${errCls(ev.errors.title)}`} />
@@ -964,12 +970,20 @@ export default function Calendar() {
               )}
               {ev.type === "Call" && (
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Contact<span className="text-red-500"> *</span>
-                  <select value={ev.contactId} onChange={(e) => evPatch({ contactId: e.target.value, errors: { ...ev.errors, contact: false } })} className={`${fieldCls} ${errCls(ev.errors.contact)}`}>
-                    <option value="">Select contact</option>
-                    {contacts.map((c) => (
-                      <option key={c.id} value={c.id}>{`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.email || "Unnamed"}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    value={ev.contactId}
+                    onChange={(val) => evPatch({ contactId: val, errors: { ...ev.errors, contact: false } })}
+                    placeholder="Select contact"
+                    hasError={Boolean(ev.errors.contact)}
+                    options={[
+                      { value: "", label: "Select contact" },
+                      ...contacts.map((c) => ({
+                        value: c.id,
+                        label: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.email || "Unnamed",
+                      })),
+                    ]}
+                    className={`${fieldCls} ${errCls(ev.errors.contact)}`}
+                  />
                 </label>
               )}
               {guestType && (
@@ -1006,19 +1020,28 @@ export default function Calendar() {
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Repeat
-                      <select value={ev.repeat} onChange={(e) => evPatch({ repeat: e.target.value })} className={`${fieldCls} ${errCls()}`}>
-                        {REPEATS.map((r) => <option key={r}>{r}</option>)}
-                      </select>
+                      <SearchableSelect
+                        value={ev.repeat}
+                        onChange={(val) => evPatch({ repeat: val })}
+                        options={REPEATS}
+                        className={`${fieldCls} ${errCls()}`}
+                      />
                     </label>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">My reminder
-                      <select value={ev.reminder} onChange={(e) => evPatch({ reminder: e.target.value })} className={`${fieldCls} ${errCls()}`}>
-                        {REMINDERS.map((r) => <option key={r}>{r}</option>)}
-                      </select>
+                      <SearchableSelect
+                        value={ev.reminder}
+                        onChange={(val) => evPatch({ reminder: val })}
+                        options={REMINDERS}
+                        className={`${fieldCls} ${errCls()}`}
+                      />
                     </label>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Guests reminder
-                      <select value={ev.guestsReminder} onChange={(e) => evPatch({ guestsReminder: e.target.value })} className={`${fieldCls} ${errCls()}`}>
-                        {REMINDERS.map((r) => <option key={r}>{r}</option>)}
-                      </select>
+                      <SearchableSelect
+                        value={ev.guestsReminder}
+                        onChange={(val) => evPatch({ guestsReminder: val })}
+                        options={REMINDERS}
+                        className={`${fieldCls} ${errCls()}`}
+                      />
                     </label>
                   </div>
                 </>

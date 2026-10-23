@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser } from "@/api/auth";
 import { hasPermission, useAuth } from "@/context/AuthContext";
+import SearchableSelect from "@/components/common/SearchableSelect";
 
 type EventStatus = "Planning" | "Active" | "Complete";
 
@@ -428,20 +429,16 @@ export default function EventWebinar() {
           <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             Show
 
-            <select
+            <SearchableSelect
+              size="sm"
               value={entriesPerPage}
-              onChange={(e) => {
-                setEntriesPerPage(Number(e.target.value));
+              onChange={(val) => {
+                setEntriesPerPage(Number(val));
                 setPage(1);
               }}
-              className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 outline-none dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-300"
-            >
-              {[5, 10, 25, 50].map((count) => (
-                <option key={count} value={count}>
-                  {count}
-                </option>
-              ))}
-            </select>
+              options={[5, 10, 25, 50]}
+              className="h-9 w-20"
+            />
 
             entries
           </label>
@@ -687,6 +684,12 @@ function EventForm({
   onCancel,
   onSave,
 }: EventFormProps) {
+  const handleSelect = (name: string, value: string) => {
+    onChange({
+      target: { name, value },
+    } as unknown as React.ChangeEvent<HTMLSelectElement>);
+  };
+
   return (
     <div className="space-y-6">
       {/* PAGE HEADER */}
@@ -779,21 +782,23 @@ function EventForm({
                   Webinar duration
                 </label>
 
-                <select
+                <SearchableSelect
                   id="duration"
                   name="duration"
                   value={form.duration}
-                  onChange={onChange}
+                  onChange={(val) => handleSelect("duration", val)}
                   className={inputClass}
                   required
-                >
-                  <option value="">-None-</option>
-                  <option value="45 minutes">45 minutes</option>
-                  <option value="1 hour">1 hour</option>
-                  <option value="1.5 hours">1.5 hours</option>
-                  <option value="2 hours">2 hours</option>
-                  <option value="3 hours">3 hours</option>
-                </select>
+                  placeholder="-None-"
+                  options={[
+                    { value: "", label: "-None-" },
+                    "45 minutes",
+                    "1 hour",
+                    "1.5 hours",
+                    "2 hours",
+                    "3 hours",
+                  ]}
+                />
               </div>
             </div>
           </section>
@@ -814,20 +819,18 @@ function EventForm({
                   Campaign owner
                 </label>
 
-                <select
+                <SearchableSelect
                   id="owner"
                   name="owner"
                   value={form.owner}
-                  onChange={onChange}
+                  onChange={(val) => handleSelect("owner", val)}
                   className={inputClass}
-                >
-                  <option value="">Select campaign owner</option>
-                  {owners.map((owner) => (
-                    <option key={owner.id} value={owner.id}>
-                      {owner.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Select campaign owner"
+                  options={[
+                    { value: "", label: "Select campaign owner" },
+                    ...owners.map((owner) => ({ value: owner.id, label: owner.name })),
+                  ]}
+                />
               </div>
 
               {/* TYPE */}
@@ -839,18 +842,15 @@ function EventForm({
                   Type
                 </label>
 
-                <select
+                <SearchableSelect
                   id="type"
                   name="type"
                   value={form.type}
-                  onChange={onChange}
+                  onChange={(val) => handleSelect("type", val)}
                   className={inputClass}
                   required
-                >
-                  <option value="Webinar">Webinar</option>
-                  <option value="Event">Event</option>
-                  <option value="Workshop">Workshop</option>
-                </select>
+                  options={["Webinar", "Event", "Workshop"]}
+                />
               </div>
 
               {/* CAMPAIGN NAME */}
@@ -882,18 +882,20 @@ function EventForm({
                   Status
                 </label>
 
-                <select
+                <SearchableSelect
                   id="status"
                   name="status"
                   value={form.status}
-                  onChange={onChange}
+                  onChange={(val) => handleSelect("status", val)}
                   className={inputClass}
-                >
-                  <option value="">-None-</option>
-                  <option value="Planning">Planning</option>
-                  <option value="Active">Active</option>
-                  <option value="Complete">Complete</option>
-                </select>
+                  placeholder="-None-"
+                  options={[
+                    { value: "", label: "-None-" },
+                    "Planning",
+                    "Active",
+                    "Complete",
+                  ]}
+                />
               </div>
 
               {/* EXPECTED REVENUE */}

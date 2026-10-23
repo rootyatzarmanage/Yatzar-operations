@@ -1,5 +1,6 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import {
   createEmployee,
   deleteEmployee,
@@ -359,133 +360,7 @@ function employeeToFormValues(employee: EmployeeRecord): TeamFormValues {
 const inputClass =
   "h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 text-base text-gray-800 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
 
-function SearchableSelect({
-  label,
-  options,
-  value,
-  onChange,
-  hasError,
-}: {
-  label: string;
-  options: string[];
-  value: string;
-  onChange: (value: string) => void;
-  hasError: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const safeOptions = options.filter(
-    (option): option is string =>
-      typeof option === "string" && option.trim().length > 0,
-  );
-  const filteredOptions = safeOptions.filter((option) =>
-    option.toLowerCase().includes(query.toLowerCase()),
-  );
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !wrapperRef.current?.contains(target) &&
-        !menuRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    const updatePlacement = () => {
-      if (!wrapperRef.current) return;
-      const rect = wrapperRef.current.getBoundingClientRect();
-      const viewportPadding = 8;
-      const gap = 4;
-      const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
-      const spaceAbove = rect.top - viewportPadding;
-      const opensAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
-      const availableHeight = Math.max(
-        120,
-        Math.min(320, opensAbove ? spaceAbove - gap : spaceBelow - gap),
-      );
-      setMenuStyle({
-        left: rect.left,
-        width: rect.width,
-        maxHeight: availableHeight,
-        ...(opensAbove
-          ? { bottom: window.innerHeight - rect.top + gap }
-          : { top: rect.bottom + gap }),
-      });
-    };
-    updatePlacement();
-    document.addEventListener("mousedown", handleOutsideClick);
-    window.addEventListener("resize", updatePlacement);
-    window.addEventListener("scroll", updatePlacement, true);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      window.removeEventListener("resize", updatePlacement);
-      window.removeEventListener("scroll", updatePlacement, true);
-    };
-  }, [isOpen]);
-  return (
-    <div
-      ref={wrapperRef}
-      className={`relative min-w-0 ${isOpen ? "z-30" : ""}`}
-    >
-      <button
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        className={`${inputClass} ${hasError ? "border-error-500" : ""} flex items-center justify-between text-start`}
-      >
-        <span
-          className={
-            value ? "text-gray-800 dark:text-white/90" : "text-gray-400"
-          }
-        >
-          {value || `Select ${label.toLowerCase()}`}
-        </span>
-        <ChevronDownIcon className="size-4 text-gray-400" />
-      </button>
-      {isOpen &&
-        createPortal(
-          <div
-            ref={menuRef}
-            style={menuStyle}
-            className="fixed z-9999 flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-2 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark"
-          >
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className={`${inputClass} h-9 shrink-0`}
-              placeholder={`Search ${label.toLowerCase()}`}
-            />
-            <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              {filteredOptions.length ? (
-                filteredOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => {
-                      onChange(option);
-                      setQuery("");
-                      setIsOpen(false);
-                    }}
-                    className="w-full rounded-md px-3 py-2 text-start text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5"
-                  >
-                    {option}
-                  </button>
-                ))
-              ) : (
-                <p className="px-3 py-2 text-sm text-gray-400">
-                  No results found
-                </p>
-              )}
-            </div>
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
-}
+
 
 function FieldControl({
   field,
@@ -1324,20 +1199,16 @@ export default function Teams() {
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
               <label className="flex items-center gap-2">
                 Show
-                <select
+                <SearchableSelect
+                  size="sm"
                   value={pageSize}
-                  onChange={(event) => {
-                    setPageSize(Number(event.target.value));
+                  onChange={(val) => {
+                    setPageSize(Number(val));
                     setPage(1);
                   }}
-                  className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
-                >
-                  {[5, 10, 25].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
+                  options={[5, 10, 25]}
+                  className="h-9 w-20"
+                />
                 entries
               </label>
               <span>

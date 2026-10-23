@@ -1,5 +1,6 @@
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import {
   createWorkspace,
   deleteWorkspace,
@@ -485,18 +486,16 @@ export default function Workspace() {
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
               <label className="flex items-center gap-2">
                 Show
-                <select
+                <SearchableSelect
+                  size="sm"
                   value={entriesPerPage}
-                  onChange={(event) => {
-                    setEntriesPerPage(Number(event.target.value));
+                  onChange={(val) => {
+                    setEntriesPerPage(Number(val));
                     setPage(1);
                   }}
-                  className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-gray-700 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-300"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                </select>
+                  options={[5, 10, 25]}
+                  className="h-10 w-20"
+                />
                 entries
               </label>
             </div>
@@ -847,20 +846,19 @@ export default function Workspace() {
                 <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Status <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   required
+                  label="Status"
                   value={formValues.status}
-                  onChange={(event) =>
+                  onChange={(val) =>
                     handleFieldChange(
                       "status",
-                      event.target.value as WorkspaceStatus,
+                      val as WorkspaceStatus,
                     )
                   }
+                  options={["Enabled", "Disabled"]}
                   className={fieldClass}
-                >
-                  <option value="Enabled">Enabled</option>
-                  <option value="Disabled">Disabled</option>
-                </select>
+                />
               </div>
 
               <div className="md:col-span-2">

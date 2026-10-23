@@ -21,6 +21,7 @@ import { listTags, type Tag } from "@/api/tags";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 import {
   Mail,
@@ -222,20 +223,16 @@ function EmailListModal({
 
         <div className="max-h-[65vh] overflow-y-auto p-6">
           <label className="mb-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-            <select
+            <SearchableSelect
+              size="sm"
               value={perPage}
-              onChange={(event) => {
-                setPerPage(Number(event.target.value));
+              onChange={(val) => {
+                setPerPage(Number(val));
                 setPage(1);
               }}
-              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 dark:border-gray-800 dark:bg-gray-900"
-            >
-              {[10, 25, 50].map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
+              options={[10, 25, 50]}
+              className="h-9 w-20"
+            />
 
             entries per page
           </label>
@@ -918,19 +915,12 @@ export default function EmailMarketing() {
             <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               Show
 
-              <select className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 outline-none dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-300">
-                <option value="10">
-                  10
-                </option>
-
-                <option value="25">
-                  25
-                </option>
-
-                <option value="50">
-                  50
-                </option>
-              </select>
+              <SearchableSelect
+                size="sm"
+                value="10"
+                options={[10, 25, 50]}
+                className="h-9 w-20"
+              />
 
               entries per page
             </label>
@@ -1511,19 +1501,13 @@ function EmailCampaignForm({
                   Platform
                 </span>
 
-                <select
+                <SearchableSelect
+                  label="Platform"
                   value={platform}
-                  onChange={(event) => setPlatform(event.target.value)}
+                  onChange={(val) => setPlatform(val)}
+                  options={["Email", "Newsletter"]}
                   className={inputClass}
-                >
-                  <option value="Email">
-                    Email
-                  </option>
-
-                  <option value="Newsletter">
-                    Newsletter
-                  </option>
-                </select>
+                />
               </label>
 
               {/* Sender */}
@@ -1553,27 +1537,20 @@ function EmailCampaignForm({
                   Mail type
                 </span>
 
-                <select
+                <SearchableSelect
+                  label="Mail type"
                   value={mailType}
-                  onChange={(event) => {
-                    setMailType(
-                      event.target
-                        .value as MailType,
-                    );
-
+                  onChange={(val) => {
+                    setMailType(val as MailType);
                     setError("");
                     setNotice("");
                   }}
+                  options={[
+                    { value: "test", label: "Test email" },
+                    { value: "bulk", label: "Send bulk email" },
+                  ]}
                   className={inputClass}
-                >
-                  <option value="test">
-                    Test email
-                  </option>
-
-                  <option value="bulk">
-                    Send bulk email
-                  </option>
-                </select>
+                />
               </label>
             </div>
 
@@ -1598,28 +1575,17 @@ function EmailCampaignForm({
                 />
               ) : (
                 <>
-                  <select
+                  <SearchableSelect
+                    label="Recipient tag"
                     value={tagId}
-                    onChange={(event) =>
-                      setTagId(
-                        event.target.value,
-                      )
-                    }
+                    onChange={(val) => setTagId(val)}
+                    placeholder="Select a recipient tag"
+                    options={[
+                      { value: "", label: "Select a recipient tag" },
+                      ...tags.map((tag) => ({ value: tag.id, label: tag.name })),
+                    ]}
                     className={inputClass}
-                  >
-                    <option value="">
-                      Select a recipient tag
-                    </option>
-
-                    {tags.map((tag) => (
-                      <option
-                        key={tag.id}
-                        value={tag.id}
-                      >
-                        {tag.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
 
                   {selectedTag && (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-100 bg-brand-25 px-4 py-3 dark:border-brand-500/20 dark:bg-brand-500/10">

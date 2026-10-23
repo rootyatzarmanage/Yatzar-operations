@@ -1,6 +1,7 @@
 "use client";
 
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
@@ -103,7 +104,13 @@ export default function Profile() {
               <label>
                 <span className={labelClass}>Mobile Number</span>
                 <div className="flex gap-2">
-                  <select aria-label="Country calling code" className="h-10 w-16 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 outline-none dark:border-gray-700 dark:bg-white/5 dark:text-white/90"><option>+91</option></select>
+                  <SearchableSelect
+                    size="sm"
+                    aria-label="Country calling code"
+                    className="h-10 w-24"
+                    value="+91"
+                    options={["+91", "+1", "+44", "+61", "+971"]}
+                  />
                   <input type="tel" value={form.mobile} onChange={(event) => updateField("mobile", event.target.value)} className={inputClass} placeholder="Enter mobile number" />
                 </div>
               </label>
@@ -122,9 +129,9 @@ export default function Profile() {
           </div>
           <form onSubmit={saveSection}>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label><span className={labelClass}>Country</span><select value={form.country} onChange={(event) => updateField("country", event.target.value)} className={inputClass}><option>India</option><option>United States</option><option>United Kingdom</option></select></label>
-              <label><span className={labelClass}>State</span><select value={form.state} onChange={(event) => updateField("state", event.target.value)} className={inputClass}><option>Tamil Nadu</option><option>Karnataka</option><option>Kerala</option></select></label>
-              <label><span className={labelClass}>District</span><select value={form.district} onChange={(event) => updateField("district", event.target.value)} className={inputClass}><option>Coimbatore</option><option>Chennai</option><option>Madurai</option></select></label>
+              <label><span className={labelClass}>Country</span><SearchableSelect value={form.country} onChange={(val) => updateField("country", val)} options={["India", "United States", "United Kingdom"]} className={inputClass} /></label>
+              <label><span className={labelClass}>State</span><SearchableSelect value={form.state} onChange={(val) => updateField("state", val)} options={["Tamil Nadu", "Karnataka", "Kerala", "Maharashtra", "Delhi"]} className={inputClass} /></label>
+              <label><span className={labelClass}>District</span><SearchableSelect value={form.district} onChange={(val) => updateField("district", val)} options={["Coimbatore", "Chennai", "Madurai", "Bengaluru", "Kochi"]} className={inputClass} /></label>
               <label><span className={labelClass}>Pin code</span><input value={form.pincode} onChange={(event) => updateField("pincode", event.target.value)} className={inputClass} placeholder="e.g. 641006" /></label>
             </div>
             <div className="mt-4 flex justify-end"><button type="submit" className="rounded-lg bg-sky-400 px-3 py-2 text-xs font-medium text-white hover:bg-sky-500">▣&nbsp; Save</button></div>

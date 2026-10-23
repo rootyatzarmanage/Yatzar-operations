@@ -2,6 +2,7 @@ import type { RecordValues, StoredRecord } from "@/storage/localStore";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { EmbedConfig } from "@/components/records/embed";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -472,20 +473,16 @@ export default function RecordPage<T extends StoredRecord>({
     if (field.type === "select") {
       const options = [...new Set([...(field.options ?? []), current])].filter(Boolean);
       control = (
-        <select
+        <SearchableSelect
           id={id}
           value={current}
-          onChange={(event) => setField(field.key, event.target.value)}
-          aria-invalid={Boolean(error)}
+          onChange={(val) => setField(field.key, val)}
+          hasError={Boolean(error)}
+          placeholder={field.placeholder ?? "-None-"}
+          label={field.label}
+          options={[{ value: "", label: field.placeholder ?? "-None-" }, ...options]}
           className={`${inputClass}${errorClass}`}
-        >
-          <option value="">{field.placeholder ?? "-None-"}</option>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        />
       );
     } else if (field.type === "textarea") {
       control = (
@@ -596,14 +593,15 @@ export default function RecordPage<T extends StoredRecord>({
                     return (
                       <div key={f.label}>
                         <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">{f.label}</label>
-                        <select
+                        <SearchableSelect
+                          size="sm"
                           value={filterValues[i] ?? ""}
-                          onChange={(e) => { setFilterValues((c) => ({ ...c, [i]: e.target.value })); setPage(1); }}
-                          className="h-9 w-full rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300"
-                        >
-                          <option value="">All</option>
-                          {options.map((o) => <option key={o} value={o}>{o}</option>)}
-                        </select>
+                          onChange={(val) => { setFilterValues((c) => ({ ...c, [i]: val })); setPage(1); }}
+                          placeholder="All"
+                          label={f.label}
+                          options={[{ value: "", label: "All" }, ...options]}
+                          className="h-9 w-full"
+                        />
                       </div>
                     );
                   })}
@@ -629,18 +627,16 @@ export default function RecordPage<T extends StoredRecord>({
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               Show
-              <select
+              <SearchableSelect
+                size="sm"
                 value={entriesPerPage}
-                onChange={(event) => {
-                  setEntriesPerPage(Number(event.target.value));
+                onChange={(val) => {
+                  setEntriesPerPage(Number(val));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
-              >
-                {[5, 10, 25, 50].map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
+                options={[5, 10, 25, 50]}
+                className="h-9 w-20"
+              />
               entries
             </label>
           </div>

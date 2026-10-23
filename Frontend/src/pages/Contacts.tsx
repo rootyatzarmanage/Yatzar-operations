@@ -20,6 +20,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { addContactToLeads } from "@/api/leads";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import RecordView from "@/components/records/RecordView";
 import type { EmbedProps } from "@/components/records/embed";
 import { hasPermission, useAuth } from "@/context/AuthContext";
@@ -871,20 +872,16 @@ const handleBulkDelete = async () => {
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
             <label className="flex items-center gap-2">
               Show
-              <select
+              <SearchableSelect
+                size="sm"
                 value={entriesPerPage}
-                onChange={(event) => {
-                  setEntriesPerPage(Number(event.target.value));
+                onChange={(val) => {
+                  setEntriesPerPage(Number(val));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
-              >
-                {[5, 10, 25, 50].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
+                options={[5, 10, 25, 50]}
+                className="h-9 w-20"
+              />
               entries
             </label>
           </div>
@@ -1328,20 +1325,36 @@ const handleBulkDelete = async () => {
                       <label htmlFor="contact-leadSource" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Lead source
                       </label>
-                      <select id="contact-leadSource" value={formValues.leadSource} onChange={(event) => updateField("leadSource", event.target.value)} className={inputClass}>
-                        <option value="">-None-</option>
-                        {[...new Set([...leadSources, formValues.leadSource])].filter(Boolean).map((source) => <option key={source} value={source}>{source}</option>)}
-                      </select>
+                      <SearchableSelect
+                        id="contact-leadSource"
+                        label="Lead source"
+                        value={formValues.leadSource}
+                        onChange={(val) => updateField("leadSource", val)}
+                        placeholder="-None-"
+                        options={[
+                          { value: "", label: "-None-" },
+                          ...[...new Set([...leadSources, formValues.leadSource])].filter(Boolean),
+                        ]}
+                        className={inputClass}
+                      />
                       {formErrors.leadSource && <p className="mt-1 text-xs text-red-600">{formErrors.leadSource}</p>}
                     </div>
                     <div>
                       <label htmlFor="contact-tag" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Tag
                       </label>
-                      <select id="contact-tag" value={formValues.tagId} onChange={(event) => updateField("tagId", event.target.value)} className={inputClass}>
-                        <option value="">-None-</option>
-                        {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-                      </select>
+                      <SearchableSelect
+                        id="contact-tag"
+                        label="Tag"
+                        value={formValues.tagId}
+                        onChange={(val) => updateField("tagId", val)}
+                        placeholder="-None-"
+                        options={[
+                          { value: "", label: "-None-" },
+                          ...tags.map((tag) => ({ value: tag.id, label: tag.name })),
+                        ]}
+                        className={inputClass}
+                      />
                     </div>
                     {renderInput("firstName", "First Name", {
                       required: true,

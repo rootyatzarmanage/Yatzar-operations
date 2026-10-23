@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import {
   Eye,
   Pencil,
@@ -328,19 +329,16 @@ export default function Campaign() {
           <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
             Show
 
-            <select
+            <SearchableSelect
+              size="sm"
               value={perPage}
-              onChange={(e) => {
-                setPerPage(Number(e.target.value));
+              onChange={(val) => {
+                setPerPage(Number(val));
                 setPage(1);
               }}
-              className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-700 outline-none dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-300"
-            >
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
+              options={[5, 10, 25, 50]}
+              className="h-9 w-20"
+            />
 
             entries
           </label>
@@ -876,15 +874,20 @@ function FormSelect({
         {label}
       </label>
 
-      <select
+      <SearchableSelect
         name={name}
+        label={label}
         value={value}
         required={required}
-        onChange={onChange}
+        onChange={(val) => {
+          onChange({
+            target: { name, value: val },
+          } as unknown as React.ChangeEvent<HTMLSelectElement>);
+        }}
         className={inputClass}
       >
         {children}
-      </select>
+      </SearchableSelect>
     </div>
   );
 }

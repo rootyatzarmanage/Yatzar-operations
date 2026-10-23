@@ -9,6 +9,7 @@ import {
 } from "@/api/calls";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -412,18 +413,16 @@ export default function Calls({ embed }: EmbedProps = {}) {
             />
             <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               Show
-              <select
+              <SearchableSelect
+                size="sm"
                 value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
+                onChange={(val) => {
+                  setEntriesPerPage(Number(val));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
-              >
-                {[5, 10, 25, 50].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
+                options={[5, 10, 25, 50]}
+                className="h-9 w-20"
+              />
               entries
             </label>
           </div>
@@ -525,20 +524,22 @@ export default function Calls({ embed }: EmbedProps = {}) {
               {/* Call for */}
               <div>
                 <label htmlFor="call-for" className={labelClass}>Call for</label>
-                <select
+                <SearchableSelect
                   id="call-for"
+                  label="Contact"
                   value={form.contactId}
-                  onChange={(e) => {
-                    setForm({ ...form, contactId: e.target.value });
+                  onChange={(val) => {
+                    setForm({ ...form, contactId: val });
                     setErrors((cur) => ({ ...cur, contactId: undefined }));
                   }}
-                  className={`${inputClass}${errors.contactId ? " border-red-500" : ""}`}
-                >
-                  <option value="">{editingId && !form.contactId ? calls.find((c) => c.id === editingId)?.contactName || "Select contact" : "Select contact"}</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>{contactFullName(c)}</option>
-                  ))}
-                </select>
+                  hasError={Boolean(errors.contactId)}
+                  placeholder={editingId && !form.contactId ? calls.find((c) => c.id === editingId)?.contactName || "Select contact" : "Select contact"}
+                  options={[
+                    { value: "", label: editingId && !form.contactId ? calls.find((c) => c.id === editingId)?.contactName || "Select contact" : "Select contact" },
+                    ...contacts.map((c) => ({ value: c.id, label: contactFullName(c) })),
+                  ]}
+                  className={inputClass}
+                />
                 {errors.contactId && <p className="mt-1 text-xs text-red-600">{errors.contactId}</p>}
               </div>
 
@@ -551,33 +552,38 @@ export default function Calls({ embed }: EmbedProps = {}) {
               {/* Call type */}
               <div>
                 <label htmlFor="call-type" className={labelClass}>Call type</label>
-                <select
+                <SearchableSelect
                   id="call-type"
+                  label="Call type"
                   value={isSchedule ? "Outbound" : form.callType}
                   disabled={isSchedule}
-                  onChange={(e) => setForm({ ...form, callType: e.target.value as CallType })}
+                  onChange={(val) => setForm({ ...form, callType: val as CallType })}
+                  options={callTypes}
                   className={inputClass}
-                >
-                  {callTypes.map((t) => <option key={t}>{t}</option>)}
-                </select>
+                />
               </div>
 
               {/* Outgoing call status */}
               <div>
                 <label htmlFor="call-status" className={labelClass}>Outgoing call status</label>
                 {isSchedule ? (
-                  <select id="call-status" value="Scheduled" disabled className={inputClass}>
-                    <option>Scheduled</option>
-                  </select>
-                ) : (
-                  <select
+                  <SearchableSelect
                     id="call-status"
-                    value={form.status}
-                    onChange={(e) => setForm({ ...form, status: e.target.value as CallStatus })}
+                    label="Outgoing call status"
+                    value="Scheduled"
+                    disabled
+                    options={["Scheduled"]}
                     className={inputClass}
-                  >
-                    {loggedStatuses.map((s) => <option key={s}>{s}</option>)}
-                  </select>
+                  />
+                ) : (
+                  <SearchableSelect
+                    id="call-status"
+                    label="Outgoing call status"
+                    value={form.status}
+                    onChange={(val) => setForm({ ...form, status: val as CallStatus })}
+                    options={loggedStatuses}
+                    className={inputClass}
+                  />
                 )}
               </div>
 
@@ -680,9 +686,14 @@ export default function Calls({ embed }: EmbedProps = {}) {
               {isSchedule && (
                 <div>
                   <label htmlFor="call-reminder" className={labelClass}>Reminder</label>
-                  <select id="call-reminder" value={form.reminder} onChange={(e) => setForm({ ...form, reminder: e.target.value })} className={inputClass}>
-                    {reminders.map((r) => <option key={r}>{r}</option>)}
-                  </select>
+                  <SearchableSelect
+                    id="call-reminder"
+                    label="Reminder"
+                    value={form.reminder}
+                    onChange={(val) => setForm({ ...form, reminder: val })}
+                    options={reminders}
+                    className={inputClass}
+                  />
                 </div>
               )}
             </div>
@@ -694,9 +705,14 @@ export default function Calls({ embed }: EmbedProps = {}) {
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
                     <label htmlFor="call-purpose" className={labelClass}>Call purpose</label>
-                    <select id="call-purpose" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} className={inputClass}>
-                      {purposes.map((p) => <option key={p}>{p}</option>)}
-                    </select>
+                    <SearchableSelect
+                      id="call-purpose"
+                      label="Call purpose"
+                      value={form.purpose}
+                      onChange={(val) => setForm({ ...form, purpose: val })}
+                      options={purposes}
+                      className={inputClass}
+                    />
                   </div>
                   <div>
                     <label htmlFor="call-agenda" className={labelClass}>Call agenda</label>

@@ -4,6 +4,7 @@ import { listCustomers, type CustomerRecord } from "@/api/customers";
 import { createTask, deleteTask, listTasks, updateTask, type TaskApi, type TaskPayload } from "@/api/task";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
+import SearchableSelect from "@/components/common/SearchableSelect";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -436,18 +437,16 @@ export default function Tasks({ embed }: EmbedProps = {}) {
             />
             <label className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               Show
-              <select
+              <SearchableSelect
+                size="sm"
                 value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
+                onChange={(val) => {
+                  setEntriesPerPage(Number(val));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
-              >
-                {[5, 10, 25, 50].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
+                options={[5, 10, 25, 50]}
+                className="h-9 w-20"
+              />
               entries
             </label>
           </div>
@@ -608,15 +607,25 @@ export default function Tasks({ embed }: EmbedProps = {}) {
               </div>
               <div>
                 <label htmlFor="task-status" className={labelClass}>Status</label>
-                <select id="task-status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as TaskStatus })} className={inputClass}>
-                  {statuses.map((s) => <option key={s}>{s}</option>)}
-                </select>
+                <SearchableSelect
+                  id="task-status"
+                  label="Status"
+                  value={form.status}
+                  onChange={(val) => setForm({ ...form, status: val as TaskStatus })}
+                  options={statuses}
+                  className={inputClass}
+                />
               </div>
               <div>
                 <label htmlFor="task-priority" className={labelClass}>Priority</label>
-                <select id="task-priority" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as TaskPriority })} className={inputClass}>
-                  {priorities.map((p) => <option key={p}>{p}</option>)}
-                </select>
+                <SearchableSelect
+                  id="task-priority"
+                  label="Priority"
+                  value={form.priority}
+                  onChange={(val) => setForm({ ...form, priority: val as TaskPriority })}
+                  options={priorities}
+                  className={inputClass}
+                />
               </div>
               <div className="relative">
                 <label className={labelClass}>Reminder</label>
@@ -655,11 +664,13 @@ export default function Tasks({ embed }: EmbedProps = {}) {
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-700">
                       Notify
-                      <select value={form.reminderNotify} onChange={(e) => setForm({ ...form, reminderNotify: e.target.value })} className={inputClass}>
-                        <option>Email</option>
-                        <option>Popup</option>
-                        <option>Email and Popup</option>
-                      </select>
+                      <SearchableSelect
+                        size="sm"
+                        value={form.reminderNotify}
+                        onChange={(val) => setForm({ ...form, reminderNotify: val })}
+                        options={["Email", "Popup", "Email and Popup"]}
+                        className="h-9 flex-1"
+                      />
                     </div>
                     <div className="flex justify-end gap-3">
                       <button type="button" onClick={() => { setReminderOpen(false); setForm({ ...form, reminder: false, repeat: false }); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700">Cancel</button>
@@ -706,15 +717,16 @@ export default function Tasks({ embed }: EmbedProps = {}) {
 
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
               <div className="flex gap-3">
-                <select
+                <SearchableSelect
+                  size="sm"
                   value={pickerSource}
-                  onChange={(event) => setPickerSource(event.target.value as ParticipantType)}
-                  className={`${inputClass} !w-40`}
-                >
-                  {(Object.keys(participantSourceLabels) as ParticipantType[]).map((source) => (
-                    <option key={source} value={source}>{participantSourceLabels[source]}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setPickerSource(val as ParticipantType)}
+                  options={(Object.keys(participantSourceLabels) as ParticipantType[]).map((source) => ({
+                    value: source,
+                    label: participantSourceLabels[source],
+                  }))}
+                  className="!w-40"
+                />
                 <input
                   type="search"
                   value={pickerSearch}
