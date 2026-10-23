@@ -1835,20 +1835,21 @@ export default function Teams() {
                 );
               })}
             </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                disabled={activeTab === fieldGroups.length - 1}
-                onClick={() =>
-                  setActiveTab((current) =>
-                    Math.min(fieldGroups.length - 1, current + 1),
-                  )
-                }
-                className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+            {activeTab < fieldGroups.length - 1 && (
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveTab((current) =>
+                      Math.min(fieldGroups.length - 1, current + 1),
+                    )
+                  }
+                  className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}

@@ -13,7 +13,9 @@ import {
 import type {
   Workspace as BaseWorkspace,
   WorkspacePayload as BaseWorkspacePayload,
+  WorkspaceUpdatePayload,
   WorkspaceStatus,
+  WorkspacePlatformPayload,
 } from "@/api/workspaces";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { hasPermission, useAuth } from "@/context/AuthContext";
@@ -37,6 +39,23 @@ const emptyForm: WorkspaceFormValues = {
   description: "",
   status: "Enabled",
   image: "",
+};
+
+type PlatformFormValues = Omit<WorkspacePlatformPayload, "mail_mailer"> & {
+  mail_mailer: string;
+};
+
+const emptyPlatform: PlatformFormValues = {
+  platform_name: "",
+  mail_mailer: "smtp",
+  mail_host: "",
+  mail_port: 587,
+  mail_username: "",
+  mail_password: "",
+  mail_encryption: "TLS",
+  mail_from_address: "",
+  mail_from_name: "",
+  mail_status: "Enabled",
 };
 
 const IMAGE_WIDTH = 640;
@@ -86,6 +105,8 @@ export default function Workspace() {
   const [isSaving, setIsSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [platformValues, setPlatformValues] = useState<PlatformFormValues>(emptyPlatform);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -161,6 +182,13 @@ export default function Workspace() {
     setFormValues((current) => ({ ...current, [field]: value }));
   };
 
+  const handlePlatformChange = <K extends keyof PlatformFormValues>(
+    field: K,
+    value: PlatformFormValues[K],
+  ) => {
+    setPlatformValues((current) => ({ ...current, [field]: value }));
+  };
+
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
@@ -169,6 +197,8 @@ export default function Workspace() {
     setRemoveImage(false);
     setFormError("");
     setApiError("");
+    setPlatformValues(emptyPlatform);
+    setShowPassword(false);
   };
 
   const handleAddNew = () => {
@@ -179,6 +209,8 @@ export default function Workspace() {
     setEditingId(null);
     setFormError("");
     setApiError("");
+    setPlatformValues(emptyPlatform);
+    setShowPassword(false);
     setShowForm(true);
   };
 
@@ -196,6 +228,19 @@ export default function Workspace() {
     setFormError("");
     setApiError("");
     setShowForm(true);
+    setPlatformValues({
+      platform_name: workspace.platform_name ?? "",
+      mail_mailer: workspace.mail_mailer ?? "smtp",
+      mail_host: workspace.mail_host ?? "",
+      mail_port: workspace.mail_port ?? 587,
+      mail_username: workspace.mail_username ?? "",
+      mail_password: "",
+      mail_encryption: (workspace.mail_encryption as PlatformFormValues["mail_encryption"] | null) ?? "TLS",
+      mail_from_address: workspace.mail_from_address ?? "",
+      mail_from_name: workspace.mail_from_name ?? "",
+      mail_status: workspace.mail_status ?? "Enabled",
+    });
+    setShowPassword(false);
   };
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -256,26 +301,67 @@ export default function Workspace() {
       return;
     }
 
+    const platform = platformValues;
     setFormError("");
     setApiError("");
     setIsSaving(true);
-    const payload: BaseWorkspacePayload = {
+    const workspacePayload: BaseWorkspacePayload = {
       name: trimmedName,
       description: trimmedDescription,
       status: formValues.status,
+    };
+    const platformPayload: WorkspacePlatformPayload = {
+      ...platform,
+      mail_mailer: "smtp",
+      platform_name: platform.platform_name.trim(),
+      mail_host: platform.mail_host.trim(),
+      mail_username: platform.mail_username.trim(),
+      mail_from_address: platform.mail_from_address.trim(),
+      mail_from_name: platform.mail_from_name.trim(),
     };
     let createdWorkspace: WorkspaceItem | null = null;
     try {
       let saved: WorkspaceItem;
       if (editingId !== null) {
         if (!canUpdate) return;
+        const updatePayload: WorkspaceUpdatePayload = {
+          ...workspacePayload,
+          ...(platform.platform_name.trim()
+            ? { platform_name: platform.platform_name.trim() }
+            : {}),
+          mail_mailer: "smtp",
+          ...(platform.mail_host.trim()
+            ? { mail_host: platform.mail_host.trim() }
+            : {}),
+          ...(Number.isInteger(platform.mail_port) &&
+          platform.mail_port >= 1 &&
+          platform.mail_port <= 65535
+            ? { mail_port: platform.mail_port }
+            : {}),
+          ...(platform.mail_username.trim()
+            ? { mail_username: platform.mail_username.trim() }
+            : {}),
+          ...(platform.mail_password
+            ? { mail_password: platform.mail_password }
+            : {}),
+          ...(platform.mail_encryption
+            ? { mail_encryption: platform.mail_encryption }
+            : {}),
+          ...(platform.mail_from_address.trim()
+            ? { mail_from_address: platform.mail_from_address.trim() }
+            : {}),
+          ...(platform.mail_from_name.trim()
+            ? { mail_from_name: platform.mail_from_name.trim() }
+            : {}),
+          mail_status: platform.mail_status,
+        };
         saved = await updateWorkspace(
           editingId,
-          payload,
+          updatePayload,
         );
       } else {
         if (!canCreate) return;
-        saved = await createWorkspace(payload);
+        saved = await createWorkspace({ ...workspacePayload, ...platformPayload });
         createdWorkspace = saved;
       }
       if (selectedImage) {
@@ -294,7 +380,7 @@ export default function Workspace() {
       if (createdWorkspace) {
         setWorkspaces((current) => [createdWorkspace!, ...current]);
         setEditingId(createdWorkspace.id);
-        setFormError("Workspace was created, but its image could not be saved. Save again to retry.");
+        setFormError("Workspace was created, but its image or platform settings could not be saved. Save again to retry.");
       } else {
         setFormError(
           error instanceof Error ? error.message : "Unable to save workspace.",
@@ -717,7 +803,8 @@ export default function Workspace() {
           )}
         </section>
       ) : (
-        <section className="max-w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+        <>
+        <section className="max-w-full min-w-0 my-5 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 sm:px-6">
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
               {editingId !== null ? "Edit workspace" : "Add workspace"}
@@ -859,6 +946,66 @@ export default function Workspace() {
             )}
           </div>
         </section>
+        <section className="max-w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+          <div className="p-4 sm:p-5 sm:px-6">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Platforms</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Email (SMTP) settings for this workspace.</p>
+          </div>
+          <div className="border-t border-gray-200 p-6 sm:p-7 dark:border-gray-800">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Platform Name</label>
+                <input value={platformValues.platform_name} onChange={(event) => handlePlatformChange("platform_name", event.target.value)} className={fieldClass} placeholder="Enter platform name" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Mailer</label>
+                <select value={platformValues.mail_mailer} onChange={(event) => handlePlatformChange("mail_mailer", event.target.value)} className={fieldClass}>
+                  <option value="smtp">smtp</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Host</label>
+                <input value={platformValues.mail_host} onChange={(event) => handlePlatformChange("mail_host", event.target.value)} className={fieldClass} placeholder="smtp.example.com" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Port</label>
+                <input type="number" min={1} max={65535} value={platformValues.mail_port} onChange={(event) => handlePlatformChange("mail_port", Number(event.target.value))} className={fieldClass} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+                <input autoComplete="username" value={platformValues.mail_username} onChange={(event) => handlePlatformChange("mail_username", event.target.value)} className={fieldClass} placeholder="SMTP username" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Password {editingId !== null && "(leave blank to keep current)"}</label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} autoComplete="new-password" value={platformValues.mail_password} onChange={(event) => handlePlatformChange("mail_password", event.target.value)} className={`${fieldClass} pe-16`} placeholder={editingId !== null && workspaces.find((item) => item.id === editingId)?.has_mail_password ? "Configured; enter a new password to replace" : "SMTP password"} />
+                  <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-e-3 top-1/2 -translate-y-1/2 text-xs font-medium text-brand-500">{showPassword ? "Hide" : "Show"}</button>
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Encryption</label>
+                <select value={platformValues.mail_encryption} onChange={(event) => handlePlatformChange("mail_encryption", event.target.value as PlatformFormValues["mail_encryption"])} className={fieldClass}>
+                  <option value="TLS">TLS</option><option value="SSL">SSL</option><option value="none">None</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">From Address</label>
+                <input type="email" value={platformValues.mail_from_address} onChange={(event) => handlePlatformChange("mail_from_address", event.target.value)} className={fieldClass} placeholder="sender@example.com" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">From Name</label>
+                <input value={platformValues.mail_from_name} onChange={(event) => handlePlatformChange("mail_from_name", event.target.value)} className={fieldClass} placeholder="Sender name" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                <select value={platformValues.mail_status} onChange={(event) => handlePlatformChange("mail_status", event.target.value as PlatformFormValues["mail_status"])} className={fieldClass}>
+                  <option value="Enabled">Enable</option><option value="Disabled">Disable</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+        </>
       )}
 
       {deleteId !== null && (

@@ -20,6 +20,7 @@ import {
   type EmailMarketingRecipient,
 } from "@/api/emailMarketing";
 import { listTags, type Tag } from "@/api/tags";
+import { getWorkspace } from "@/api/workspaces";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -38,6 +39,11 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import RichTextEditor from "@/components/common/RichTextEditor";
+import DOMPurify from "dompurify";
+
+const isContentEmpty = (html: string) =>
+  html.replace(/<[^>]*>/g, "").trim().length === 0 && !/<(img|hr|table)/.test(html);
 
 type MailType = "test" | "bulk";
 
@@ -46,7 +52,6 @@ type EmailCampaign = {
   campaignName: string;
   subject: string;
   status: string;
-  platform: string;
   sendTo: number;
   opens: number;
   clicks: number;
@@ -67,7 +72,6 @@ type EmailCampaignForm = {
   subject: string;
   content: string;
   mailType: MailType;
-  platform: string;
   scheduledAt: string;
   selectedUserIds: string[] | null;
 };
@@ -78,7 +82,6 @@ function fromApiCampaign(campaign: ApiEmailCampaign): EmailCampaign {
     campaignName: campaign.campaign_name,
     subject: campaign.subject,
     status: campaign.status,
-    platform: campaign.platform,
     sendTo: campaign.sent_count,
     opens: campaign.open_count,
     clicks: campaign.click_count,
@@ -99,6 +102,7 @@ function fromApiListItem(campaign: {
   campaign_name: string;
   subject: string;
   status: string;
+  mail_type: string;
   sent_count: number;
   open_count: number;
   click_count: number;
@@ -110,7 +114,6 @@ function fromApiListItem(campaign: {
     campaignName: campaign.campaign_name,
     subject: campaign.subject,
     status: campaign.status,
-    platform: "Email",
     sendTo: campaign.sent_count,
     opens: campaign.open_count,
     clicks: campaign.click_count,
@@ -119,7 +122,7 @@ function fromApiListItem(campaign: {
       : "—",
     sender: "",
     content: "",
-    mailType: "bulk",
+    mailType: campaign.mail_type === "Test Email" ? "test" : "bulk",
     testEmail: "",
     tagId: "",
     scheduledAt: campaign.scheduled_at,
@@ -487,8 +490,6 @@ function ViewCampaignModal({
             }
           />
 
-          <DetailRow label="Platform" value={campaignDetails.platform} />
-
           <DetailRow
             label="Scheduled send"
             value={campaignDetails.scheduledAt ? new Date(campaignDetails.scheduledAt).toLocaleString() : "Immediate"}
@@ -501,15 +502,13 @@ function ViewCampaignModal({
 
           <DetailRow
             label="Status"
-            value={campaignDetails.status}
+            value={campaignDetails.mailType === "test" ? "Test" : "Email Sent"}
           />
 
           <div>
             <p className={labelClass}>Content</p>
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm whitespace-pre-wrap text-gray-700 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-300">
-              {campaignDetails.content}
-            </div>
+            <div className="email-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(campaignDetails.content) }} />
           </div>
 
           {canUpdateRecipients && ["Queued", "Scheduled"].includes(campaignDetails.status) && (
@@ -751,7 +750,6 @@ export default function EmailMarketing() {
       const payload: EmailMarketingCreatePayload = {
         workspace_id: currentWorkspace.id,
         campaign_name: form.campaignName,
-        platform: form.platform,
         from_email: form.sender,
         mail_type: form.mailType === "test" ? "Test Email" : "Bulk Email",
         to_email: form.mailType === "test" ? form.testEmail : null,
@@ -915,7 +913,7 @@ export default function EmailMarketing() {
           <div className="flex flex-col gap-4 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
             <div>
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                Email marketing
+                Emails
               </h2>
 
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -932,7 +930,7 @@ export default function EmailMarketing() {
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
             >
               <Plus size={16} />
-              New campaign
+              New email
             </button>}
           </div>
 
@@ -953,7 +951,7 @@ export default function EmailMarketing() {
                 onChange={(event) =>
                   setSearch(event.target.value)
                 }
-                placeholder="Search campaigns"
+                placeholder="Search emails"
                 className="h-11 w-full rounded-lg border border-gray-200 bg-transparent pl-9 pr-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 dark:border-gray-800 dark:text-white/90 dark:placeholder:text-gray-500"
               />
             </div>
@@ -1030,6 +1028,7 @@ export default function EmailMarketing() {
 
                       <td className="px-3 py-4 sm:px-5">
                         <StatusBadge
+                          mailType={campaign.mailType}
                           status={campaign.status}
                         />
                       </td>
@@ -1265,11 +1264,27 @@ function EmailCampaignForm({
       initialCampaign?.campaignName ?? "",
     );
 
-  const [platform, setPlatform] = useState(initialCampaign?.platform ?? "Email");
-
   const [sender, setSender] = useState(
     initialCampaign?.sender ?? "",
   );
+
+  useEffect(() => {
+    if (initialCampaign || !currentWorkspace?.id) return;
+    let active = true;
+    void getWorkspace(currentWorkspace.id)
+      .then((workspace) => {
+        const fromAddress = workspace.mail_from_address?.trim();
+        if (active && fromAddress) {
+          setSender((current) => current || fromAddress);
+        }
+      })
+      .catch(() => {
+        // Keep the From field editable when workspace settings are unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentWorkspace?.id, initialCampaign]);
 
   const [testEmail, setTestEmail] =
     useState(
@@ -1391,7 +1406,7 @@ function EmailCampaignForm({
       !campaignName.trim() ||
       !sender.trim() ||
       !subject.trim() ||
-      !content.trim()
+      isContentEmpty(content)
     ) {
       setError(
         "Campaign name, sender, subject, and content are required.",
@@ -1430,7 +1445,6 @@ function EmailCampaignForm({
           subject: subject.trim(),
           content: content.trim(),
           mailType,
-          platform,
           scheduledAt,
           selectedUserIds: null,
         });
@@ -1472,7 +1486,6 @@ function EmailCampaignForm({
         subject: subject.trim(),
         content: content.trim(),
         mailType,
-        platform,
         scheduledAt,
         selectedUserIds,
       });
@@ -1489,7 +1502,7 @@ function EmailCampaignForm({
       />
 
       <PageBreadcrumb
-        pageTitle={isEditing ? "Edit campaign" : "New campaign"}
+        pageTitle={isEditing ? "Edit campaign" : "Campaign"}
         parent={{
           label: "Email marketing",
         }}
@@ -1498,7 +1511,7 @@ function EmailCampaignForm({
       <div className="space-y-6">
         {/* Header */}
 
-        <div>
+        {/* <div>
           <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">
             Email marketing
           </h1>
@@ -1506,7 +1519,7 @@ function EmailCampaignForm({
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {isEditing ? "Update this scheduled email campaign." : "Create and send email marketing campaigns."}
           </p>
-        </div>
+        </div> */}
 
         {/* Form + Preview */}
 
@@ -1522,7 +1535,7 @@ function EmailCampaignForm({
 
               <div>
                 <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                  New campaign
+                  New email
                 </h2>
 
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1569,28 +1582,6 @@ function EmailCampaignForm({
                   className={inputClass}
                   placeholder="Campaign name"
                 />
-              </label>
-
-              {/* Platform */}
-
-              <label>
-                <span className={labelClass}>
-                  Platform
-                </span>
-
-                <select
-                  value={platform}
-                  onChange={(event) => setPlatform(event.target.value)}
-                  className={inputClass}
-                >
-                  <option value="Email">
-                    Email
-                  </option>
-
-                  <option value="Newsletter">
-                    Newsletter
-                  </option>
-                </select>
               </label>
 
               {/* Sender */}
@@ -1746,22 +1737,10 @@ function EmailCampaignForm({
 
             {/* Content */}
 
-            <label className="mt-5 block">
-              <span className={labelClass}>
-                Content
-              </span>
-
-              <textarea
-                value={content}
-                onChange={(event) =>
-                  setContent(
-                    event.target.value,
-                  )
-                }
-                className={`${inputClass} min-h-48 resize-y`}
-                placeholder="Write your email content..."
-              />
-            </label>
+            <div className="mt-5">
+              <span className={labelClass}>Content</span>
+              <RichTextEditor value={content} onChange={setContent} />
+            </div>
 
             <label className="mt-5 block">
               <span className={labelClass}>Schedule send (optional)</span>
@@ -1792,7 +1771,6 @@ function EmailCampaignForm({
                 type="button"
                 onClick={() => {
                   setCampaignName("");
-                  setPlatform("Email");
                   setSender("");
                   setTestEmail("");
                   setTagId("");
@@ -1831,10 +1809,11 @@ function EmailCampaignForm({
                     "Campaign preview"}
                 </h3>
 
-                <p className="whitespace-pre-wrap">
-                  {content ||
-                    "Your email content will appear here."}
-                </p>
+                {isContentEmpty(content) ? (
+                  <p>Your email content will appear here.</p>
+                ) : (
+                  <div className="email-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
+                )}
               </article>
             </div>
           </section>
@@ -1864,21 +1843,27 @@ function EmailCampaignForm({
 /* -------------------------------------------------------------------------- */
 
 function StatusBadge({
+  mailType,
   status,
 }: {
+  mailType: MailType;
   status: string;
 }) {
-  const isTest = status === "Test";
+  const isTest = mailType === "test";
+  const isScheduled = !isTest && status === "Scheduled";
+  const label = isTest ? "Test" : isScheduled ? "Scheduled" : "Email Sent";
 
   return (
     <span
       className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ${
         isTest
           ? "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400"
-          : "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-400"
+          : isScheduled
+            ? "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"
+            : "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-400"
       }`}
     >
-      {status}
+      {label}
     </span>
   );
 }
