@@ -492,7 +492,7 @@ function ViewCampaignModal({
 
           <DetailRow
             label="Scheduled send"
-            value={campaignDetails.scheduledAt ? new Date(campaignDetails.scheduledAt).toLocaleString() : "Immediate"}
+            value={campaignDetails.mailType === "test" ? "Immediate" : campaignDetails.scheduledAt ? new Date(campaignDetails.scheduledAt).toLocaleString() : "Immediate"}
           />
 
           <DetailRow
@@ -1034,7 +1034,7 @@ export default function EmailMarketing() {
                       </td>
 
                       <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
-                        {campaign.scheduledAt
+                        {campaign.mailType !== "test" && campaign.scheduledAt
                           ? new Date(campaign.scheduledAt).toLocaleString()
                           : "Immediate"}
                       </td>

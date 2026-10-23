@@ -38,6 +38,7 @@ class EmailMarketingListItemResponse(BaseModel):
     id: UUID
     campaign_name: str
     subject: str
+    mail_type: str
     status: str
     sent_count: int
     scheduled_at: datetime | None = None
