@@ -6,7 +6,6 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
-    Integer,
     Index,
     String,
     Text,
@@ -61,10 +60,3 @@ class Contact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),default=lambda: datetime.now().astimezone(),nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),nullable=True,index=True)
-
-
-class CustomerNumberCounter(Base):
-    __tablename__ = "customer_number_counters"
-
-    year: Mapped[int] = mapped_column(Integer, primary_key=True)
-    last_number: Mapped[int] = mapped_column(Integer, nullable=False)

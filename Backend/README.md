@@ -93,8 +93,15 @@ consolidation boundary.
 
 Run migrations before starting the API. Startup now validates the schema instead
 of creating tables outside Alembic. `alembic heads` should report one head;
-`alembic current` after upgrading should report `20261022_calendar_events`,
-which adds calendar events and guests after the baseline.
+`alembic current` after upgrading should report `20261027_email_multiple_tags`.
+Customer IDs use `CUS-YYYY-NNNN`, with an annual series shared across workspaces.
+The repository reads the highest numeric suffix from `contacts.customer_id`,
+including soft-deleted contacts and contacts moved to another stage. A PostgreSQL
+transaction advisory lock serializes allocation until the contact update commits;
+the existing unique index provides additional duplicate protection. No counter
+table is required; migration `20261026_contact_customer_ids` removes the historical counter table if
+present. Permanently deleting the highest numbered contact can allow its number
+to be reused. Normal soft deletion preserves the number.
 
 The `users` table stores login accounts and hashed passwords. The `employees` table stores employee details and links each Teams employee to one user account. Employee deletes are soft deletes and deactivate the linked account.
 Authentication uses an HttpOnly signed session cookie. Set `SESSION_SECRET` to a strong private value in `.env` before deployment.
@@ -137,6 +144,56 @@ yo/
 All request bodies are validated before service execution. Successful responses include `"validation": {}`.
 
 ## API Endpoints
+
+### Bulk email tags and recipient switches
+
+`POST /api/v1/email-marketing` and `PUT /api/v1/email-marketing/{campaign_id}`
+accept multiple tags in `tag_ids`. Existing clients can still send scalar
+`tag_id`; responses include `tag_ids` and the first tag as legacy `tag_id`.
+The existing `email_marketing` table stores the UUID array. The migration
+backfills existing single-tag campaigns without changing their recipients.
+No additional application tables are created.
+
+Example bulk campaign body (replace the example UUIDs with existing records):
+
+```json
+{
+  "workspace_id": "11111111-1111-4111-8111-111111111111",
+  "campaign_name": "Department update",
+  "from_email": "marketing@example.com",
+  "mail_type": "Bulk Email",
+  "tag_ids": [
+    "22222222-2222-4222-8222-222222222222",
+    "33333333-3333-4333-8333-333333333333"
+  ],
+  "selection_mode": "selected",
+  "selected_user_ids": ["44444444-4444-4444-8444-444444444444"],
+  "subject": "Department update",
+  "content": "<p>Hello!</p>",
+  "scheduled_at": null
+}
+```
+
+`selected_user_ids` contains **contact UUIDs**, not login-user UUIDs. With
+`selection_mode: "selected"`, those contacts are enabled and all other eligible
+contacts across the selected tags are saved as disabled in the existing
+`email_marketing_recipients` table. With `selection_mode: "all"`, every eligible
+contact is enabled and `selected_user_ids` must be empty. Invalid/inactive tags,
+contacts outside the selected workspace/tags, opt-outs, deleted contacts and
+contacts without email addresses cannot be selected for delivery.
+
+List saved recipient rows with
+`GET /api/v1/email-marketing/{campaign_id}/recipients?workspace_id=...`.
+Toggle a saved recipient using
+`PATCH /api/v1/email-marketing/recipients/{recipient_id}/status?workspace_id=...`
+with `{"is_enabled": false}` or `{"is_enabled": true}`. A change locks the
+campaign against the sender; already-sent recipients and completed campaigns
+return 409. The worker only sends to enabled rows and rechecks tag membership,
+active tags, workspace, opt-outs and current email before delivery. Shared email
+addresses use the existing delivery log to avoid sending the same message twice.
+Null/omitted `scheduled_at` queues immediately, so send the intended enabled
+contact list in the create request; use a future schedule when switches need
+to be changed before delivery.
 
 | Method | Endpoint                          | Description             |
 | ------ | --------------------------------- | ----------------------- |
@@ -182,6 +239,13 @@ Example request:
 ```
 
 ## Verification
+
+The customer-number integration tests use disposable PostgreSQL schemas and
+require a database user with permission to create schemas. From `Backend`, run:
+
+```bash
+RUN_DATABASE_TESTS=1 venv/bin/python -m unittest discover -s tests -v
+```
 
 After PostgreSQL is running and `.env` is configured:
 
