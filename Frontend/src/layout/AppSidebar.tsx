@@ -16,6 +16,8 @@ import { CalendarDays, Volume1, Calendar1 } from 'lucide-react'
 import { ChevronLeft, MessageSquare, User } from "lucide-react"
 import { cn } from "../utils";
 import { hasPermission, useAuth } from "@/context/AuthContext";
+import { listEmployees } from "@/api/teams";
+import type { Employee } from "@/api/teams";
 
 type NavItem = {
   name: string;
@@ -31,10 +33,13 @@ type NavItem = {
     pro?: boolean;
     new?: boolean;
     target?: string;
+    id?: string;
   }[];
+  keepEmptySubmenu?: boolean;
 };
 
 function permissionMenuForPath(path: string): string | null {
+  const pathname = path.split("?")[0];
   const menuByPath: Record<string, string> = {
     "/teams": "Teams",
     "/others": "Teams",
@@ -51,7 +56,7 @@ function permissionMenuForPath(path: string): string | null {
     "/email-marketing": "Email Marketing",
     "/event-webinar": "Event Webinar",
   };
-  return menuByPath[path] ?? null;
+  return menuByPath[pathname] ?? null;
 }
 
 function canViewPath(user: Parameters<typeof hasPermission>[0], path: string) {
@@ -82,6 +87,8 @@ const navItems: NavItem[] = [
     name: "Workspace",
     key: "workspace",
     path: "/workspace",
+    keepEmptySubmenu: true,
+    subItems: [],
   },
   {
     icon: <ContactsIcon fontSize={24} />,
@@ -149,11 +156,54 @@ const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { currentWorkspace, leaveWorkspace } = useWorkspace();
   const { user } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [membersError, setMembersError] = useState("");
+  useEffect(() => {
+    if (currentWorkspace || !hasPermission(user, "Teams")) return;
+    let active = true;
+    void listEmployees()
+      .then((items) => {
+        if (active) {
+          setEmployees(items.filter((employee) => employee.workspaces?.length));
+          setMembersError("");
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setMembersError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load workspace members.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentWorkspace, user]);
+  const navItemsWithWorkspaceMembers = useMemo(
+    () =>
+      navItems.map((item) =>
+        item.key === "workspace"
+          ? {
+              ...item,
+              subItems: employees.flatMap((employee) =>
+                employee.workspaces.map((workspace) => ({
+                  id: `${employee.id}-${workspace.id}`,
+                  name: `${employee.display_name || employee.employee_name || employee.username || employee.employee_code} — ${workspace.name}`,
+                  path: `/workspace?members=${encodeURIComponent(workspace.id)}`,
+                })),
+              ),
+            }
+          : item,
+      ),
+    [employees],
+  );
   const sidebarContentVisible = Boolean(
     currentWorkspace || isExpanded || isHovered || isMobileOpen,
   );
   const activeNavItems = useMemo(
-    () => (currentWorkspace ? workspaceNavItems : navItems)
+    () => (currentWorkspace ? workspaceNavItems : navItemsWithWorkspaceMembers)
       .map((item) => item.subItems
         ? { ...item, subItems: item.subItems.filter((subItem) => canViewPath(user, subItem.path)) }
         : item)
@@ -166,10 +216,10 @@ const AppSidebar: React.FC = () => {
           return false;
         }
         return item.subItems
-          ? item.subItems.length > 0
+          ? item.subItems.length > 0 || item.keepEmptySubmenu === true
           : !item.path || canViewPath(user, item.path);
       }),
-    [currentWorkspace, user],
+    [currentWorkspace, user, navItemsWithWorkspaceMembers],
   );
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([]);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>(
@@ -187,7 +237,7 @@ const AppSidebar: React.FC = () => {
 
   // const isActive = (path: string) => location.pathname === path;
   const isActive = useCallback(
-    (path: string) => location.pathname === path,
+    (path: string) => location.pathname === path.split("?")[0],
     [location.pathname],
   );
 
@@ -215,7 +265,7 @@ const AppSidebar: React.FC = () => {
         }));
       }
     });
-  }, [openSubmenus, isExpanded, isHovered, isMobileOpen, currentWorkspace]);
+  }, [openSubmenus, isExpanded, isHovered, isMobileOpen, currentWorkspace, activeNavItems]);
 
   const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
     const key = `${menuType}-${index}`;
@@ -236,6 +286,56 @@ const AppSidebar: React.FC = () => {
               <span className="menu-item-icon-size menu-item-icon-inactive">{nav.icon}</span>
               {sidebarContentVisible && (
                 <span className="menu-item-text">{nav.name}</span>
+              )}
+            </div>
+          ) : nav.path ? (
+            <div
+              className={`group menu-item ${
+                isActive(nav.path) ||
+                openSubmenus.includes(`${menuType}-${index}`)
+                  ? "menu-item-active"
+                  : "menu-item-inactive"
+              } ${
+                !sidebarContentVisible
+                  ? "xl:justify-center"
+                  : "xl:justify-start"
+              }`}
+            >
+              <Link
+                to={nav.path}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                <span
+                  className={`menu-item-icon-size ${
+                    isActive(nav.path)
+                      ? "menu-item-icon-active"
+                      : "menu-item-icon-inactive"
+                  }`}
+                >
+                  {nav.icon}
+                </span>
+                {sidebarContentVisible && (
+                  <span className="menu-item-text">
+                    {nav.key ? t(`sidebar.items.${nav.key}`) : nav.name}
+                  </span>
+                )}
+              </Link>
+              {sidebarContentVisible && (
+                <button
+                  type="button"
+                  aria-label={`Toggle ${nav.name} members`}
+                  aria-expanded={openSubmenus.includes(`${menuType}-${index}`)}
+                  onClick={() => handleSubmenuToggle(index, menuType)}
+                  className="ms-auto flex size-7 items-center justify-center"
+                >
+                  <ChevronDownIcon
+                    className={`h-5 w-5 transition-transform duration-200 ${
+                      openSubmenus.includes(`${menuType}-${index}`)
+                        ? "rotate-180 text-brand-500"
+                        : ""
+                    }`}
+                  />
+                </button>
               )}
             </div>
           ) : (
@@ -342,7 +442,13 @@ const AppSidebar: React.FC = () => {
               }}
             >
               <ul className="ms-9 mt-2 space-y-1">
-                {nav.subItems.map((subItem) => (
+                {nav.subItems.length === 0 ? (
+                  <li className="px-3 py-2 text-xs text-gray-400">
+                    {membersError
+                      ? "Unable to load workspace members."
+                      : "No workspace members assigned."}
+                  </li>
+                ) : nav.subItems.map((subItem) => (
                   <li key={subItem.name}>
                     <Link
                       to={subItem.path}

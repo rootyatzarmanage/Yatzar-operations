@@ -1,13 +1,9 @@
-type ApiEnvelope<T> = {
-  success: boolean;
-  message: string;
-  data: T;
-  validation: Record<string, unknown>;
-};
+import { request } from "@/api/client";
 
 export type Employee = {
   id: string;
   user_id: string;
+  workspaces: Array<{ id: string; name: string }>;
   employee_code: string;
   employee_name: string;
   display_name: string | null;
@@ -72,56 +68,24 @@ export type EmployeeDraft = {
   updated_at: string;
 };
 
-const apiOrigin = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
-const apiPrefix = import.meta.env.DEV ? "/api/v1" : `${apiOrigin}/api/v1`;
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiPrefix}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
-  const envelope = (await response.json()) as
-    | ApiEnvelope<T>
-    | { detail?: string | { loc: string[]; msg: string }[]; message?: string };
-
-  if (!response.ok) {
-    const detail = "detail" in envelope ? envelope.detail : undefined;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((item) => item.msg).join("; ")
-          : "message" in envelope && envelope.message
-            ? envelope.message
-            : `Request failed (${response.status})`;
-    throw new Error(message);
-  }
-
-  if (!("success" in envelope) || !envelope.success) {
-    throw new Error(
-      "message" in envelope && envelope.message
-        ? envelope.message
-        : "The server returned an invalid response.",
-    );
-  }
-  return envelope.data;
-}
-
 export async function listEmployees(): Promise<Employee[]> {
   const employees: Employee[] = [];
   const pageSize = 100;
-  let skip = 0;
-  let page: Employee[];
+  let page = 1;
+  let total = 0;
   do {
-    page = await request<Employee[]>(
-      `/employees?skip=${skip}&limit=${pageSize}`,
+    const result = await request<{
+      items: Employee[];
+      total: number;
+      page: number;
+      per_page: number;
+    }>(
+      `/employees?page=${page}&per_page=${pageSize}`,
     );
-    employees.push(...page);
-    skip += page.length;
-  } while (page.length === pageSize);
+    employees.push(...result.items);
+    total = result.total;
+    page += 1;
+  } while (employees.length < total);
   return employees;
 }
 

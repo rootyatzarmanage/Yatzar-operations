@@ -1216,10 +1216,10 @@ export default function Teams() {
   return (
     <>
       <PageMeta
-        title="Teams | Yatzar Operations"
-        description="Yatzar Operations teams"
+        title="Yatzar Team | Yatzar Operations"
+        description="Yatzar Operations team members"
       />
-      <PageBreadcrumb pageTitle={t("ecommerce.title") || "Teams"} />
+      <PageBreadcrumb pageTitle={t("ecommerce.title") || "Yatzar Team"} />
       {apiError && (
         <p className="mb-4 rounded-lg border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-600">
           {apiError}

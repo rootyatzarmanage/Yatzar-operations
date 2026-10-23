@@ -20,8 +20,10 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 import { getEmployeeWorkspaceIds } from "@/utils/workspaceAccess";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
+import { listEmployees } from "@/api/teams";
+import type { Employee } from "@/api/teams";
 
 type WorkspaceItem = BaseWorkspace;
 
@@ -64,6 +66,8 @@ const fieldClass =
 export default function Workspace() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const membersWorkspaceId = searchParams.get("members");
   const { user } = useAuth();
   const canCreate = hasPermission(user, "Workspace", "create");
   const canUpdate = hasPermission(user, "Workspace", "update");
@@ -86,6 +90,43 @@ export default function Workspace() {
   const [isSaving, setIsSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [workspaceMembers, setWorkspaceMembers] = useState<Employee[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState("");
+
+  useEffect(() => {
+    if (!membersWorkspaceId) return;
+    let active = true;
+    setMembersLoading(true);
+    setMembersError("");
+    void listEmployees()
+      .then((employees) => {
+        if (active) {
+          setWorkspaceMembers(
+            employees.filter((employee) =>
+              employee.workspaces?.some(
+                (workspace) => workspace.id === membersWorkspaceId,
+              ),
+            ),
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setMembersError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load workspace members.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setMembersLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [membersWorkspaceId]);
 
   useEffect(() => {
     let active = true;
@@ -428,7 +469,70 @@ export default function Workspace() {
         </div>
       )}
 
-      {!showForm ? (
+      {membersWorkspaceId ? (
+        <section className="max-w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
+          <div className="flex flex-col gap-3 border-b border-gray-200 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                Team members
+                {workspaces.find((workspace) => workspace.id === membersWorkspaceId)
+                  ? ` — ${workspaces.find((workspace) => workspace.id === membersWorkspaceId)?.name}`
+                  : ""}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Members assigned to this workspace.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/workspace")}
+              className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              All workspaces
+            </button>
+          </div>
+          {membersError ? (
+            <p role="alert" className="p-5 text-sm text-red-600">
+              {membersError}
+            </p>
+          ) : membersLoading ? (
+            <p className="p-5 text-sm text-gray-500">
+              Loading team members…
+            </p>
+          ) : workspaceMembers.length === 0 ? (
+            <p className="p-5 text-sm text-gray-500">
+              No members are assigned to this workspace.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px] text-left text-sm">
+                <thead className="border-b border-gray-200 text-xs uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                  <tr>
+                    <th className="px-5 py-3 font-medium">Name</th>
+                    <th className="px-5 py-3 font-medium">Email</th>
+                    <th className="px-5 py-3 font-medium">Role</th>
+                    <th className="px-5 py-3 font-medium">Department</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {workspaceMembers.map((member) => (
+                    <tr key={member.id} className="text-gray-700 dark:text-gray-300">
+                      <td className="px-5 py-3">
+                        {member.display_name || member.employee_name || member.username}
+                      </td>
+                      <td className="px-5 py-3">
+                        {member.login_email || member.email}
+                      </td>
+                      <td className="px-5 py-3">{member.role || "—"}</td>
+                      <td className="px-5 py-3">{member.department || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : !showForm ? (
         <section className="max-w-full min-w-0 overflow-visible rounded-2xl border border-gray-200 bg-white shadow-theme-sm dark:border-gray-800 dark:bg-gray-dark">
           {/* Header */}
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">

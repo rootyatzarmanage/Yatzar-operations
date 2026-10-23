@@ -21,7 +21,7 @@
     },
     "items": {
       "dashboard": "Dashboard",
-      "ecommerceHome": "Teams",
+      "ecommerceHome": "Yatzar Team",
       "appPermission": "App Permission",
       "workspace": "Workspace",
       "contacts": "Contacts",
@@ -151,7 +151,7 @@
     "signOut": "Sign out"
   },
   "ecommerce": {
-    "title": "Teams",
+    "title": "Yatzar Team",
     "metrics": {
       "customers": "Customers",
       "orders": "Orders"

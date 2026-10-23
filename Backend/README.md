@@ -91,10 +91,11 @@ Future changes should be new revisions following this baseline. The baseline
 itself refuses destructive downgrades. Backups provide recovery across the
 consolidation boundary.
 
-Run migrations before starting the API. Startup now validates the schema instead
-of creating tables outside Alembic. `alembic heads` should report one head;
-`alembic current` after upgrading should report `20261022_calendar_events`,
-which adds calendar events and guests after the baseline.
+Run migrations before starting the API. Startup may create missing tables for
+local bootstrap, but it does not add missing columns to existing tables.
+`alembic heads` should report one head; `alembic current` after upgrading
+should report `20261023_workspace_mail_config`. The migrations after the
+baseline add calendar events and guests, followed by per-workspace mail settings.
 
 The `users` table stores login accounts and hashed passwords. The `employees` table stores employee details and links each Teams employee to one user account. Employee deletes are soft deletes and deactivate the linked account.
 Authentication uses an HttpOnly signed session cookie. Set `SESSION_SECRET` to a strong private value in `.env` before deployment.
