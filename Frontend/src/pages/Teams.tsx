@@ -979,16 +979,18 @@ export default function Teams() {
       current === null ? nextNumber + 1 : Math.max(current, nextNumber + 1),
     );
     setTeams(
-      records.map((employee) => ({
-        id: employee.id,
-        code: employee.employee_code,
-        name: employee.employee_name || employee.display_name || employee.username || "",
-        type: employee.employee_type || "",
-        department: employee.department || "",
-        location: employee.work_location || "",
-        status: employee.employment_status || "",
-        email: employee.login_email || employee.email || "",
-      })),
+      records
+        .filter((employee) => employee.status === 1)
+        .map((employee) => ({
+          id: employee.id,
+          code: employee.employee_code,
+          name: employee.employee_name || employee.display_name || employee.username || "",
+          type: employee.employee_type || "",
+          department: employee.department || "",
+          location: employee.work_location || "",
+          status: employee.employment_status || "",
+          email: employee.login_email || employee.email || "",
+        })),
     );
   };
 
