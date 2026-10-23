@@ -10,6 +10,7 @@ import {
   updateMeeting,
   type MeetingApi,
   type MeetingPayload,
+  type MeetingProvider,
 } from "@/api/meetings";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
@@ -17,6 +18,7 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
+import WorkspaceAssigneeField, { useWorkspaceMembers } from "@/components/activities/WorkspaceAssigneeField";
 
 type ParticipantType = "contact" | "lead" | "customer";
 
@@ -32,6 +34,8 @@ type Meeting = {
   title: string;
   venue: string;
   location: string;
+  meetingProvider: MeetingProvider | "";
+  meetingLink: string;
   allDay: boolean;
   from: string;
   to: string;
@@ -42,6 +46,7 @@ type Meeting = {
   participantsReminderTime: string;
   reminder: string;
   description: string;
+  assignedTo: string;
 };
 
 const sourceLabels: Record<ParticipantType, string> = {
@@ -51,6 +56,7 @@ const sourceLabels: Record<ParticipantType, string> = {
 };
 
 const venues = ["Client location", "In-office", "Online"];
+const meetingProviders: MeetingProvider[] = ["Google Meet", "Zoom", "Microsoft Teams", "Webex", "Skype", "Other"];
 const repeats = ["None", "Daily", "Weekly", "Monthly", "Yearly"];
 const participantReminders = ["None", "Email", "Popup", "Email and Popup"];
 const participantReminderTimes = [
@@ -96,6 +102,8 @@ function makeEmptyForm() {
     title: "New Meeting",
     venue: "Client location",
     location: "",
+    meetingProvider: "",
+    meetingLink: "",
     allDay: false,
     from,
     to,
@@ -106,6 +114,7 @@ function makeEmptyForm() {
     participantsReminderTime: "None",
     reminder: "15 minutes before",
     description: "",
+    assignedTo: "",
   };
 }
 
@@ -133,6 +142,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   const canUpdate = hasPermission(user, "Meetings", "update");
   const canDelete = hasPermission(user, "Meetings", "delete");
   const { currentWorkspace } = useWorkspace();
+  const workspaceMembers = useWorkspaceMembers();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -242,6 +252,8 @@ export default function Meetings({ embed }: EmbedProps = {}) {
       title: meeting.title,
       venue: meeting.venue ?? "",
       location: meeting.location ?? "",
+      meetingProvider: meeting.meeting_provider ?? "",
+      meetingLink: meeting.meeting_link ?? "",
       allDay: meeting.all_day,
       from: toFormDateTime(meeting.starts_at),
       to: toFormDateTime(meeting.ends_at),
@@ -253,7 +265,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
           person ?? {
             key,
             type: participant.type,
-            name: participant.id,
+            name: `Unknown ${sourceLabels[participant.type].toLowerCase()}`,
             email: "",
           }
         );
@@ -264,8 +276,19 @@ export default function Meetings({ embed }: EmbedProps = {}) {
       participantsReminderTime: meeting.reminder_type,
       reminder: meeting.reminder,
       description: meeting.description ?? "",
+      assignedTo: meeting.assigned_to ?? "",
     };
   }
+
+  useEffect(() => {
+    if (!people.length) return;
+    setMeetings((current) => current.map((meeting) => ({
+      ...meeting,
+      participants: meeting.participants.map((participant) =>
+        people.find((person) => person.key === participant.key) ?? participant,
+      ),
+    })));
+  }, [people]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -415,6 +438,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
     if (!canCreate) return;
     setEditingId(null);
     setForm(makeEmptyForm());
+    setForm((current) => ({ ...current, assignedTo: user?.id ?? "" }));
     setApiError("");
     setNotice("");
     setShowForm(true);
@@ -441,11 +465,18 @@ export default function Meetings({ embed }: EmbedProps = {}) {
   const handleSave = async (event: FormEvent) => {
     if (editingId ? !canUpdate : !canCreate) return;
     event.preventDefault();
+    if (form.venue === "Online" && !form.meetingProvider) {
+      setApiError("Select an online meeting platform.");
+      return;
+    }
 
     const payload: MeetingPayload = {
       title: form.title.trim(),
+      assigned_to: form.assignedTo || null,
       venue: form.venue || null,
       location: form.location.trim() || null,
+      meeting_provider: form.venue === "Online" ? form.meetingProvider || null : null,
+      meeting_link: form.venue === "Online" ? form.meetingLink.trim() || null : null,
       all_day: form.allDay,
       starts_at: toApiDateTime(form.from, form.allDay),
       ends_at: toApiDateTime(form.to, form.allDay),
@@ -704,9 +735,11 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                   <th className={thClass}>Title</th>
                   <th className={thClass}>From</th>
                   <th className={thClass}>To</th>
+                  <th className={thClass}>Platform</th>
                   <th className={thClass}>Related to</th>
                   <th className={thClass}>Contact Name</th>
-                  <th className={thClass}>Host</th>
+                  <th className={thClass}>Related To</th>
+                  <th className={thClass}>Assigned to</th>
                   {(canUpdate || canDelete) && <th className={thClass}>Actions</th>}
                 </tr>
               </thead>
@@ -735,6 +768,9 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                       {formatDateTime(m.to)}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
+                      {m.meetingProvider || "—"}
+                    </td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
                       {m.venue}
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
@@ -742,6 +778,9 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
                       {m.relatedTo || "—"}
+                    </td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
+                      {workspaceMembers.find((member) => member.id === m.assignedTo)?.name ?? (m.assignedTo === user?.id ? user?.display_name || user?.employee_name || user?.username : "—")}
                     </td>
                     {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center gap-1">
@@ -870,6 +909,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                   Title
                 </label>
                 <input
+                  maxLength={255}
                   id="meeting-title"
                   value={form.title}
                   onChange={(e) =>
@@ -880,24 +920,63 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                 />
               </div>
 
+              <WorkspaceAssigneeField
+                id="meeting-assigned-to"
+                value={form.assignedTo}
+                members={workspaceMembers}
+                onChange={(assignedTo) => setForm((current) => ({ ...current, assignedTo }))}
+              />
+
               {renderSelect("meeting-venue", "Meeting venue", form.venue, venues, (v) =>
-                setForm({ ...form, venue: v }),
+                setForm({ ...form, venue: v, meetingProvider: v === "Online" ? form.meetingProvider : "", meetingLink: v === "Online" ? form.meetingLink : "" }),
               )}
 
-              <div>
-                <label htmlFor="meeting-location" className={labelClass}>
-                  Location
-                </label>
-                <input
-                  id="meeting-location"
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
-                  placeholder="Enter location"
-                  className={inputClass}
-                />
-              </div>
+              {form.venue === "Online" && (
+                <>
+                  <div>
+                    <label htmlFor="meeting-provider" className={labelClass}>Online meeting platform</label>
+                    <select
+                      id="meeting-provider"
+                      value={form.meetingProvider}
+                      onChange={(event) => setForm({ ...form, meetingProvider: event.target.value as MeetingProvider | "" })}
+                      className={inputClass}
+                      required
+                    >
+                      <option value="">Select a platform</option>
+                      {meetingProviders.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="meeting-link" className={labelClass}>Meeting link</label>
+                    <input
+                      id="meeting-link"
+                      type="url"
+                      maxLength={1000}
+                      value={form.meetingLink}
+                      onChange={(event) => setForm({ ...form, meetingLink: event.target.value })}
+                      placeholder="https://..."
+                      className={inputClass}
+                    />
+                  </div>
+                </>
+              )}
+
+              {(form.venue === "Client location" || form.venue === "In-office") && (
+                <div>
+                  <label htmlFor="meeting-location" className={labelClass}>
+                    Location
+                  </label>
+                  <input
+                    id="meeting-location"
+                    value={form.location}
+                    onChange={(e) =>
+                      setForm({ ...form, location: e.target.value })
+                    }
+                    placeholder="Enter location"
+                    className={inputClass}
+                  />
+                </div>
+              )}
 
               <label className="flex items-center gap-2 self-center pt-7 text-sm text-gray-700 dark:text-gray-300">
                 <input
@@ -991,14 +1070,6 @@ export default function Meetings({ embed }: EmbedProps = {}) {
                   form.participantsReminder,
                   participantReminders,
                   (v) => setForm({ ...form, participantsReminder: v }),
-                )}
-                {renderSelect(
-                  "meeting-prt",
-                  "",
-                  form.participantsReminderTime,
-                  participantReminderTimes,
-                  (v) =>
-                    setForm({ ...form, participantsReminderTime: v }),
                 )}
               </div>
 

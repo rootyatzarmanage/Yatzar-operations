@@ -1,13 +1,13 @@
 import logging
 from uuid import UUID
-
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-
+ 
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+ 
+from yo.services.role import RoleService
 from yo.core.database import DatabaseSession
 from yo.core.exceptions import AppException
 from yo.core.schemas.responses import SuccessResponse
 from yo.core.auth.dependencies import CurrentUser
-from yo.core.auth.permissions import require_permission
 from yo.repositories.contact import ContactRepository
 from yo.schemas.requests.contact import (
     ContactCreateRequest,
@@ -18,23 +18,22 @@ from yo.schemas.responses.contact import (
     ContactResponse,
     ContactListResponse,
 )
-
+ 
 from yo.services.contact import ContactService
-
+ 
 logger = logging.getLogger(__name__)
-
+ 
 router = APIRouter(
     prefix="/contacts",
     tags=["Contacts"],
 )
-
-
+ 
+ 
 @router.get(
     "",
     response_model=SuccessResponse[ContactListResponse],
     status_code=status.HTTP_200_OK,
     summary="Get contacts, leads or customers",
-    dependencies=[Depends(require_permission("contacts", "view"))],
 )
 async def list_contacts(
     session: DatabaseSession,
@@ -48,6 +47,7 @@ async def list_contacts(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=5, ge=1, le=100),
 ) -> SuccessResponse[ContactListResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "view")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
@@ -58,7 +58,7 @@ async def list_contacts(
             page=page,
             per_page=per_page,
         )
-
+ 
         items = result["items"]
         total = result["total"]
         data = ContactListResponse(
@@ -70,7 +70,7 @@ async def list_contacts(
             page=page,
             per_page=per_page,
         )
-
+ 
         logger.info(
             "Contact records fetched successfully",
             extra={
@@ -79,7 +79,7 @@ async def list_contacts(
                 "page": page,
             },
         )
-
+ 
         return SuccessResponse(
             success=True,
             message=f"{stage.title()} records fetched successfully",
@@ -93,31 +93,33 @@ async def list_contacts(
             status_code=500,
             detail="Failed to fetch contact records.",
         )
-
+ 
 @router.post(
     "/{contact_id}/image",
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Upload contact image",
-    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def upload_contact_image(
     contact_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
     file: UploadFile = File(...),
 ) -> SuccessResponse[ContactResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "update")
     repository = ContactRepository(session)
     service = ContactService(repository)
-
-    contact = await service.get_by_id(contact_id, current_user.id)
-
+ 
+    contact = await service.get_by_id(contact_id, current_user.id, workspace_id)
+ 
     image_path = await service.save_contact_image(
         current_user.id,
         contact_id,
         file,
+        workspace_id,
     )
-
+ 
     await repository.update_by_id(
         contact_id,
         {
@@ -125,33 +127,33 @@ async def upload_contact_image(
             "updated_by": current_user.id,
         },
     )
-
-    contact = await service.get_by_id(contact_id, current_user.id)
-
+ 
+    contact = await service.get_by_id(contact_id, current_user.id, workspace_id)
+ 
     return SuccessResponse(
         success=True,
         message="Contact image uploaded successfully",
         data=ContactResponse.model_validate(contact),
     )
-
+ 
 @router.post(
     "",
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Create a contact",
-    dependencies=[Depends(require_permission("contacts", "create"))],
 )
 async def create_contact(
     payload: ContactCreateRequest,
     session: DatabaseSession,
     current_user: CurrentUser
 ) -> SuccessResponse[ContactResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "create")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
+ 
         contact = await service.create(payload, current_user.id)
-
+ 
         return SuccessResponse(
             success=True,
             message="Contact created successfully",
@@ -165,26 +167,27 @@ async def create_contact(
             status_code=500,
             detail="Failed to create contact.",
         )
-
-
+ 
+ 
 @router.get(
     "/{contact_id}",
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Get contact by ID",
-    dependencies=[Depends(require_permission("contacts", "view"))],
 )
 async def get_contact(
     contact_id: UUID,
     session: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[ContactResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "view")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
-        contact = await service.get_by_id(contact_id, current_user.id)
-
+ 
+        contact = await service.get_by_id(contact_id, current_user.id, workspace_id)
+ 
         return SuccessResponse(
             success=True,
             message="Contact fetched successfully",
@@ -201,31 +204,33 @@ async def get_contact(
             status_code=500,
             detail="Failed to fetch contact.",
         )
-
-
+ 
+ 
 @router.put(
     "/{contact_id}",
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Update a contact",
-    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def update_contact(
     contact_id: UUID,
     payload: ContactUpdateRequest,
     session: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[ContactResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "update")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
+ 
         contact = await service.update(
             contact_id,
             payload,
             current_user.id,
+            workspace_id,
         )
-
+ 
         return SuccessResponse(
             success=True,
             message="Contact updated successfully",
@@ -242,30 +247,32 @@ async def update_contact(
             status_code=500,
             detail="Failed to update contact.",
         )
-
-
+ 
+ 
 @router.post(
     "/{contact_id}/move-to-lead",
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Move contact to leads",
-    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def move_to_lead(
     contact_id: UUID,
     session: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[ContactResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "update")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
+ 
         contact = await service.move_to(
             contact_id,
             "lead",
             current_user.id,
+            workspace_id,
         )
-
+ 
         return SuccessResponse(
             success=True,
             message="Contact moved to leads successfully",
@@ -279,30 +286,32 @@ async def move_to_lead(
             status_code=500,
             detail="Failed to move contact to lead.",
         )
-
-
+ 
+ 
 @router.post(
     "/{contact_id}/move-to-customer",
     response_model=SuccessResponse[ContactResponse],
     status_code=status.HTTP_200_OK,
     summary="Move contact to customers",
-    dependencies=[Depends(require_permission("contacts", "update"))],
 )
 async def move_to_customer(
     contact_id: UUID,
     session: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[ContactResponse]:
+    await RoleService(session).check_permission(current_user, "contacts", "update")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
+ 
         contact = await service.move_to(
             contact_id,
             "customer",
             current_user.id,
+            workspace_id,
         )
-
+ 
         return SuccessResponse(
             success=True,
             message="Contact moved to customers successfully",
@@ -316,29 +325,31 @@ async def move_to_customer(
             status_code=500,
             detail="Failed to move contact to customer.",
         )
-
-
+ 
+ 
 @router.post(
     "/bulk-delete",
     response_model=SuccessResponse[dict[str, int]],
     status_code=status.HTTP_200_OK,
     summary="Bulk delete contacts",
-    dependencies=[Depends(require_permission("contacts", "delete"))],
 )
 async def bulk_delete_contacts(
     payload: ContactBulkDeleteRequest,
     session: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[dict[str, int]]:
+    await RoleService(session).check_permission(current_user, "contacts", "delete")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
+ 
         deleted = await service.bulk_delete(
             payload.ids,
             current_user.id,
+            workspace_id,
         )
-
+ 
         return SuccessResponse(
             success=True,
             message="Contacts deleted successfully",
@@ -352,26 +363,27 @@ async def bulk_delete_contacts(
             status_code=500,
             detail="Failed to bulk delete contacts.",
         )
-
-
+ 
+ 
 @router.delete(
     "/{contact_id}",
     response_model=SuccessResponse[dict[str, str]],
     status_code=status.HTTP_200_OK,
     summary="Delete a contact",
-    dependencies=[Depends(require_permission("contacts", "delete"))],
 )
 async def delete_contact(
     contact_id: UUID,
     session: DatabaseSession,
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[dict[str, str]]:
+    await RoleService(session).check_permission(current_user, "contacts", "delete")
     try:
         repository = ContactRepository(session)
         service = ContactService(repository)
-
-        await service.delete(contact_id, current_user.id)
-
+ 
+        await service.delete(contact_id, current_user.id, workspace_id)
+ 
         return SuccessResponse(
             success=True,
             message="Contact deleted successfully",

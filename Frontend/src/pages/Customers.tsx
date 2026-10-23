@@ -18,6 +18,17 @@ import type { EmbedProps } from "@/components/records/embed";
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
 const text = (value: string | boolean | undefined) => String(value ?? "");
 const customerName = (c: CustomerRecord) => `${text(c.firstName)} ${text(c.lastName)}`.trim();
+const purchasedProducts = (value: string | boolean | undefined) => {
+  try {
+    const parsed: unknown = JSON.parse(text(value) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is { name: string; quantity?: number } =>
+      typeof item === "object" && item !== null && typeof item.name === "string" && item.name.trim().length > 0,
+    );
+  } catch {
+    return [];
+  }
+};
 
 const columns: Column<CustomerRecord>[] = [
   { header: "Customer ID", render: (r) => text(r.customerId) || "—" },
@@ -26,17 +37,23 @@ const columns: Column<CustomerRecord>[] = [
   { header: "Phone", render: (r) => text(r.phone) || "—" },
   { header: "Department", render: (r) => text(r.department) || "—" },
   { header: "Lead Source", render: (r) => text(r.leadSource) || "—" },
+  { header: "Purchased Products", render: (r) => {
+    const products = purchasedProducts(r.purchasedProducts);
+    return products.length
+      ? <span>{products.map((product) => `${product.name} × ${product.quantity ?? 1}`).join(", ")}</span>
+      : "—";
+  } },
 ];
 
 const addressFields = (prefix: "" | "other"): FieldDef[] => {
   const k = (name: string) => (prefix ? `${prefix}${name}` : name[0].toLowerCase() + name.slice(1));
   return [
-    { key: k("AddressLine1"), label: "Flat / House no. / Building", required: true },
+    { key: k("AddressLine1"), label: "Flat / House no. / Building" },
     { key: k("AddressLine2"), label: "Street address" },
-    { key: k("City"), label: "City", required: true },
-    { key: k("State"), label: "State", required: true },
-    { key: k("Country"), label: "Country", required: true },
-    { key: k("Pincode"), label: "Pincode", required: true },
+    { key: k("City"), label: "City" },
+    { key: k("State"), label: "State" },
+    { key: k("Country"), label: "Country" },
+    { key: k("Pincode"), label: "Pincode" },
   ];
 };
 
@@ -80,17 +97,22 @@ export default function Customers({ embed }: EmbedProps = {}) {
       {
         title: "Customer information",
         fields: [
-          { key: "firstName", label: "First name", required: true, placeholder: "Enter first name" },
-          { key: "lastName", label: "Last name", placeholder: "Enter last name" },
+          { key: "firstName", label: "First name", maxLength: 100, placeholder: "Enter first name" },
+          { key: "lastName", label: "Last name", maxLength: 100, placeholder: "Enter last name" },
           { key: "email", label: "Email", type: "email", placeholder: "name@example.com" },
-          { key: "phone", label: "Phone", type: "tel", required: true },
+          { key: "phone", label: "Phone", type: "tel", maxDigits: 10 },
           { key: "otherPhone", label: "Other phone", type: "tel" },
-          { key: "department", label: "Department" },
-          { key: "leadSource", label: "Lead source", type: "select", required: true, options: sources, placeholder: "Select lead source" },
+          { key: "department", label: "Department", maxLength: 150 },
+          { key: "leadSource", label: "Lead source", type: "select", maxLength: 100, options: sources, placeholder: "Select lead source" },
         ],
       },
       { title: "Address", subtitle: "Mailing address", fields: addressFields("") },
       { title: "Other address", fields: addressFields("other") },
+      {
+        title: "Purchased products",
+        subtitle: "Products purchased by this customer",
+        fields: [{ key: "purchasedProducts", label: "Products", type: "purchased-products" }],
+      },
     ],
     [sources],
   );
@@ -109,7 +131,7 @@ export default function Customers({ embed }: EmbedProps = {}) {
       searchPlaceholder="Search customers"
       sections={sections}
       columns={columns}
-      searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource)]}
+      searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource), ...purchasedProducts(r.purchasedProducts).map((product) => product.name)]}
       recordName={customerName}
       store={store}
       showExport={false}

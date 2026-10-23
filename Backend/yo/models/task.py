@@ -16,7 +16,6 @@ def utcnow():
 class Task(Base):
     __tablename__ = "tasks"
 
-    # Existing unassigned rows remain hidden until explicitly backfilled.
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=True, index=True,
@@ -26,6 +25,7 @@ class Task(Base):
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     task_owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     contact_selection: Mapped[dict] = mapped_column(JSONB,default=lambda: {"selection_type": "name","tag_id": None,"contact_ids": []},nullable=False)
     account: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="Not Started", nullable=False)

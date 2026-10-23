@@ -13,6 +13,7 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { EmbedProps } from "@/components/records/embed";
+import WorkspaceAssigneeField, { useWorkspaceMembers } from "@/components/activities/WorkspaceAssigneeField";
 
 type CallType = "Outbound" | "Inbound" | "Missed";
 type CallStatus = "Completed" | "Scheduled" | "Missed";
@@ -31,6 +32,8 @@ type Call = {
   contactId: string;
   contactName: string;
   owner: string;
+  assignedToId: string;
+  assignedTo: string;
   voiceRecording: string;
   reminder: string;
   purpose: string;
@@ -103,6 +106,7 @@ const emptyForm = {
   reminder: "None",
   purpose: "-None-",
   agenda: "",
+  assignedTo: "",
 };
 
 type FormErrors = { contactId?: string; startTime?: string; duration?: string };
@@ -113,6 +117,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
   const canUpdate = hasPermission(user, "Calls", "update");
   const canDelete = hasPermission(user, "Calls", "delete");
   const { currentWorkspace } = useWorkspace();
+  const workspaceMembers = useWorkspaceMembers();
   const callOwner = user?.display_name || user?.employee_name || user?.username || "";
 
   const [calls, setCalls] = useState<Call[]>([]);
@@ -141,7 +146,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
       .catch((error: unknown) =>
         setApiError(error instanceof Error ? error.message : "Unable to load calls."),
       );
-  }, [currentWorkspace?.id]);
+  }, [currentWorkspace?.id, workspaceMembers]);
 
   function fromApiCall(call: CallApi, availableContacts: Contact[]): Call {
     const contact = availableContacts.find((item) => item.id === call.contact_id);
@@ -160,7 +165,9 @@ export default function Calls({ embed }: EmbedProps = {}) {
       account: call.related_to ?? "",
       contactId: call.contact_id,
       contactName: contact ? contactFullName(contact) : "",
-      owner: callOwner,
+      owner: workspaceMembers.find((member) => member.id === call.created_by)?.name ?? (call.created_by === user?.id ? callOwner : call.created_by ? "Unknown user" : callOwner),
+      assignedToId: call.assigned_to ?? "",
+      assignedTo: workspaceMembers.find((member) => member.id === call.assigned_to)?.name ?? (call.assigned_to === user?.id ? callOwner : ""),
       voiceRecording: call.voice_recording ?? "",
       reminder: call.reminder ?? "None",
       purpose: call.call_purpose ?? "-None-",
@@ -229,6 +236,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
       ...emptyForm,
       startTime: nowLocal(),
       status: kind === "schedule" ? "Scheduled" : "Completed",
+      assignedTo: user?.id ?? "",
     });
     setView(kind);
   };
@@ -253,6 +261,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
       reminder: call.reminder,
       purpose: call.purpose,
       agenda: call.agenda,
+      assignedTo: call.assignedToId,
     });
     setView(call.kind);
   };
@@ -299,6 +308,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
       setApiError("");
       const payload: CallPayload = {
         contact_id: form.contactId,
+        assigned_to: form.assignedTo || null,
         subject: subjectValue.trim() || defaultSubject(isSchedule ? "schedule" : "log", form.callType, selectedName),
         call_type: isSchedule ? "Outbound" : form.callType,
         call_status: isSchedule ? "Scheduled" : form.status,
@@ -450,6 +460,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
                   <th className={thClass}>Related to</th>
                   <th className={thClass}>Contact name</th>
                   <th className={thClass}>Call owner</th>
+                  <th className={thClass}>Assigned to</th>
                   {(canUpdate || canDelete) && <th className={thClass}>Actions</th>}
                 </tr>
               </thead>
@@ -467,6 +478,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.account || "—"}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.contactName || "—"}</td>
                     <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.owner || callOwner}</td>
+                    <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">{call.assignedTo || "—"}</td>
                     {(canUpdate || canDelete) && <td className="px-3 py-4 sm:px-5">
                       <div className="flex items-center gap-1">
                         {canUpdate && <button type="button" onClick={() => openEdit(call)} title="Edit" aria-label="Edit" className="rounded-md p-1.5 text-brand-500 hover:bg-brand-50">
@@ -541,6 +553,13 @@ export default function Calls({ embed }: EmbedProps = {}) {
                 </select>
                 {errors.contactId && <p className="mt-1 text-xs text-red-600">{errors.contactId}</p>}
               </div>
+
+              <WorkspaceAssigneeField
+                id="call-assigned-to"
+                value={form.assignedTo}
+                members={workspaceMembers}
+                onChange={(assignedTo) => setForm((current) => ({ ...current, assignedTo }))}
+              />
 
               {/* Related to */}
               <div>
@@ -642,6 +661,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
                 <div>
                   <label htmlFor="call-subject" className={labelClass}>Subject</label>
                   <input
+                  maxLength={255}
                     id="call-subject"
                     value={subjectValue}
                     onChange={(e) => setForm({ ...form, subject: e.target.value, subjectEdited: true })}

@@ -6,10 +6,11 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import ForeignKey
 from yo.core.database.base import Base
@@ -17,8 +18,10 @@ from yo.core.database.base import Base
 
 class Contact(Base):
     __tablename__ = "contacts"
+    __table_args__ = (Index("uq_contacts_customer_id", "customer_id", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
+    customer_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True),ForeignKey("workspaces.id"),nullable=True,index=True)
     owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True),ForeignKey("users.id"),nullable=True,index=True)
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -49,6 +52,7 @@ class Contact(Base):
     other_building: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     email_opt_out: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    purchased_products: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
     stage: Mapped[str] = mapped_column(String(20),default="contact",nullable=False,index=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True),ForeignKey("users.id"),nullable=True)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True),ForeignKey("users.id"),nullable=True)

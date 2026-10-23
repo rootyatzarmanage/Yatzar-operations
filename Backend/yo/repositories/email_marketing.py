@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yo.repositories.workspace import WorkspaceRepository
 
 from yo.models.contact import Contact
+from yo.models.tag import Tag
 from yo.repositories.contact import ContactRepository
 from yo.models.email_marketing import EmailMarketing, EmailMarketingRecipient
 
@@ -16,13 +17,15 @@ class EmailMarketingRepository:
         self.session = session
         self.workspace_id = workspace_id
 
-    async def get_campaign(self, campaign_id: UUID):
-        result = await self.session.execute(
-            select(EmailMarketing).where(
-                EmailMarketing.id == campaign_id,
-                EmailMarketing.deleted_at.is_(None), or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
-            )
+    async def get_campaign(self, campaign_id: UUID, *, for_update: bool = False):
+        query = select(EmailMarketing).where(
+            EmailMarketing.id == campaign_id,
+            EmailMarketing.deleted_at.is_(None),
+            or_(self.workspace_id is None, EmailMarketing.workspace_id == self.workspace_id),
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def list_campaigns(
@@ -113,6 +116,7 @@ class EmailMarketingRepository:
                 email_marketing_id=campaign_id,
                 user_id=recipient.get("user_id"),
                 email=recipient["email"],
+                is_enabled=recipient.get("is_enabled", True),
             )
             objects.append(obj)
 
@@ -122,15 +126,21 @@ class EmailMarketingRepository:
 
         return objects
 
-    async def get_recipients_by_tag(
+    async def get_active_tag_ids(self, tag_ids: list[UUID]) -> set[UUID]:
+        return set(await self.session.scalars(select(Tag.id).where(
+            Tag.id.in_(tag_ids), Tag.deleted_at.is_(None), Tag.status == 1,
+        )))
+
+    async def get_recipients_by_tags(
         self,
-        tag_id: UUID,
+        tag_ids: list[UUID],
         selection_mode: str,
         selected_contact_ids: list[UUID],
         *, user_id: UUID,
     ) -> list[dict]:
-        query = select(Contact.id, Contact.email).where(
-            Contact.tag_id == tag_id,
+        query = select(Contact.id, Contact.email).join(Tag, Tag.id == Contact.tag_id).where(
+            Contact.tag_id.in_(tag_ids),
+            Tag.deleted_at.is_(None), Tag.status == 1,
             Contact.workspace_id == self.workspace_id,
             ContactRepository.access_condition(user_id),
             Contact.deleted_at.is_(None),
@@ -138,13 +148,12 @@ class EmailMarketingRepository:
             Contact.email_opt_out.is_(False),
             func.length(func.trim(Contact.email)) > 0,
         )
-        if selection_mode == "selected":
-            query = query.where(Contact.id.in_(selected_contact_ids))
+        query = query.order_by(Contact.created_at, Contact.id)
         result = await self.session.execute(query)
-        # The existing recipient user_id is an opaque tracking UUID, without a
-        # users FK. Bulk campaigns use the selected contact's UUID here.
+        enabled_ids = set(selected_contact_ids)
         return [
-            {"user_id": contact_id, "email": email.strip()}
+            {"user_id": contact_id, "email": email.strip().lower(),
+             "is_enabled": selection_mode == "all" or contact_id in enabled_ids}
             for contact_id, email in result.all()
         ]
 

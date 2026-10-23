@@ -10,8 +10,11 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 export type FieldDef = {
   key: string;
   label: string;
-  type?: "text" | "email" | "tel" | "number" | "date" | "select" | "textarea" | "checkbox";
+  type?: "text" | "email" | "tel" | "number" | "date" | "select" | "textarea" | "checkbox" | "purchased-products";
   required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  maxDigits?: number;
   options?: string[];
   placeholder?: string;
   defaultValue?: string;
@@ -49,6 +52,28 @@ const toneClass = {
   emerald:
     "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
 };
+
+type PurchasedProductValue = {
+  name: string;
+  quantity: number;
+  purchased_on: string;
+};
+
+function readPurchasedProducts(value: string): PurchasedProductValue[] {
+  try {
+    const parsed: unknown = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+      .map((item) => ({
+        name: typeof item.name === "string" ? item.name : "",
+        quantity: typeof item.quantity === "number" && item.quantity >= 1 ? item.quantity : 1,
+        purchased_on: typeof item.purchased_on === "string" ? item.purchased_on : "",
+      }));
+  } catch {
+    return [];
+  }
+}
 const toolBtn =
   "inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5";
 
@@ -332,7 +357,13 @@ export default function RecordPage<T extends StoredRecord>({
       subtitle: section.subtitle,
       items: section.fields.map((f) => ({
         label: f.label,
-        value: f.type === "checkbox" ? (record[f.key] ? "Yes" : "No") : String(record[f.key] ?? ""),
+        value: f.type === "checkbox"
+          ? (record[f.key] ? "Yes" : "No")
+          : f.type === "purchased-products"
+            ? readPurchasedProducts(String(record[f.key] ?? "[]"))
+                .map((product) => `${product.name || "Unnamed product"} × ${product.quantity}${product.purchased_on ? ` (${product.purchased_on})` : ""}`)
+                .join(", ")
+            : String(record[f.key] ?? ""),
       })),
     }));
 
@@ -367,18 +398,34 @@ export default function RecordPage<T extends StoredRecord>({
     setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
+  const validateField = (field: FieldDef, rawValue: string) => {
+    const value = rawValue.trim();
+    if (field.required && !value) return `${field.label} is required.`;
+    if (!value) return undefined;
+    if (field.type === "email" && !emailPattern.test(value)) {
+      return "Enter a valid email address.";
+    }
+    if (field.maxDigits && /\D/.test(value)) {
+      return `Enter digits only (up to ${field.maxDigits}).`;
+    }
+    if (field.maxDigits && value.length > field.maxDigits) {
+      return `Enter no more than ${field.maxDigits} digits.`;
+    }
+    if (field.maxLength && value.length > field.maxLength) {
+      return `Use ${field.maxLength} characters or fewer.`;
+    }
+    if (field.minLength && value.length < field.minLength) {
+      return `Enter at least ${field.minLength} characters.`;
+    }
+    return field.validate?.(value);
+  };
+
   const validate = () => {
     const found: Record<string, string | undefined> = {};
     for (const field of allFields) {
       if (field.type === "checkbox") continue;
       const value = String(values[field.key] ?? "").trim();
-      if (field.required && !value) {
-        found[field.key] = `${field.label} is required.`;
-      } else if (value && field.type === "email" && !emailPattern.test(value)) {
-        found[field.key] = "Enter a valid email address.";
-      } else if (value && field.validate) {
-        found[field.key] = field.validate(value);
-      }
+      found[field.key] = validateField(field, value);
     }
     return found;
   };
@@ -468,6 +515,63 @@ export default function RecordPage<T extends StoredRecord>({
     }
 
     const current = String(values[field.key] ?? "");
+    if (field.type === "purchased-products") {
+      const products = readPurchasedProducts(current);
+      const updateProducts = (next: PurchasedProductValue[]) =>
+        setField(field.key, JSON.stringify(next));
+      return (
+        <div key={field.key} className="md:col-span-2">
+          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {field.label}
+          </label>
+          <div className="space-y-3">
+            {products.map((product, index) => (
+              <div key={index} className="grid gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-800 sm:grid-cols-[minmax(0,2fr)_minmax(5rem,0.7fr)_minmax(9rem,1fr)_auto]">
+                <input
+                  value={product.name}
+                  onChange={(event) => updateProducts(products.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
+                  placeholder="Product name"
+                  aria-label={`Purchased product ${index + 1} name`}
+                  className={inputClass}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={100000}
+                  value={product.quantity}
+                  onChange={(event) => updateProducts(products.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Number(event.target.value) } : item))}
+                  aria-label={`Purchased product ${index + 1} quantity`}
+                  className={inputClass}
+                />
+                <input
+                  type="date"
+                  value={product.purchased_on}
+                  onChange={(event) => updateProducts(products.map((item, itemIndex) => itemIndex === index ? { ...item, purchased_on: event.target.value } : item))}
+                  aria-label={`Purchased product ${index + 1} purchase date`}
+                  className={inputClass}
+                />
+                <button
+                  type="button"
+                  onClick={() => updateProducts(products.filter((_, itemIndex) => itemIndex !== index))}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-error-600 hover:bg-error-50 dark:text-error-400 dark:hover:bg-error-500/10"
+                  aria-label={`Remove purchased product ${index + 1}`}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => updateProducts([...products, { name: "", quantity: 1, purchased_on: "" }])}
+            className="mt-3 inline-flex h-9 items-center rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            + Add product
+          </button>
+        </div>
+      );
+    }
+
     let control: ReactNode;
     if (field.type === "select") {
       const options = [...new Set([...(field.options ?? []), current])].filter(Boolean);
@@ -495,6 +599,10 @@ export default function RecordPage<T extends StoredRecord>({
           value={current}
           placeholder={field.placeholder}
           onChange={(event) => setField(field.key, event.target.value)}
+          onBlur={() => setErrors((currentErrors) => ({
+            ...currentErrors,
+            [field.key]: validateField(field, String(values[field.key] ?? "")),
+          }))}
           className={`${inputClass}${errorClass}`}
         />
       );
@@ -507,6 +615,10 @@ export default function RecordPage<T extends StoredRecord>({
           value={current}
           placeholder={field.placeholder}
           onChange={(event) => setField(field.key, event.target.value)}
+          onBlur={() => setErrors((currentErrors) => ({
+            ...currentErrors,
+            [field.key]: validateField(field, String(values[field.key] ?? "")),
+          }))}
           aria-invalid={Boolean(error)}
           className={`${inputClass}${errorClass}`}
         />

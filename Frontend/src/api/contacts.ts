@@ -67,10 +67,18 @@ export type ContactPayload = {
   other_zip: string | null;
   other_building: string | null;
   other_street: string | null;
+  purchased_products?: PurchasedProduct[];
+};
+
+export type PurchasedProduct = {
+  name: string;
+  quantity: number;
+  purchased_on: string | null;
 };
 
 export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   id: string;
+  customer_id?: string | null;
   first_name: string | null;
   email: string | null;
   phone: string | null;
@@ -82,6 +90,7 @@ export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   updated_by: string | null;
   created_at: string;
   updated_at: string | null;
+  purchased_products: PurchasedProduct[];
 };
 
 export type ContactStage = Contact["stage"];
@@ -131,7 +140,9 @@ export function getContactPhotoUrl(photo: string | null): string {
   if (!photo) return "";
   if (/^https?:\/\//i.test(photo)) return photo;
 
-  const backendOrigin = API_BASE.replace(/\/api\/v1\/?$/, "");
+  const backendOrigin = API_BASE.startsWith("/")
+    ? ""
+    : API_BASE.replace(/\/api\/v1\/?$/, "");
   return `${backendOrigin}/${photo.replace(/^\/+/, "")}`;
 }
 
@@ -201,8 +212,12 @@ export function uploadContactPhoto(
 export function moveContact(
   contactId: string,
   stage: Exclude<ContactStage, "contact">,
+  workspaceId?: string,
 ): Promise<Contact> {
-  return request<Contact>(`/contacts/${contactId}/move-to-${stage}`, {
+  const query = workspaceId
+    ? `?workspace_id=${encodeURIComponent(workspaceId)}`
+    : "";
+  return request<Contact>(`/contacts/${contactId}/move-to-${stage}${query}`, {
     method: "POST",
   });
 }

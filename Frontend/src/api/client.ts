@@ -3,6 +3,10 @@ import { workspaceStorageKey } from "@/context/WorkspaceContext";
 const TOKEN_KEY = "yatzar_auth_token";
 
 function getApiBase(): string {
+  // Use Vite's same-origin proxy in development so the browser never makes
+  // cross-origin API requests to the local backend.
+  if (import.meta.env.DEV) return "/api/v1";
+
   const directUrl = import.meta.env.VITE_API_URL;
   if (directUrl) {
     const normalized = directUrl.replace(/\/+$/, "");
@@ -67,7 +71,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const workspaceId = getStoredWorkspaceId();
   if (workspaceId) {
     const url = new URL(`${API_BASE}${path}`, window.location.origin);
-    const apiPathPrefix = new URL(API_BASE).pathname.replace(/\/+$/, "");
+    const apiPathPrefix = new URL(API_BASE, window.location.origin).pathname.replace(/\/+$/, "");
     const pathname = apiPathPrefix && url.pathname.startsWith(apiPathPrefix)
       ? url.pathname.slice(apiPathPrefix.length) || "/"
       : url.pathname;
@@ -79,6 +83,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       "/campaigns",
       "/event-webinars",
       "/email-marketing",
+      "/calendar-events",
     ];
     const root = roots.find(
       (candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`),
@@ -99,6 +104,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         "/campaigns",
         "/event-webinars",
         "/email-marketing",
+        "/calendar-events",
       ];
       if (
         createRoots.includes(root) &&
@@ -140,7 +146,21 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   });
 
-  const body = (await response.json()) as ApiEnvelope<T> | ApiError;
+  const responseText = await response.text();
+  let body: ApiEnvelope<T> | ApiError;
+  try {
+    body = JSON.parse(responseText) as ApiEnvelope<T> | ApiError;
+  } catch {
+    if (response.status === 401) {
+      setAuthToken(null);
+    }
+    const responseDetail = responseText.trim().slice(0, 500);
+    throw new Error(
+      responseDetail
+        ? `Request failed (${response.status} ${response.statusText}): ${responseDetail}`
+        : `Request failed (${response.status} ${response.statusText})`,
+    );
+  }
 
   if (!response.ok) {
     if (response.status === 401) {

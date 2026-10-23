@@ -5,6 +5,7 @@ export type TaskApi = {
   subject: string;
   due_date: string | null;
   task_owner_id: string;
+  assigned_to: string | null;
   contact_selection: ContactSelectionApi;
   account: string | null;
   status: string;
@@ -26,6 +27,7 @@ export type ContactSelectionApi = {
 
 export type TaskPayload = {
   subject: string;
+  assigned_to?: string | null;
   due_date?: string | null;
   contact_selection?: ContactSelectionApi;
   account?: string | null;

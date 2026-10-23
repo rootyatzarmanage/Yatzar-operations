@@ -43,9 +43,72 @@ type Field = {
   label: string;
   type?: string;
   required?: boolean;
+  maxLength?: number;
+  minLength?: number;
+  maxDigits?: number;
   options?: string[];
   description?: string;
 };
+
+const employeeFieldConstraints: Record<string, Pick<Field, "maxLength" | "minLength" | "maxDigits">> = {
+  employee_name: { maxLength: 150 },
+  display_name: { maxLength: 150 },
+  employee_type: { maxLength: 50 },
+  gender: { maxLength: 20 },
+  blood_group: { maxLength: 10 },
+  marital_status: { maxLength: 30 },
+  mobile_number: { maxLength: 30, maxDigits: 10 },
+  alternate_phone: { maxLength: 30, maxDigits: 10 },
+  email: { maxLength: 255 },
+  emergency_contact_name: { maxLength: 150 },
+  emergency_contact_number: { maxLength: 30, maxDigits: 10 },
+  address_line1: { maxLength: 255 },
+  address_line2: { maxLength: 255 },
+  country: { maxLength: 100 },
+  state: { maxLength: 100 },
+  district: { maxLength: 100 },
+  pincode: { maxLength: 20 },
+  permanent_address_line1: { maxLength: 255 },
+  permanent_address_line2: { maxLength: 255 },
+  permanent_country: { maxLength: 100 },
+  permanent_state: { maxLength: 100 },
+  permanent_district: { maxLength: 100 },
+  permanent_pincode: { maxLength: 20 },
+  department: { maxLength: 100 },
+  designation: { maxLength: 100 },
+  reporting_manager: { maxLength: 150 },
+  work_location: { maxLength: 150 },
+  employment_status: { maxLength: 50 },
+  aadhar_number: { maxLength: 30 },
+  pan_number: { maxLength: 20 },
+  uan_number: { maxLength: 30 },
+  bank_name: { maxLength: 150 },
+  account_number: { maxLength: 50 },
+  ifsc_code: { maxLength: 20 },
+  experience: { maxLength: 100 },
+  username: { minLength: 3, maxLength: 100 },
+  login_email: { maxLength: 255 },
+  password: { minLength: 8, maxLength: 128 },
+  role: { maxLength: 50 },
+};
+
+function employeeFieldError(name: string, value: string) {
+  const constraints = employeeFieldConstraints[name];
+  if (!constraints || !value) return "";
+  if (constraints.maxDigits && /\D/.test(value)) {
+    return `${name === "mobile_number" ? "Mobile number" : name === "alternate_phone" ? "Alternate phone" : "Emergency contact number"} must contain digits only.`;
+  }
+  if (constraints.maxDigits && value.length > constraints.maxDigits) {
+    return `Enter no more than ${constraints.maxDigits} digits.`;
+  }
+  if (constraints.maxLength && value.length > constraints.maxLength) {
+    return `Use ${constraints.maxLength} characters or fewer.`;
+  }
+  if (constraints.minLength && value.length < constraints.minLength) {
+    return `Enter at least ${constraints.minLength} characters.`;
+  }
+  return "";
+}
 type WorkspaceOption = Pick<Workspace, "id" | "name">;
 type Team = {
   id: string;
@@ -126,14 +189,14 @@ const fieldGroups: {
       {
         name: "mobile_number",
         label: "Mobile number",
-        type: "number",
+        type: "tel",
         required: true,
         description: "Primary contact number",
       },
       {
         name: "alternate_phone",
         label: "Alternate phone",
-        type: "number",
+        type: "tel",
       },
       {
         name: "email",
@@ -149,7 +212,7 @@ const fieldGroups: {
       {
         name: "emergency_contact_number",
         label: "Emergency contact number",
-        type: "number",
+        type: "tel",
       },
     ],
   },
@@ -762,8 +825,13 @@ function FieldControl({
             <h4 className="text-sm font-semibold text-gray-800 md:col-span-2 dark:text-white/90">
               Permanent address
             </h4>
-            {permanentFields.map((addressField) => (
-              <label key={addressField.name}>
+            {permanentFields.map((addressField) => {
+              const error = employeeFieldError(
+                addressField.name,
+                addressValues[addressField.name] ?? "",
+              );
+              return (
+                <label key={addressField.name}>
                 <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {addressField.label}
                   {addressField.required && (
@@ -776,10 +844,13 @@ function FieldControl({
                   onValueChange={(nextValue) =>
                     onAddressValueChange?.(addressField.name, nextValue)
                   }
+                  hasError={Boolean(error)}
                   optionsOverride={optionsOverrides?.[addressField.name]}
                 />
-              </label>
-            ))}
+                  {error && <span className="mt-1 block text-xs text-error-500">{error}</span>}
+                </label>
+              );
+            })}
           </div>
         )}
       </div>
@@ -817,6 +888,7 @@ function FieldControl({
   return (
     <input
       type={field.type || "text"}
+      inputMode={field.type === "tel" ? "numeric" : undefined}
       readOnly={field.name === "employee_code"}
       value={value}
       onChange={(event) => onValueChange(event.target.value)}
@@ -907,16 +979,18 @@ export default function Teams() {
       current === null ? nextNumber + 1 : Math.max(current, nextNumber + 1),
     );
     setTeams(
-      records.map((employee) => ({
-        id: employee.id,
-        code: employee.employee_code,
-        name: employee.employee_name || employee.display_name || employee.username || "",
-        type: employee.employee_type || "",
-        department: employee.department || "",
-        location: employee.work_location || "",
-        status: employee.employment_status || "",
-        email: employee.login_email || employee.email || "",
-      })),
+      records
+        .filter((employee) => employee.status === 1)
+        .map((employee) => ({
+          id: employee.id,
+          code: employee.employee_code,
+          name: employee.employee_name || employee.display_name || employee.username || "",
+          type: employee.employee_type || "",
+          department: employee.department || "",
+          location: employee.work_location || "",
+          status: employee.employment_status || "",
+          email: employee.login_email || employee.email || "",
+        })),
     );
   };
 
@@ -1047,8 +1121,12 @@ export default function Teams() {
   const handleCreate = async () => {
     if (editingCode ? !canUpdate : !canCreate) return;
     const requiredErrors: Record<string, boolean> = {};
+    const lengthErrors: Record<string, boolean> = {};
     fieldGroups.forEach((group) => {
       group.fields.forEach((field) => {
+        if (field.name !== "employee_code" && employeeFieldError(field.name, formValues[field.name] ?? "")) {
+          lengthErrors[field.name] = true;
+        }
         if (!field.required || field.name === "employee_code") return;
         if (editingCode && field.name === "password") return;
         if (field.name === "permanent_address") {
@@ -1074,9 +1152,25 @@ export default function Teams() {
           requiredErrors[field.name] = true;
       });
     });
-    setValidationErrors(requiredErrors);
+    if (isDifferentAddress) {
+      [
+        "permanent_address_line1",
+        "permanent_address_line2",
+        "permanent_country",
+        "permanent_state",
+        "permanent_district",
+        "permanent_pincode",
+      ].forEach((name) => {
+        if (employeeFieldError(name, formValues[name] ?? "")) {
+          lengthErrors[name] = true;
+          lengthErrors.permanent_address = true;
+        }
+      });
+    }
+    const formErrors = { ...requiredErrors, ...lengthErrors };
+    setValidationErrors(formErrors);
     const firstInvalidTab = fieldGroups.findIndex((group) =>
-      group.fields.some((field) => requiredErrors[field.name]),
+      group.fields.some((field) => formErrors[field.name]),
     );
     if (firstInvalidTab >= 0) {
       setActiveTab(firstInvalidTab);
@@ -1173,6 +1267,26 @@ export default function Teams() {
     setSuccessMessage("");
     setActiveTab(0);
     setIsCreating(true);
+  };
+
+  const handleDeleteDraft = async (id: string) => {
+    if (!canDelete) return;
+    try {
+      await deleteEmployeeDraft(id);
+      await refreshDrafts();
+      if (draftId === id) {
+        setDraftId(null);
+        setFormValues({});
+        setIsDifferentAddress(false);
+        setValidationErrors({});
+        setIsCreating(false);
+      }
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to delete draft.",
+      );
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -1280,14 +1394,17 @@ export default function Teams() {
                     <span className="text-xs text-gray-400">
                       {new Date(draft.updated_at).toLocaleDateString()}
                     </span>
-                    {/* <button
-                      type="button"
-                      onClick={() => void handleDeleteDraft(draft.id)}
-                      className="text-error-500 hover:text-error-600"
-                      aria-label="Delete draft"
-                    >
-                      ×
-                    </button> */}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteDraft(draft.id)}
+                        className="inline-flex size-6 items-center justify-center rounded-full text-error-500 transition hover:bg-error-50 hover:text-error-700 dark:hover:bg-error-500/10"
+                        aria-label={`Delete ${draft.data.employee_name || "untitled"} draft`}
+                        title="Delete draft"
+                      >
+                        <span aria-hidden="true" className="text-lg leading-none">×</span>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1657,7 +1774,12 @@ export default function Teams() {
                   Current address
                 </h4>
               )}
-              {fieldGroups[activeTab].fields.map((field) => (
+              {fieldGroups[activeTab].fields.map((field) => {
+                const inputError = employeeFieldError(
+                  field.name,
+                  formValues[field.name] ?? "",
+                );
+                return (
                 <div
                   key={field.name}
                   className={
@@ -1697,7 +1819,7 @@ export default function Teams() {
                     }}
                     addressValues={formValues}
                     onAddressValueChange={updateFormValue}
-                    hasError={Boolean(validationErrors[field.name])}
+                    hasError={Boolean(validationErrors[field.name] || inputError)}
                     workspaceOptions={workspaceOptions}
                     optionsOverride={
                       field.name === "country"
@@ -1720,7 +1842,11 @@ export default function Teams() {
                       permanent_district: permDistricts,
                     }}
                   />
-                  {validationErrors[field.name] && (
+                  {inputError ? (
+                    <span className="mt-1.5 block text-xs text-error-500">
+                      {inputError}
+                    </span>
+                  ) : validationErrors[field.name] && (
                     <span className="mt-1.5 block text-xs text-error-500">
                       This field is required.
                     </span>
@@ -1731,22 +1857,24 @@ export default function Teams() {
                     </span>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                disabled={activeTab === fieldGroups.length - 1}
-                onClick={() =>
-                  setActiveTab((current) =>
-                    Math.min(fieldGroups.length - 1, current + 1),
-                  )
-                }
-                className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+            {activeTab < fieldGroups.length - 1 && (
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveTab((current) =>
+                      Math.min(fieldGroups.length - 1, current + 1),
+                    )
+                  }
+                  className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}

@@ -73,7 +73,7 @@ export type EmployeeDraft = {
 };
 
 const apiOrigin = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
-const apiPrefix = `${apiOrigin}/api/v1`;
+const apiPrefix = import.meta.env.DEV ? "/api/v1" : `${apiOrigin}/api/v1`;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiPrefix}${path}`, {

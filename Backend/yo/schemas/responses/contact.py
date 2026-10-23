@@ -4,10 +4,17 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
+class PurchasedProductResponse(BaseModel):
+    name: str
+    quantity: int = 1
+    purchased_on: date | None = None
+
+
 class ContactResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    customer_id: str | None = None
     workspace_id: UUID | None = None
     owner_id: UUID | None = None
     first_name: str | None = None
@@ -38,6 +45,7 @@ class ContactResponse(BaseModel):
     other_street: str | None = None
     description: str | None = None
     email_opt_out: bool = False
+    purchased_products: list[PurchasedProductResponse] = []
     stage: str
     created_by: UUID | None = None
     updated_by: UUID | None = None
