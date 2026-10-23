@@ -93,8 +93,7 @@ function toCampaignData(
     subject: campaign.campaign_subject,
     owner:
       owners.find((owner) => owner.id === campaign.campaign_owner_id)?.name ??
-      campaign.campaign_owner_id ??
-      "",
+      (campaign.campaign_owner_id ? "Unknown user" : ""),
     budgetedCost: campaign.budgeted_cost == null ? "" : String(campaign.budgeted_cost),
     actualCost: campaign.actual_cost == null ? "" : String(campaign.actual_cost),
     senderName: campaign.sender_name ?? "",

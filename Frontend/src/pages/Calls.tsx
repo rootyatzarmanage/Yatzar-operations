@@ -165,7 +165,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
       account: call.related_to ?? "",
       contactId: call.contact_id,
       contactName: contact ? contactFullName(contact) : "",
-      owner: workspaceMembers.find((member) => member.id === call.created_by)?.name ?? (call.created_by === user?.id ? callOwner : call.created_by ?? callOwner),
+      owner: workspaceMembers.find((member) => member.id === call.created_by)?.name ?? (call.created_by === user?.id ? callOwner : call.created_by ? "Unknown user" : callOwner),
       assignedToId: call.assigned_to ?? "",
       assignedTo: workspaceMembers.find((member) => member.id === call.assigned_to)?.name ?? (call.assigned_to === user?.id ? callOwner : ""),
       voiceRecording: call.voice_recording ?? "",

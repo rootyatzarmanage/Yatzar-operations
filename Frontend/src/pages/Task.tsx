@@ -224,7 +224,7 @@ export default function Tasks({ embed }: EmbedProps = {}) {
       status: task.status as TaskStatus,
       priority: task.priority as TaskPriority,
       account: task.account ?? "",
-      owner: workspaceMembers.find((member) => member.id === task.task_owner_id)?.name ?? (task.task_owner_id === user?.id ? owner : task.task_owner_id),
+      owner: workspaceMembers.find((member) => member.id === task.task_owner_id)?.name ?? (task.task_owner_id === user?.id ? owner : task.task_owner_id ? "Unknown user" : ""),
       assignedToId: task.assigned_to ?? "",
       assignedTo: workspaceMembers.find((member) => member.id === task.assigned_to)?.name ?? (task.assigned_to === user?.id ? taskOwner : ""),
       contactMode: task.contact_selection.selection_type,

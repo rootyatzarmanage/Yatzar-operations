@@ -66,8 +66,7 @@ function toEventData(
     ownerId: event.campaign_owner_id ?? "",
     owner:
       owners.find((owner) => owner.id === event.campaign_owner_id)?.name ??
-      event.campaign_owner_id ??
-      "",
+      (event.campaign_owner_id ? "Unknown user" : ""),
     expectedRevenue: event.expected_revenue == null ? "" : String(event.expected_revenue),
     budgetedCost: event.budgeted_cost == null ? "" : String(event.budgeted_cost),
     actualCost: event.actual_cost == null ? "" : String(event.actual_cost),

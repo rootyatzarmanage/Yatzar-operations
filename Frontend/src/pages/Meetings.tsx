@@ -265,7 +265,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
           person ?? {
             key,
             type: participant.type,
-            name: participant.id,
+            name: `Unknown ${sourceLabels[participant.type].toLowerCase()}`,
             email: "",
           }
         );
@@ -279,6 +279,16 @@ export default function Meetings({ embed }: EmbedProps = {}) {
       assignedTo: meeting.assigned_to ?? "",
     };
   }
+
+  useEffect(() => {
+    if (!people.length) return;
+    setMeetings((current) => current.map((meeting) => ({
+      ...meeting,
+      participants: meeting.participants.map((participant) =>
+        people.find((person) => person.key === participant.key) ?? participant,
+      ),
+    })));
+  }, [people]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
