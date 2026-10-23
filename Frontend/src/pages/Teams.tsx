@@ -1267,6 +1267,26 @@ export default function Teams() {
     setIsCreating(true);
   };
 
+  const handleDeleteDraft = async (id: string) => {
+    if (!canDelete) return;
+    try {
+      await deleteEmployeeDraft(id);
+      await refreshDrafts();
+      if (draftId === id) {
+        setDraftId(null);
+        setFormValues({});
+        setIsDifferentAddress(false);
+        setValidationErrors({});
+        setIsCreating(false);
+      }
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to delete draft.",
+      );
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (!canDelete) return;
     const teamsToDelete = teams.filter((team) =>
@@ -1372,14 +1392,17 @@ export default function Teams() {
                     <span className="text-xs text-gray-400">
                       {new Date(draft.updated_at).toLocaleDateString()}
                     </span>
-                    {/* <button
-                      type="button"
-                      onClick={() => void handleDeleteDraft(draft.id)}
-                      className="text-error-500 hover:text-error-600"
-                      aria-label="Delete draft"
-                    >
-                      ×
-                    </button> */}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteDraft(draft.id)}
+                        className="inline-flex size-6 items-center justify-center rounded-full text-error-500 transition hover:bg-error-50 hover:text-error-700 dark:hover:bg-error-500/10"
+                        aria-label={`Delete ${draft.data.employee_name || "untitled"} draft`}
+                        title="Delete draft"
+                      >
+                        <span aria-hidden="true" className="text-lg leading-none">×</span>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
