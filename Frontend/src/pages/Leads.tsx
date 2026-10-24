@@ -15,6 +15,7 @@ import RecordPage, {
 } from "@/components/records/RecordPage";
 import { useEffect, useMemo, useState } from "react";
 import type { EmbedProps } from "@/components/records/embed";
+import { useWorkspaceMembers } from "@/components/activities/WorkspaceAssigneeField";
 
 const fallbackSources = ["Website", "Referral", "Social media", "Cold call", "Event"];
 const text = (value: string | boolean | undefined) => String(value ?? "");
@@ -33,6 +34,9 @@ const columns: Column<LeadRecord>[] = [
 
 export default function Leads({ embed }: EmbedProps = {}) {
   const { currentWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const currentUserName = user?.display_name || user?.employee_name || user?.username || "";
+  const workspaceMembers = useWorkspaceMembers();
   const [sources, setSources] = useState<string[]>(fallbackSources);
 
   const store = useMemo(
@@ -42,15 +46,19 @@ export default function Leads({ embed }: EmbedProps = {}) {
 
         const leads = await listLeads();
 
-        return leads.filter(
-          (lead) => lead.workspaceId === currentWorkspace.id,
-        );
+        return leads
+          .filter((lead) => lead.workspaceId === currentWorkspace.id)
+          .map((lead) => ({
+            ...lead,
+            leadOwner: workspaceMembers.find((member) => member.id === lead.leadOwner)?.name ??
+              (lead.leadOwner === user?.id ? currentUserName : lead.leadOwner ? "Unknown user" : ""),
+          }));
       },
       create: createLead,
       update: updateLead,
       remove: deleteLead,
     }),
-    [currentWorkspace],
+    [currentWorkspace, user?.id, currentUserName, workspaceMembers],
   );
 
   useEffect(() => {

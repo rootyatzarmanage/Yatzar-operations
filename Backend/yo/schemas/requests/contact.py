@@ -1,7 +1,17 @@
 from datetime import date
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_serializer
+
+
+class PurchasedProductRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    quantity: int = Field(default=1, ge=1, le=100000)
+    purchased_on: date | None = None
+
+    @field_serializer("purchased_on")
+    def serialize_date(self, value):
+        return value.isoformat() if value else None
 
 
 class ContactCreateRequest(BaseModel):
@@ -33,6 +43,7 @@ class ContactCreateRequest(BaseModel):
     other_street: str | None = None
     description: str | None = None
     email_opt_out: bool = False
+    purchased_products: list[PurchasedProductRequest] = Field(default_factory=list)
 
 
 class ContactUpdateRequest(BaseModel):
@@ -66,6 +77,7 @@ class ContactUpdateRequest(BaseModel):
     other_street: str | None = None
     description: str | None = None
     email_opt_out: bool | None = None
+    purchased_products: list[PurchasedProductRequest] | None = None
 
 
 class ContactBulkDeleteRequest(BaseModel):

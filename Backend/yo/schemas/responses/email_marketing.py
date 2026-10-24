@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EmailMarketingResponse(BaseModel):
@@ -16,6 +16,7 @@ class EmailMarketingResponse(BaseModel):
     mail_type: str
     to_email: str | None = None
     tag_id: UUID | None = None
+    tag_ids: list[UUID] = Field(default_factory=list)
     subject: str
     content: str
     status: str
@@ -38,6 +39,8 @@ class EmailMarketingListItemResponse(BaseModel):
     id: UUID
     campaign_name: str
     subject: str
+    mail_type: str
+    tag_ids: list[UUID] = Field(default_factory=list)
     status: str
     sent_count: int
     scheduled_at: datetime | None = None

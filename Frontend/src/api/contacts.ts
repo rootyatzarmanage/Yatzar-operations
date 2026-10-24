@@ -67,6 +67,13 @@ export type ContactPayload = {
   other_zip: string | null;
   other_building: string | null;
   other_street: string | null;
+  purchased_products?: PurchasedProduct[];
+};
+
+export type PurchasedProduct = {
+  name: string;
+  quantity: number;
+  purchased_on: string | null;
 };
 
 export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
@@ -82,6 +89,7 @@ export type Contact = Omit<ContactPayload, "first_name" | "email" | "phone"> & {
   updated_by: string | null;
   created_at: string;
   updated_at: string | null;
+  purchased_products: PurchasedProduct[];
 };
 
 export type ContactStage = Contact["stage"];

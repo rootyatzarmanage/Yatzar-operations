@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from yo.core.database.base import Base
@@ -15,7 +15,6 @@ def utcnow():
 class EmailMarketing(Base):
     __tablename__ = "email_marketing"
 
-    # Existing unassigned rows remain hidden until explicitly backfilled.
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=True, index=True,
@@ -28,6 +27,9 @@ class EmailMarketing(Base):
     mail_type: Mapped[str] = mapped_column(String(100), nullable=False)
     to_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     tag_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tags.id"), nullable=True, index=True)
+    tag_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, default=list, server_default="{}",
+    )
     subject: Mapped[str] = mapped_column(String(500), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(100), nullable=False, default="Draft", index=True)

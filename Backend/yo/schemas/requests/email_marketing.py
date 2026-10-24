@@ -24,10 +24,14 @@ class EmailMarketingCreateRequest(BaseModel):
     mail_type: Literal["Test Email", "Bulk Email"]
     to_email: EmailStr | None = None
     tag_id: UUID | None = None
+    tag_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Recipient tag UUIDs. Contacts from all selected tags are combined. Legacy tag_id is accepted for single-tag requests.",
+    )
     selection_mode: Literal["all", "selected"] | None = None
     selected_user_ids: list[UUID] = Field(
         default_factory=list,
-        description="Selected contact UUIDs in the chosen tag. Only these contacts receive the bulk email when selection_mode is selected.",
+        description="Enabled contact UUIDs across the chosen tags when selection_mode is selected. Other eligible contacts are saved as disabled. With all, every eligible contact is enabled.",
     )
     subject: str = Field(min_length=1,max_length=500)
     content: str = Field(min_length=1)
@@ -43,12 +47,20 @@ class EmailMarketingCreateRequest(BaseModel):
             if not self.to_email:
                 raise ValueError("to_email is required for Test Email")
 
-            if self.tag_id or self.selection_mode or self.selected_user_ids:
+            if self.tag_id or self.tag_ids or self.selection_mode or self.selected_user_ids:
                 raise ValueError("Tag selection is not allowed for Test Email")
 
         if self.mail_type == "Bulk Email":
-            if not self.tag_id:
-                raise ValueError("tag_id is required for Bulk Email")
+            self.tag_ids = list(dict.fromkeys(self.tag_ids))
+            self.selected_user_ids = list(dict.fromkeys(self.selected_user_ids))
+            if self.tag_id and self.tag_ids and self.tag_id not in self.tag_ids:
+                raise ValueError("tag_id must belong to tag_ids when both are supplied")
+            if not self.tag_ids and self.tag_id:
+                self.tag_ids = [self.tag_id]
+            if not self.tag_ids:
+                raise ValueError("tag_ids is required for Bulk Email (or legacy tag_id)")
+            # Keep the scalar field compatible with existing API consumers.
+            self.tag_id = self.tag_ids[0]
 
             if self.selection_mode not in ("all", "selected"):
                 raise ValueError("selection_mode must be all or selected")

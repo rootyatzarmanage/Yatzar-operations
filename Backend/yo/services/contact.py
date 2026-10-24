@@ -97,6 +97,8 @@ class ContactService:
     ) -> Contact:
         await self.get_by_id(contact_id, user_id, workspace_id)
         values = request.model_dump(exclude_unset=True)
+        if values.get("purchased_products") is None:
+            values.pop("purchased_products", None)
         values.pop("owner_id", None)
         if "workspace_id" in values:
             # A workspace-scoped edit must not move a contact outside the

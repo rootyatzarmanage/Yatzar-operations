@@ -6,6 +6,7 @@ import {
   updateContact,
   type Contact,
   type ContactPayload,
+  type PurchasedProduct,
 } from "@/api/contacts";
 import type { RecordValues, StoredRecord } from "@/storage/localStore";
 
@@ -13,6 +14,27 @@ export type CustomerRecord = StoredRecord;
 
 const text = (values: RecordValues, key: string) => String(values[key] ?? "").trim();
 const nullable = (values: RecordValues, key: string) => text(values, key) || null;
+
+function purchasedProducts(values: RecordValues): PurchasedProduct[] {
+  try {
+    const parsed: unknown = JSON.parse(text(values, "purchasedProducts") || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item): PurchasedProduct[] => {
+      if (typeof item !== "object" || item === null) return [];
+      const product = item as Record<string, unknown>;
+      const name = typeof product.name === "string" ? product.name.trim() : "";
+      if (!name) return [];
+      const quantity = Number(product.quantity);
+      return [{
+        name,
+        quantity: Number.isInteger(quantity) && quantity >= 1 && quantity <= 100000 ? quantity : 1,
+        purchased_on: typeof product.purchased_on === "string" && product.purchased_on ? product.purchased_on : null,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
 
 function toPayload(values: RecordValues): ContactPayload {
   return {
@@ -43,6 +65,7 @@ function toPayload(values: RecordValues): ContactPayload {
     description: null,
     tag_id: null,
     email_opt_out: false,
+    purchased_products: purchasedProducts(values),
   };
 }
 
@@ -72,6 +95,7 @@ function fromContact(contact: Contact): CustomerRecord {
     otherState: contact.other_state ?? "",
     otherCountry: contact.other_country ?? "",
     otherPincode: contact.other_zip ?? "",
+    purchasedProducts: JSON.stringify(contact.purchased_products ?? []),
   };
 }
 

@@ -4,7 +4,11 @@ from typing import Self , Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from yo.core.mail_schedule import aware, validate_reminder
 
-    
+
+MEETING_PROVIDERS = ("Google Meet", "Zoom", "Microsoft Teams", "Webex", "Skype", "Other")
+MeetingProvider = Literal["Google Meet", "Zoom", "Microsoft Teams", "Webex", "Skype", "Other"]
+
+
 class MeetingParticipantRequest(BaseModel):
     id: UUID
     type: Literal["contact", "lead", "customer"]
@@ -26,6 +30,8 @@ class MeetingCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     venue: str | None = None
     location: str | None = None
+    meeting_provider: MeetingProvider | None = None
+    meeting_link: str | None = Field(default=None, max_length=1000)
     all_day: bool = False
     starts_at: datetime
     ends_at: datetime
@@ -36,6 +42,7 @@ class MeetingCreateRequest(BaseModel):
     participants_reminder: str = "None"
     reminder_type: str = "None"
     description: str | None = None
+    assigned_to: UUID | None = None
 
     @field_validator("title", "repeat_frequency", "reminder", "participants_reminder", "reminder_type")
     @classmethod
@@ -43,6 +50,16 @@ class MeetingCreateRequest(BaseModel):
         if value is not None:
             return value.strip()
         return value
+
+    @model_validator(mode="after")
+    def validate_online_provider(self):
+        if (self.venue or "").strip().lower() == "online":
+            if not self.meeting_provider:
+                raise ValueError("meeting_provider is required for an online meeting")
+        else:
+            self.meeting_provider = None
+            self.meeting_link = None
+        return self
 
 
 class MeetingUpdateRequest(BaseModel):
@@ -61,6 +78,8 @@ class MeetingUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     venue: str | None = None
     location: str | None = None
+    meeting_provider: MeetingProvider | None = None
+    meeting_link: str | None = Field(default=None, max_length=1000)
     all_day: bool | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
@@ -71,6 +90,7 @@ class MeetingUpdateRequest(BaseModel):
     participants_reminder: str | None = None
     reminder_type: str | None = None
     description: str | None = None
+    assigned_to: UUID | None = None
 
     @field_validator("title", "repeat_frequency", "reminder", "participants_reminder", "reminder_type")
     @classmethod

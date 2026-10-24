@@ -93,8 +93,7 @@ function toCampaignData(
     subject: campaign.campaign_subject,
     owner:
       owners.find((owner) => owner.id === campaign.campaign_owner_id)?.name ??
-      campaign.campaign_owner_id ??
-      "",
+      (campaign.campaign_owner_id ? "Unknown user" : ""),
     budgetedCost: campaign.budgeted_cost == null ? "" : String(campaign.budgeted_cost),
     actualCost: campaign.actual_cost == null ? "" : String(campaign.actual_cost),
     senderName: campaign.sender_name ?? "",
@@ -632,7 +631,7 @@ function AddCampaign({
               onClick={onCancel}
               className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
             >
-              Cancel
+              ← Back to table
             </button>
 
             {!readOnly && <button

@@ -128,8 +128,7 @@ async def track_email_click(
     response_model=SuccessResponse[EmailMarketingResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Queue email campaign for immediate or scheduled SMTP delivery",
-    description="Set scheduled_at to a future date/time to schedule delivery. The worker sends the saved subject/content only to the saved enabled recipients, at or after that time. Omit scheduled_at for immediate queuing.",
-    dependencies=[Depends(require_permission("emailMarketing", "create"))],
+    description="For Bulk Email, pass tag_ids and selection_mode: all enables every eligible contact across the tags; selected enables only selected_user_ids and saves the others as disabled. Legacy tag_id is accepted. Set scheduled_at for future delivery or omit it to queue immediately. Only saved enabled recipients are sent mail.",
 )
 async def create_email_campaign(
     payload: EmailMarketingCreateRequest,

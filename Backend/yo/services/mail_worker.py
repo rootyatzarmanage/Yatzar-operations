@@ -20,6 +20,7 @@ from yo.models.email_marketing import EmailMarketing, EmailMarketingRecipient
 from yo.models.mail_delivery import MailDelivery
 from yo.models.meeting import Meeting
 from yo.models.task import Task
+from yo.models.tag import Tag
 from yo.models.user import User
 from yo.models.workspace import Workspace
 from yo.repositories.email_marketing import EmailMarketingRepository
@@ -239,7 +240,11 @@ async def process_campaign(campaign_id):
                 if recipient.sent or not recipient.is_enabled:
                     continue
                 if campaign.mail_type == "Bulk Email":
-                    contact = await session.get(Contact, recipient.user_id) if recipient.user_id else None
+                    contact = await session.scalar(select(Contact).join(Tag, Tag.id == Contact.tag_id).where(
+                        Contact.id == recipient.user_id,
+                        Contact.tag_id.in_(campaign.tag_ids),
+                        Tag.deleted_at.is_(None), Tag.status == 1,
+                    )) if recipient.user_id else None
                     if (not contact or contact.deleted_at or contact.email_opt_out
                             or contact.workspace_id != campaign.workspace_id
                             or (contact.email or "").strip().lower() != recipient.email.strip().lower()):

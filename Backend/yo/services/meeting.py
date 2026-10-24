@@ -3,7 +3,9 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
+from yo.core.exceptions import AppException
 from yo.services.workspace import WorkspaceService
+from yo.core.assignee import validate_assignee
 from yo.models.meeting import Meeting
 from yo.repositories.meeting import MeetingRepository
 from yo.repositories.contact import ContactRepository
@@ -67,6 +69,7 @@ class MeetingService:
             self.user_id, self.repository.workspace_id,
         )
         self._validate_schedule(payload.starts_at, payload.ends_at)
+        await validate_assignee(self.repository.session, payload.assigned_to, self.repository.workspace_id)
         await self._validate_participants(payload.participants)
         values = payload.model_dump()
 
@@ -94,8 +97,17 @@ class MeetingService:
 
         starts_at = values.get("starts_at", meeting.starts_at)
         ends_at = values.get("ends_at", meeting.ends_at)
+        venue = values.get("venue", meeting.venue)
+        if (venue or "").strip().lower() == "online":
+            if not values.get("meeting_provider", meeting.meeting_provider):
+                raise AppException("meeting_provider is required for an online meeting", 400)
+        elif "venue" in values or "meeting_provider" in values or "meeting_link" in values:
+            values["meeting_provider"] = None
+            values["meeting_link"] = None
 
         self._validate_schedule(starts_at, ends_at)
+        if values.get("assigned_to") is not None:
+            await validate_assignee(self.repository.session, values["assigned_to"], self.repository.workspace_id)
 
         if "participants" in values and values["participants"] is not None:
             await self._validate_participants(payload.participants)

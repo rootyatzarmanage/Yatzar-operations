@@ -10,7 +10,7 @@ import { hasPermission, useAuth } from "@/context/AuthContext";
 export type FieldDef = {
   key: string;
   label: string;
-  type?: "text" | "email" | "tel" | "number" | "date" | "select" | "textarea" | "checkbox";
+  type?: "text" | "email" | "tel" | "number" | "date" | "select" | "textarea" | "checkbox" | "purchased-products";
   required?: boolean;
   options?: string[];
   placeholder?: string;
@@ -49,6 +49,28 @@ const toneClass = {
   emerald:
     "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
 };
+
+type PurchasedProductValue = {
+  name: string;
+  quantity: number;
+  purchased_on: string;
+};
+
+function readPurchasedProducts(value: string): PurchasedProductValue[] {
+  try {
+    const parsed: unknown = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+      .map((item) => ({
+        name: typeof item.name === "string" ? item.name : "",
+        quantity: typeof item.quantity === "number" && item.quantity >= 1 ? item.quantity : 1,
+        purchased_on: typeof item.purchased_on === "string" ? item.purchased_on : "",
+      }));
+  } catch {
+    return [];
+  }
+}
 const toolBtn =
   "inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-transparent dark:text-gray-300 dark:hover:bg-white/5";
 
@@ -332,7 +354,13 @@ export default function RecordPage<T extends StoredRecord>({
       subtitle: section.subtitle,
       items: section.fields.map((f) => ({
         label: f.label,
-        value: f.type === "checkbox" ? (record[f.key] ? "Yes" : "No") : String(record[f.key] ?? ""),
+        value: f.type === "checkbox"
+          ? (record[f.key] ? "Yes" : "No")
+          : f.type === "purchased-products"
+            ? readPurchasedProducts(String(record[f.key] ?? "[]"))
+                .map((product) => `${product.name || "Unnamed product"} × ${product.quantity}${product.purchased_on ? ` (${product.purchased_on})` : ""}`)
+                .join(", ")
+            : String(record[f.key] ?? ""),
       })),
     }));
 
@@ -468,6 +496,63 @@ export default function RecordPage<T extends StoredRecord>({
     }
 
     const current = String(values[field.key] ?? "");
+    if (field.type === "purchased-products") {
+      const products = readPurchasedProducts(current);
+      const updateProducts = (next: PurchasedProductValue[]) =>
+        setField(field.key, JSON.stringify(next));
+      return (
+        <div key={field.key} className="md:col-span-2">
+          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {field.label}
+          </label>
+          <div className="space-y-3">
+            {products.map((product, index) => (
+              <div key={index} className="grid gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-800 sm:grid-cols-[minmax(0,2fr)_minmax(5rem,0.7fr)_minmax(9rem,1fr)_auto]">
+                <input
+                  value={product.name}
+                  onChange={(event) => updateProducts(products.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
+                  placeholder="Product name"
+                  aria-label={`Purchased product ${index + 1} name`}
+                  className={inputClass}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={100000}
+                  value={product.quantity}
+                  onChange={(event) => updateProducts(products.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Number(event.target.value) } : item))}
+                  aria-label={`Purchased product ${index + 1} quantity`}
+                  className={inputClass}
+                />
+                <input
+                  type="date"
+                  value={product.purchased_on}
+                  onChange={(event) => updateProducts(products.map((item, itemIndex) => itemIndex === index ? { ...item, purchased_on: event.target.value } : item))}
+                  aria-label={`Purchased product ${index + 1} purchase date`}
+                  className={inputClass}
+                />
+                <button
+                  type="button"
+                  onClick={() => updateProducts(products.filter((_, itemIndex) => itemIndex !== index))}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-error-600 hover:bg-error-50 dark:text-error-400 dark:hover:bg-error-500/10"
+                  aria-label={`Remove purchased product ${index + 1}`}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => updateProducts([...products, { name: "", quantity: 1, purchased_on: "" }])}
+            className="mt-3 inline-flex h-9 items-center rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            + Add product
+          </button>
+        </div>
+      );
+    }
+
     let control: ReactNode;
     if (field.type === "select") {
       const options = [...new Set([...(field.options ?? []), current])].filter(Boolean);
@@ -792,7 +877,7 @@ export default function RecordPage<T extends StoredRecord>({
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={closeForm} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
-                  Cancel
+                  ← Back to table
                 </button>
                 {!viewing && canUpdate && canSave && moves.map((move) => (
                   <button key={move.label} type="button" disabled={busy} onClick={() => saveAndMove(move)} className={`rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50 ${toneClass[move.tone]}`}>

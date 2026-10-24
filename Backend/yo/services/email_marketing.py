@@ -152,16 +152,23 @@ class EmailMarketingService:
         if payload.mail_type == "Test Email":
             recipients_data = [{"user_id": logged_user_id, "email": str(payload.to_email)}]
         else:
-            recipients_data = await self.repository.get_recipients_by_tag(
-                tag_id=payload.tag_id, selection_mode=payload.selection_mode,
+            if await self.repository.get_active_tag_ids(payload.tag_ids) != set(payload.tag_ids):
+                raise AppException("Some selected tags do not exist or are inactive.", 400)
+            recipients_data = await self.repository.get_recipients_by_tags(
+                tag_ids=payload.tag_ids, selection_mode=payload.selection_mode,
                 selected_contact_ids=payload.selected_user_ids, user_id=logged_user_id,
             )
             if not recipients_data:
-                raise AppException("No eligible recipients found for selected tag", 400)
+                raise AppException("No eligible recipients found for selected tags", 400)
             if payload.selection_mode == "selected" and (
-                {item["user_id"] for item in recipients_data} != set(payload.selected_user_ids)
+                not set(payload.selected_user_ids).issubset({item["user_id"] for item in recipients_data})
             ):
-                raise AppException("Some selected contacts are not eligible for this tag", 400)
+                raise AppException("Some selected contacts are not eligible for these tags", 400)
+        return values, recipients_data
+
+    async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+        """Persist recipients before the worker performs any external delivery."""
+        values, recipients_data = await self._prepare_campaign(payload, logged_user_id)
         campaign = await self.repository.create_campaign(values)
         await self.repository.create_recipients(campaign.id, recipients_data)
         return campaign
@@ -261,7 +268,16 @@ class EmailMarketingService:
         if not recipient:
             raise NotFoundException("Recipient", str(recipient_id))
 
-        await self.get_campaign(recipient.email_marketing_id)
+        # Use the same campaign lock as the worker: a completed status change
+        # must be visible before a subsequent delivery starts.
+        campaign = await self.repository.get_campaign(recipient.email_marketing_id, for_update=True)
+        if not campaign:
+            raise NotFoundException("Email marketing campaign", str(recipient.email_marketing_id))
+        await self.repository.session.refresh(recipient)
+        if recipient.sent:
+            raise AppException("Recipient status cannot be changed after delivery.", 409)
+        if campaign.status not in {"Draft", "Queued", "Scheduled", "Sending"}:
+            raise AppException("Recipient status can only be changed before campaign delivery finishes.", 409)
 
         return await self.repository.update_recipient_status(
             recipient,
@@ -304,6 +320,7 @@ class EmailMarketingService:
             "mail_type": old_campaign.mail_type,
             "to_email": old_campaign.to_email,
             "tag_id": old_campaign.tag_id,
+            "tag_ids": list(old_campaign.tag_ids),
             "subject": old_campaign.subject,
             "content": old_campaign.content,
             "status": "Draft",

@@ -907,16 +907,18 @@ export default function Teams() {
       current === null ? nextNumber + 1 : Math.max(current, nextNumber + 1),
     );
     setTeams(
-      records.map((employee) => ({
-        id: employee.id,
-        code: employee.employee_code,
-        name: employee.employee_name || employee.display_name || employee.username || "",
-        type: employee.employee_type || "",
-        department: employee.department || "",
-        location: employee.work_location || "",
-        status: employee.employment_status || "",
-        email: employee.login_email || employee.email || "",
-      })),
+      records
+        .filter((employee) => employee.status === 1)
+        .map((employee) => ({
+          id: employee.id,
+          code: employee.employee_code,
+          name: employee.employee_name || employee.display_name || employee.username || "",
+          type: employee.employee_type || "",
+          department: employee.department || "",
+          location: employee.work_location || "",
+          status: employee.employment_status || "",
+          email: employee.login_email || employee.email || "",
+        })),
     );
   };
 
@@ -1175,6 +1177,26 @@ export default function Teams() {
     setIsCreating(true);
   };
 
+  const handleDeleteDraft = async (id: string) => {
+    if (!canDelete) return;
+    try {
+      await deleteEmployeeDraft(id);
+      await refreshDrafts();
+      if (draftId === id) {
+        setDraftId(null);
+        setFormValues({});
+        setIsDifferentAddress(false);
+        setValidationErrors({});
+        setIsCreating(false);
+      }
+      setApiError("");
+    } catch (error) {
+      setApiError(
+        error instanceof Error ? error.message : "Unable to delete draft.",
+      );
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (!canDelete) return;
     const teamsToDelete = teams.filter((team) =>
@@ -1280,14 +1302,17 @@ export default function Teams() {
                     <span className="text-xs text-gray-400">
                       {new Date(draft.updated_at).toLocaleDateString()}
                     </span>
-                    {/* <button
-                      type="button"
-                      onClick={() => void handleDeleteDraft(draft.id)}
-                      className="text-error-500 hover:text-error-600"
-                      aria-label="Delete draft"
-                    >
-                      ×
-                    </button> */}
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteDraft(draft.id)}
+                        className="inline-flex size-6 items-center justify-center rounded-full text-error-500 transition hover:bg-error-50 hover:text-error-700 dark:hover:bg-error-500/10"
+                        aria-label={`Delete ${draft.data.employee_name || "untitled"} draft`}
+                        title="Delete draft"
+                      >
+                        <span aria-hidden="true" className="text-lg leading-none">×</span>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1608,7 +1633,7 @@ export default function Teams() {
                 }}
                 className="h-10 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none sm:px-4 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"
               >
-                Cancel
+                ← Back to table
               </button>
               {!editingCode && canCreate && (
                 <button
@@ -1733,20 +1758,21 @@ export default function Teams() {
                 </div>
               ))}
             </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                disabled={activeTab === fieldGroups.length - 1}
-                onClick={() =>
-                  setActiveTab((current) =>
-                    Math.min(fieldGroups.length - 1, current + 1),
-                  )
-                }
-                className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+            {activeTab < fieldGroups.length - 1 && (
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveTab((current) =>
+                      Math.min(fieldGroups.length - 1, current + 1),
+                    )
+                  }
+                  className="h-10 rounded-lg bg-brand-500 px-5 text-sm font-medium text-white hover:bg-brand-600"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}

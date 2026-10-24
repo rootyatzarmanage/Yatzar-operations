@@ -1,9 +1,10 @@
 import uuid
  
-from sqlalchemy import and_, or_, select, func
+from sqlalchemy import BigInteger, and_, cast, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
  
-from yo.models.contact import Contact
+from yo.models.contact import Contact, CustomerNumberCounter
 from yo.repositories.workspace import WorkspaceRepository
 from yo.repositories.base import BaseRepository
  
@@ -33,6 +34,17 @@ class ContactRepository(BaseRepository[Contact]):
  
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def next_customer_id(self) -> str:
+        year = datetime.now(ZoneInfo("Asia/Kolkata")).year
+        await self.session.execute(select(func.pg_advisory_xact_lock(20261026, year)))
+        last_number = await self.session.scalar(
+            select(func.coalesce(func.max(cast(
+                func.split_part(Contact.customer_id, "-", 3), BigInteger,
+            )), 0)).where(Contact.customer_id.regexp_match(f"^CUS-{year}-[0-9]+$"))
+        )
+        number = last_number + 1
+        return f"CUS-{year}-{number:04d}"
  
     async def list_by_stage(
         self,
