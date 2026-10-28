@@ -59,15 +59,6 @@ const venues = ["Client location", "In-office", "Online"];
 const meetingProviders: MeetingProvider[] = ["Google Meet", "Zoom", "Microsoft Teams", "Webex", "Skype", "Other"];
 const repeats = ["None", "Daily", "Weekly", "Monthly", "Yearly"];
 const participantReminders = ["None", "Email", "Popup", "Email and Popup"];
-const participantReminderTimes = [
-  "None",
-  "At time of meeting",
-  "5 minutes before",
-  "15 minutes before",
-  "30 minutes before",
-  "1 hour before",
-  "1 day before",
-];
 const reminders = [
   "None",
   "At time of meeting",
@@ -475,7 +466,9 @@ export default function Meetings({ embed }: EmbedProps = {}) {
       assigned_to: form.assignedTo || null,
       venue: form.venue || null,
       location: form.location.trim() || null,
-      meeting_provider: form.venue === "Online" ? form.meetingProvider || null : null,
+      meeting_provider: form.venue === "Online" && form.meetingProvider
+        ? (form.meetingProvider as MeetingProvider)
+        : null,
       meeting_link: form.venue === "Online" ? form.meetingLink.trim() || null : null,
       all_day: form.allDay,
       starts_at: toApiDateTime(form.from, form.allDay),

@@ -173,13 +173,6 @@ function Toolbar({
       .run();
   };
 
-  const showHelp = () =>
-    Swal.fire({
-      title: "Keyboard shortcuts",
-      html: "Ctrl+B Bold<br/>Ctrl+I Italic<br/>Ctrl+U Underline<br/>Ctrl+Z Undo<br/>Ctrl+Shift+Z Redo",
-      confirmButtonText: "Got it",
-    });
-
   const onStyleChange = (value: string) => {
     const chain = editor.chain().focus();
     if (value === "p") chain.setParagraph().run();
