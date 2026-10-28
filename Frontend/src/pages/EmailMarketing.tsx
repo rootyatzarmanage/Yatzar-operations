@@ -1753,32 +1753,34 @@ function EmailCampaignForm({
             {/* Buttons */}
 
             <div className="mt-6 flex justify-end gap-3">
-              {!isEditing && <button
-                type="button"
-                onClick={() => {
-                  setCampaignName("");
-                  setSender("");
-                  setTestEmail("");
-                          setTagIds([]);
-                  setSubject("");
-                  setContent("");
-                  setScheduledAt("");
-                  setError("");
-                  setNotice("");
-                }}
-                className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-              >
-                Clear
-              </button>
+  {!isEditing && (
+    <button
+      type="button"
+      onClick={() => {
+        setCampaignName("");
+        setSender("");
+        setTestEmail("");
+        setTagIds([]);
+        setSubject("");
+        setContent("");
+        setScheduledAt("");
+        setError("");
+        setNotice("");
+      }}
+      className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+    >
+      Clear
+    </button>
+  )}
 
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-700 disabled:cursor-wait disabled:opacity-60"
-              >
-                {isSaving ? "Saving…" : scheduledAt ? "Schedule email" : "Send email"}
-              </button>
-            </div>
+  <button
+    type="submit"
+    disabled={isSaving}
+    className="rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-700 disabled:cursor-wait disabled:opacity-60"
+  >
+    {isSaving ? "Saving…" : scheduledAt ? "Schedule email" : "Send email"}
+  </button>
+</div>
           </form>
 
           {/* Preview */}
