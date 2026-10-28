@@ -89,7 +89,6 @@ function contactSignature(contact: LocalContact): string {
 const contactFieldLimits: Partial<Record<StringFieldKey, { maxLength?: number; maxDigits?: number }>> = {
   firstName: { maxLength: 100 },
   lastName: { maxLength: 100 },
-  company: { maxLength: 255 },
   phone: { maxLength: 30, maxDigits: 10 },
   otherPhone: { maxLength: 30, maxDigits: 10 },
   homePhone: { maxLength: 30, maxDigits: 10 },
@@ -674,7 +673,9 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
           }
         }
       } else if (moveRequest.to === "leads") {
-        await addContactToLeads(contact.id, currentWorkspace.id);
+        const workspaceId = currentWorkspace?.id;
+        if (!workspaceId) throw new Error("Select a workspace before moving this contact to Leads.");
+        await addContactToLeads(contact.id, workspaceId);
         movedIds.push(contact.id);
       } else {
         await addContactToCustomers(contact.id);

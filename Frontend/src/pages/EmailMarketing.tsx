@@ -778,6 +778,7 @@ export default function EmailMarketing() {
       const payload: EmailMarketingCreatePayload = {
         workspace_id: currentWorkspace.id,
         campaign_name: form.campaignName,
+        platform: "Email",
         from_email: form.sender,
         mail_type: form.mailType === "test" ? "Test Email" : "Bulk Email",
         to_email: form.mailType === "test" ? form.testEmail : null,
@@ -1382,7 +1383,7 @@ function EmailCampaignForm({
     () =>
       contacts.filter(
         (contact) =>
-          tagIds.includes(contact.tag_id),
+          contact.tag_id !== null && tagIds.includes(contact.tag_id),
       ),
     [contacts, tagIds],
   );
