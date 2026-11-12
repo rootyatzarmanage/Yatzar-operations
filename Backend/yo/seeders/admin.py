@@ -106,12 +106,7 @@ async def seed_default_data(session: AsyncSession) -> None:
         admin.email = settings.DEFAULT_SUPER_ADMIN_EMAIL
         admin.password_hash = hash_password(settings.DEFAULT_SUPER_ADMIN_PASSWORD)
 
-    sample_employees = [
-        ("EMP-2026-0001", "Aarav Mehta", "aarav.mehta@yatzar.com", "Admin", "Operations", "Mumbai HQ", "Full-time", "Active"),
-        ("EMP-2026-0002", "Meera Nair", "meera.nair@yatzar.com", "Manager", "Finance", "Bengaluru", "Full-time", "Active"),
-        ("EMP-2026-0003", "Kabir Shah", "kabir.shah@yatzar.com", "Employee", "Technology", "Pune", "Contract", "On Leave"),
-        ("EMP-2026-0004", "Anaya Rao", "anaya.rao@yatzar.com", "Viewer", "People", "Delhi", "Part-time", "Active"),
-    ]
+    sample_employees = []
     for code, name, email, role_name, department, location, employee_type, status in sample_employees:
         exists = await session.scalar(select(Employee).where(Employee.employee_code == code))
         if exists:
