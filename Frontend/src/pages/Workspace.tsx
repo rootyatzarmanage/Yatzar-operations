@@ -980,29 +980,29 @@ export default function Workspace() {
           <div className="border-t border-gray-200 p-6 sm:p-7 dark:border-gray-800">
             <div className="grid gap-6 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Platform Name</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Platform Name <span className="text-red-500">*</span></label>
                 <input value={platformValues.platform_name} onChange={(event) => handlePlatformChange("platform_name", event.target.value)} className={fieldClass} placeholder="Enter platform name" />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Mailer</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Mailer <span className="text-red-500">*</span></label>
                 <select value={platformValues.mail_mailer} onChange={(event) => handlePlatformChange("mail_mailer", event.target.value)} className={fieldClass}>
                   <option value="smtp">smtp</option>
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Host</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Host <span className="text-red-500">*</span></label>
                 <input value={platformValues.mail_host} onChange={(event) => handlePlatformChange("mail_host", event.target.value)} className={fieldClass} placeholder="smtp.example.com" />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Port</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Port <span className="text-red-500">*</span></label>
                 <input type="number" min={1} max={65535} value={platformValues.mail_port} onChange={(event) => handlePlatformChange("mail_port", Number(event.target.value))} className={fieldClass} />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Username <span className="text-red-500">*</span></label>
                 <input autoComplete="username" value={platformValues.mail_username} onChange={(event) => handlePlatformChange("mail_username", event.target.value)} className={fieldClass} placeholder="SMTP username" />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Password {editingId !== null && "(leave blank to keep current)"}</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Password <span className="text-red-500">*</span> {editingId !== null && "(leave blank to keep current)"}</label>
                 <div className="relative">
                   <input type={showPassword ? "text" : "password"} autoComplete="new-password" value={platformValues.mail_password} onChange={(event) => handlePlatformChange("mail_password", event.target.value)} className={`${fieldClass} pe-16`} placeholder={editingId !== null && workspaces.find((item) => item.id === editingId)?.has_mail_password ? "Configured; enter a new password to replace" : "SMTP password"} />
                   <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-e-3 top-1/2 -translate-y-1/2 text-xs font-medium text-brand-500">{showPassword ? "Hide" : "Show"}</button>
@@ -1015,7 +1015,7 @@ export default function Workspace() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">From Address</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">From Address <span className="text-red-500">*</span></label>
                 <input type="email" value={platformValues.mail_from_address} onChange={(event) => handlePlatformChange("mail_from_address", event.target.value)} className={fieldClass} placeholder="sender@example.com" />
               </div>
               <div>

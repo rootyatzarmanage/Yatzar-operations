@@ -4,7 +4,7 @@ from sqlalchemy import BigInteger, and_, cast, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
  
-from yo.models.contact import Contact, CustomerNumberCounter
+from yo.models.contact import Contact
 from yo.repositories.workspace import WorkspaceRepository
 from yo.repositories.base import BaseRepository
  
