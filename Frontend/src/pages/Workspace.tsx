@@ -87,6 +87,8 @@ export default function Workspace() {
   const canCreate = hasPermission(user, "Workspace", "create");
   const canUpdate = hasPermission(user, "Workspace", "update");
   const canDelete = hasPermission(user, "Workspace", "delete");
+  const assignedWorkspaceIds = getEmployeeWorkspaceIds(user?.email ?? "");
+  const isIndividualEmployee = assignedWorkspaceIds !== null;
   const { enterWorkspace } = useWorkspace();
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -113,10 +115,10 @@ export default function Workspace() {
     void listWorkspaces()
       .then((items) => {
         if (active) {
-          const assignedIds = getEmployeeWorkspaceIds(user?.email ?? "");
+          const employeeWorkspaceIds = getEmployeeWorkspaceIds(user?.email ?? "");
           setWorkspaces(
-            (assignedIds
-              ? items.filter((item) => assignedIds.includes(item.id))
+            (employeeWorkspaceIds
+              ? items.filter((item) => employeeWorkspaceIds.includes(item.id))
               : items) as WorkspaceItem[],
           );
         }
@@ -783,9 +785,11 @@ export default function Workspace() {
 
           {/* Footer / pagination */}
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-gray-800">
-            <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-              <span>{selectedCount} selected</span>
-            </div>
+            {!isIndividualEmployee && (
+              <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                <span>{selectedCount} selected</span>
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"

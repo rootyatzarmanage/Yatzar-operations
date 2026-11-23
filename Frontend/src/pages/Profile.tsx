@@ -1,6 +1,7 @@
 "use client";
 
 import PageMeta from "@/components/common/PageMeta";
+import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
@@ -68,6 +69,7 @@ export default function Profile() {
   return (
     <>
       <PageMeta title="Profile | Yatzar Operations" description="Manage your Yatzar Operations profile" />
+      <PageBreadcrumb pageTitle="Profile" />
       <div className="mx-auto w-full max-w-5xl space-y-3">
         <section className={cardClass}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
