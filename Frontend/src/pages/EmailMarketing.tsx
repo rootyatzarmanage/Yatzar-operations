@@ -67,6 +67,7 @@ type EmailCampaignForm = {
   sender: string;
   testEmail: string;
   tagIds: string[];
+  selectedUserIds: string[] | null;
   subject: string;
   content: string;
   mailType: MailType;
@@ -1225,6 +1226,7 @@ function EmailCampaignForm({
   const { user } = useAuth();
   const canUpdateContacts = hasPermission(user, "Contacts", "update");
   const { currentWorkspace } = useWorkspace();
+  const isEditing = Boolean(initialCampaign);
   const [mailType, setMailType] =
     useState<MailType>(
       initialCampaign?.mailType ?? "test",
@@ -1266,7 +1268,7 @@ function EmailCampaignForm({
     initialCampaign?.tagIds ?? [],
   );
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[] | null>(initialSelectedUserIds);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[] | null>(null);
 
   const [subject, setSubject] = useState(
     initialCampaign?.subject ?? "",
@@ -1412,6 +1414,7 @@ function EmailCampaignForm({
           sender: sender.trim(),
           testEmail: testEmail.trim(),
           tagIds: [],
+          selectedUserIds: null,
           subject: subject.trim(),
           content: content.trim(),
           mailType,
@@ -1447,6 +1450,7 @@ function EmailCampaignForm({
         sender: sender.trim(),
         testEmail: "",
         tagIds,
+        selectedUserIds,
         subject: subject.trim(),
         content: content.trim(),
         mailType,
