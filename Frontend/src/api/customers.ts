@@ -99,8 +99,16 @@ function fromContact(contact: Contact): CustomerRecord {
   };
 }
 
-export const listCustomers = async () =>
-  (await listContactStage("customer")).map(fromContact);
+export const listCustomers = async () => {
+  const customers = (await listContactStage("customer")).map(fromContact);
+  const year = new Date().getFullYear();
+  return customers
+    .sort((first, second) => first.createdAt.localeCompare(second.createdAt) || first.id.localeCompare(second.id))
+    .map((customer, index) => ({
+      ...customer,
+      customerId: `CUS-${year}-${String(index + 1).padStart(4, "0")}`,
+    }));
+};
 
 export const createCustomer = async (values: RecordValues) =>
   fromContact(await moveContact((await createContact(toPayload(values))).id, "customer"));
