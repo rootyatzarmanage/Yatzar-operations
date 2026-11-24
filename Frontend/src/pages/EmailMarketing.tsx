@@ -74,6 +74,7 @@ type EmailCampaignForm = {
   mailType: MailType;
   scheduledAt: string;
   selectedUserIds: string[] | null;
+  selectedUserIds: string[] | null;
 };
 
 function fromApiCampaign(campaign: ApiEmailCampaign): EmailCampaign {
@@ -1267,15 +1268,15 @@ export default function EmailMarketing() {
 
 function EmailCampaignForm({
   initialCampaign,
-  initialSelectedUserIds,
-  isEditing,
+  initialSelectedUserIds = null,
+  isEditing = false,
   onCancel,
   onSave,
   isSaving,
 }: {
   initialCampaign: EmailCampaign | null;
-  initialSelectedUserIds: string[] | null;
-  isEditing: boolean;
+  initialSelectedUserIds?: string[] | null;
+  isEditing?: boolean;
   onCancel: () => void;
   onSave: (form: EmailCampaignForm) => Promise<void>;
   isSaving: boolean;
