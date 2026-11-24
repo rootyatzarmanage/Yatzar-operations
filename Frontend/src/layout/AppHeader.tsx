@@ -50,7 +50,7 @@ const AppHeader: React.FC = () => {
         <div className="flex w-full items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:gap-4 xl:justify-normal xl:border-b-0 xl:px-0 xl:py-4 dark:border-gray-800">
           <button
             className={`flex h-10 w-10 items-center justify-center rounded-lg border-gray-200 text-gray-500 lg:h-11 lg:w-11 lg:bg-transparent xl:border dark:border-gray-800 dark:text-gray-400 dark:lg:bg-transparent ${
-              isMobileOpen ? "bg-gray-100 dark:bg-white/3" : ""
+              isMobileOpen ? "bg-gray-100 dark:bg-gray-dark" : ""
             }`}
             onClick={handleToggle}
             aria-label={t("toggleSidebar")}
@@ -148,9 +148,9 @@ const AppHeader: React.FC = () => {
                   ref={inputRef}
                   type="text"
                   placeholder={t("searchPlaceholder")}
-                  className="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-200 bg-transparent py-2.5 ps-12 pe-14 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden xl:w-107.5 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                  className="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-200 bg-transparent py-2.5 ps-12 pe-14 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden xl:w-107.5 dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
                 />
-                <button className="absolute inset-e-2.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-1.75 py-[4.5px] text-xs tracking-[-0.2px] text-gray-500 dark:border-gray-800 dark:bg-white/3 dark:text-gray-400">
+                <button className="absolute inset-e-2.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-1.75 py-[4.5px] text-xs tracking-[-0.2px] text-gray-500 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-400">
                   <span> ⌘ </span>
                   <span> K </span>
                 </button>
@@ -189,7 +189,7 @@ const AppHeader: React.FC = () => {
                   ref={mobileInputRef}
                   type="text"
                   placeholder={t("searchPlaceholder")}
-                  className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 py-2 ps-10 pe-4 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 py-2 ps-10 pe-4 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 focus:outline-hidden dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
                 />
               </div>
             </form>

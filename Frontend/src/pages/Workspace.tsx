@@ -78,7 +78,7 @@ const LayoutIcon = ({ className = "size-6" }: { className?: string }) => (
 );
 
 const fieldClass =
-  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800 dark:focus:bg-transparent";
+  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:focus:border-brand-800 dark:focus:bg-transparent";
 
 export default function Workspace() {
   const { t } = useTranslation();
@@ -566,7 +566,7 @@ export default function Workspace() {
                   setPage(1);
                 }}
                 placeholder="Search workspace"
-                className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800"
+                className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:focus:border-brand-800"
               />
             </div>
 

@@ -127,7 +127,7 @@ export default function UserDropdown() {
                 <span>{t("userDropdown.language")}</span>
               </span>
 
-              <span className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-theme-xs font-medium text-gray-700 dark:border-gray-800 dark:bg-white/3 dark:text-gray-300">
+              <span className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-theme-xs font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-300">
                 <span>{currentLang.shortName}</span>
                 <CurrentFlagIcon className="size-3.5 shrink-0 overflow-hidden rounded-full" />
               </span>

@@ -46,7 +46,7 @@ const reminders = ["None", "At time of call", "5 minutes before", "15 minutes be
 const purposes = ["-None-", "Prospecting", "Administrative", "Negotiation", "Demo", "Project", "Desk"];
 
 const inputClass =
-  "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:bg-white/3 dark:text-white/90";
+  "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:bg-gray-dark dark:text-white/90";
 const labelClass = "mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300";
 const thClass =
   "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";

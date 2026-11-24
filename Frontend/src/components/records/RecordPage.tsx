@@ -101,7 +101,7 @@ type Props<T extends StoredRecord> = {
 };
 
 const inputClass =
-  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
+  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:focus:border-brand-800";
 const headerClass =
   "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";
 
@@ -657,7 +657,7 @@ export default function RecordPage<T extends StoredRecord>({
                   setPage(1);
                 }}
                 placeholder={searchPlaceholder}
-                className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800"
+                className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:focus:border-brand-800"
               />
             </div>
             <div className="relative flex flex-wrap items-center gap-2">
