@@ -16,6 +16,8 @@ MENU_SEEDS = [
     ("App Permission", "appPermission", "/app-permission"),
     ("Workspace", "workspace", "/workspace"),
     ("Contacts", "contacts", "/contacts"),
+    ("Leads", "leads", "/leads"),
+    ("Customers", "customers", "/customers"),
     ("Tasks", "tasks", "/tasks"),
     ("Meetings", "meetings", "/meetings"),
     ("Calls", "calls", "/calls"),
@@ -26,12 +28,12 @@ MENU_SEEDS = [
 
 ROLE_SEEDS = {
     "Super Admin": {"all": True},
-    "Admin": {"Teams": (True, True, True, True), "Workspace": (True, True, True, False), "Contacts": (True, True, True, False)},
-    "Manager": {"Teams": (True, True, True, False), "Workspace": (False, True, True, False), "Contacts": (True, True, True, False)},
-    "Team Leader": {"Teams": (False, True, True, False), "Workspace": (False, True, False, False), "Contacts": (False, True, False, False)},
-    "Accountant": {"Workspace": (True, True, True, False), "Contacts": (False, True, False, False)},
+    "Admin": {"Teams": (True, True, True, True), "Workspace": (True, True, True, False), "Contacts": (True, True, True, False), "Leads": (True, True, True, False), "Customers": (True, True, True, False)},
+    "Manager": {"Teams": (True, True, True, False), "Workspace": (False, True, True, False), "Contacts": (True, True, True, False), "Leads": (True, True, True, False), "Customers": (True, True, True, False)},
+    "Team Leader": {"Teams": (False, True, True, False), "Workspace": (False, True, False, False), "Contacts": (False, True, False, False), "Leads": (False, True, False, False), "Customers": (False, True, False, False)},
+    "Accountant": {"Workspace": (True, True, True, False), "Contacts": (False, True, False, False), "Leads": (False, True, False, False), "Customers": (False, True, False, False)},
     "Employee": {"Teams": (False, True, False, False), "Workspace": (False, True, False, False)},
-    "Viewer": {"Teams": (False, True, False, False), "App Permission": (False, True, False, False), "Workspace": (False, True, False, False), "Contacts": (False, True, False, False)},
+    "Viewer": {"Teams": (False, True, False, False), "App Permission": (False, True, False, False), "Workspace": (False, True, False, False), "Contacts": (False, True, False, False), "Leads": (False, True, False, False), "Customers": (False, True, False, False)},
 }
 
 INDIA_LOCATIONS = {
