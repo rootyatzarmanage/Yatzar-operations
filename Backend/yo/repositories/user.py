@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -27,3 +28,10 @@ class UserRepository:
             ))
         result = await self.session.execute(query)
         return result.unique().scalar_one_or_none()
+
+    async def update_password(self, user: User, password_hash: str) -> User:
+        user.password_hash = password_hash
+        user.password_changed_at = datetime.now(timezone.utc)
+        user.updated_by = user.id
+        await self.session.flush()
+        return user

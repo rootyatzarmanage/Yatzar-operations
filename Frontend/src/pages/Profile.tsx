@@ -3,6 +3,7 @@
 import PageMeta from "@/components/common/PageMeta";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import { useAuth } from "@/context/AuthContext";
+import { request } from "@/api/client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type ProfileForm = {
@@ -43,6 +44,11 @@ export default function Profile() {
   });
   const [profileNotice, setProfileNotice] = useState("");
   const [addressNotice, setAddressNotice] = useState("");
+  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [passwordNotice, setPasswordNotice] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
 
   useEffect(() => {
     setForm((current) => ({ ...current, ...initialName, email: user?.email ?? "" }));
@@ -79,6 +85,26 @@ export default function Profile() {
     setTimeout(() => {
       setAddressNotice("");
     }, 3000);
+  };
+
+  const changePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordSaving(true);
+    setPasswordError("");
+    setPasswordNotice("");
+    try {
+      await request<null>("/profile/change-password", {
+        method: "POST",
+        body: JSON.stringify(passwordForm),
+      });
+      setPasswordNotice("Password changed successfully.");
+      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+      setShowPasswordDialog(false);
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : "Unable to change password.");
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   return (
@@ -154,15 +180,26 @@ export default function Profile() {
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Manage how you sign in and keep your account secure.</p>
           </div>
           <div className="flex items-center justify-between border-b border-gray-100 py-3 dark:border-gray-800">
-            <div><p className="text-xs font-medium text-gray-800 dark:text-gray-200">Change Password</p><p className="text-xs text-gray-500 dark:text-gray-400">Last changed Jun 2025</p></div>
-            <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300">Change Password</button>
+            <div><p className="text-xs font-medium text-gray-800 dark:text-gray-200">Change Password</p><p className="text-xs text-gray-500 dark:text-gray-400">Update your account password.</p></div>
+            <button type="button" onClick={() => { setPasswordError(""); setPasswordNotice(""); setShowPasswordDialog(true); }} className="rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300">Change Password</button>
           </div>
-          <div className="flex items-center justify-between pt-3">
-            <div><p className="text-xs font-medium text-gray-800 dark:text-gray-200">Two-Factor Authentication</p><p className="text-xs text-gray-500 dark:text-gray-400">Add an extra layer of security at sign-in.</p></div>
-            <button type="button" role="switch" aria-checked="false" aria-label="Enable two-factor authentication" className="relative h-6 w-10 rounded-full bg-gray-200 p-1 dark:bg-gray-700"><span className="block h-4 w-4 rounded-full bg-white shadow-sm" /></button>
-          </div>
+          {passwordNotice && <p role="status" className="pt-3 text-xs text-green-600">{passwordNotice}</p>}
         </section>
       </div>
+      {showPasswordDialog && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !passwordSaving) setShowPasswordDialog(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="change-password-title" className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <h2 id="change-password-title" className="mb-4 text-base font-semibold text-gray-900 dark:text-white">Change Password</h2>
+            <form onSubmit={changePassword} className="space-y-3">
+            <label className="block"><span className={labelClass}>Current password</span><input type="password" autoComplete="current-password" required maxLength={128} value={passwordForm.current_password} onChange={(event) => setPasswordForm((current) => ({ ...current, current_password: event.target.value }))} className={inputClass} /></label>
+            <label className="block"><span className={labelClass}>New password</span><input type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={passwordForm.new_password} onChange={(event) => setPasswordForm((current) => ({ ...current, new_password: event.target.value }))} className={inputClass} /></label>
+            <label className="block"><span className={labelClass}>Confirm new password</span><input type="password" autoComplete="new-password" required maxLength={128} value={passwordForm.confirm_password} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm_password: event.target.value }))} className={inputClass} /></label>
+            {passwordError && <p role="alert" className="text-xs text-red-600">{passwordError}</p>}
+            <div className="flex justify-end gap-2 pt-1"><button type="button" disabled={passwordSaving} onClick={() => setShowPasswordDialog(false)} className="rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300">Cancel</button><button type="submit" disabled={passwordSaving} className="rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300">{passwordSaving ? "Saving..." : "Change Password"}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
     </>
   );
 }
