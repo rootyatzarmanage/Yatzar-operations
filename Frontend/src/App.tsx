@@ -60,6 +60,23 @@ function ContactsScopeRoute({ children }: { children: ReactNode }) {
   );
 }
 
+function MenuPermissionRoute({ menu, children }: { menu: string; children: ReactNode }) {
+  const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
+  const isSuperAdmin = user?.role === "Super Admin";
+
+  if (!isSuperAdmin && !currentWorkspace) {
+    return (
+      <Navigate
+        to={hasPermission(user, "Workspace") ? "/workspace" : "/"}
+        replace
+      />
+    );
+  }
+
+  return hasPermission(user, menu) ? children : <Navigate to="/" replace />;
+}
+
 function DefaultAppRoute() {
   const { user } = useAuth();
   const { currentWorkspace } = useWorkspace();
@@ -69,6 +86,9 @@ function DefaultAppRoute() {
     ["Workspace", "/workspace"],
     ...(canOpenContactsGlobally || currentWorkspace
       ? [["Contacts", "/contacts"]]
+      : []),
+    ...(canOpenContactsGlobally || currentWorkspace
+      ? [["Leads", "/leads"], ["Customers", "/customers"]]
       : []),
     ["Tasks", "/task"],
     ["Meetings", "/meetings"],
@@ -106,8 +126,8 @@ export default function App() {
             <Route path="/profile" element={<Profile />} />
 
             {/* Workspace menu: Engagement */}
-            <Route path="/leads" element={<ContactsScopeRoute><Leads /></ContactsScopeRoute>} />
-            <Route path="/customers" element={<ContactsScopeRoute><Customers /></ContactsScopeRoute>} />
+            <Route path="/leads" element={<MenuPermissionRoute menu="Leads"><Leads /></MenuPermissionRoute>} />
+            <Route path="/customers" element={<MenuPermissionRoute menu="Customers"><Customers /></MenuPermissionRoute>} />
             <Route path="/task" element={<PermissionRoute menu="Tasks"><Task /></PermissionRoute>} />
             <Route path="/meetings" element={<PermissionRoute menu="Meetings"><Meetings /></PermissionRoute>} />
             <Route path="/calls" element={<PermissionRoute menu="Calls"><Calls /></PermissionRoute>} />
