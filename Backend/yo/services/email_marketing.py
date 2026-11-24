@@ -139,7 +139,7 @@ class EmailMarketingService:
 
         return str(soup)
 
-    async def create_and_send(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+    async def _prepare_campaign(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
         """Persist recipients before the worker performs any external delivery."""
         await WorkspaceService(self.repository.session).ensure_access(
             self.user_id, self.repository.workspace_id,
