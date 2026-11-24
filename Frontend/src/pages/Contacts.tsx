@@ -612,8 +612,8 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       const saved = await saveContact();
       if (!saved) return;
       try {
-        if (to === "leads") await addContactToLeads(saved.id);
-        else await addContactToCustomers(saved.id);
+        if (to === "leads") await addContactToLeads(saved.id, saved.workspace);
+        else await addContactToCustomers(saved.id, saved.workspace);
         setContacts((current) =>
           current.filter((contact) => contact.id !== saved.id),
         );
@@ -678,7 +678,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
         await addContactToLeads(contact.id, workspaceId);
         movedIds.push(contact.id);
       } else {
-        await addContactToCustomers(contact.id);
+        await addContactToCustomers(contact.id, contact.workspace);
         movedIds.push(contact.id);
       }
       setContacts((current) => current.filter((item) => !movedIds.includes(item.id)));
