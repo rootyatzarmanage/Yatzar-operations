@@ -1159,7 +1159,7 @@ const handleBulkDelete = async () => {
                     filteredContacts.length,
                   )} of ${filteredContacts.length} contacts`}
             </span>
-            <span>{selectedCount} selected</span>
+            {canDelete && <span>{selectedCount} selected</span>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button

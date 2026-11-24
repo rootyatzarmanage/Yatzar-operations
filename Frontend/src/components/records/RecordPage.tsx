@@ -813,7 +813,7 @@ export default function RecordPage<T extends StoredRecord>({
                   ? `Showing 0 ${plural}`
                   : `Showing ${startIndex + 1} to ${Math.min(startIndex + entriesPerPage, filtered.length)} of ${filtered.length} ${plural}`}
               </span>
-              <span>{selectedCount} selected</span>
+              {canDelete && <span>{selectedCount} selected</span>}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button type="button" disabled={currentPage === 1} onClick={() => setPage((c) => Math.max(1, c - 1))} className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-transparent dark:text-gray-300">

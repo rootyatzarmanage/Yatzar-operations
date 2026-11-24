@@ -253,6 +253,8 @@ export default function Campaign() {
 
   if (showAddCampaign || editingCampaign) {
     return (
+      <div className="space-y-6">
+      <PageBreadcrumb pageTitle="Campaigns" parent={{ label: "Marketing" }} />
       <AddCampaign
         onCancel={() => {
           setShowAddCampaign(false);
@@ -265,6 +267,7 @@ export default function Campaign() {
         saving={saving}
         readOnly={viewingCampaign}
       />
+      </div>
     );
   }
 
@@ -604,15 +607,7 @@ function AddCampaign({
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">
-          Campaigns
-        </h1>
 
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Create and manage marketing campaigns.
-        </p>
-      </div>
 
       {/* Form */}
       <form
