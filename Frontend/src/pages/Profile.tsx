@@ -41,7 +41,8 @@ export default function Profile() {
     district: "Coimbatore",
     pincode: "",
   });
-  const [notice, setNotice] = useState("");
+  const [profileNotice, setProfileNotice] = useState("");
+  const [addressNotice, setAddressNotice] = useState("");
 
   useEffect(() => {
     setForm((current) => ({ ...current, ...initialName, email: user?.email ?? "" }));
@@ -59,11 +60,25 @@ export default function Profile() {
     .toUpperCase();
   const updateField = (field: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
-    setNotice("");
+    setProfileNotice("");
+    setAddressNotice("");
   };
-  const saveSection = (event: FormEvent<HTMLFormElement>) => {
+  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setNotice("Profile details saved.");
+    setProfileNotice("Profile details saved.");
+
+    setTimeout(() => {
+      setProfileNotice("");
+    }, 3000);
+  };
+
+  const saveAddress = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAddressNotice("Address details saved.");
+
+    setTimeout(() => {
+      setAddressNotice("");
+    }, 3000);
   };
 
   return (
@@ -97,7 +112,7 @@ export default function Profile() {
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">Profile</h2>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Your Basic Account Information.</p>
           </div>
-          <form onSubmit={saveSection}>
+          <form onSubmit={saveProfile}>
             <div className="grid gap-4 sm:grid-cols-2">
               <label><span className={labelClass}>First Name</span><input value={form.firstName} onChange={(event) => updateField("firstName", event.target.value)} className={inputClass} placeholder="Enter first name" /></label>
               <label><span className={labelClass}>Last Name</span><input value={form.lastName} onChange={(event) => updateField("lastName", event.target.value)} className={inputClass} placeholder="Enter last name" /></label>
@@ -111,7 +126,7 @@ export default function Profile() {
               </label>
             </div>
             <div className="mt-4 flex items-center justify-end gap-3">
-              {notice && <span className="text-xs text-green-600">{notice}</span>}
+              {profileNotice && <span className="text-xs text-green-600">{profileNotice}</span>}
               <button type="submit" className="rounded-lg bg-sky-400 px-3 py-2 text-xs font-medium text-white hover:bg-sky-500">▣&nbsp; Save</button>
             </div>
           </form>
@@ -122,14 +137,14 @@ export default function Profile() {
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">Address</h2>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">This address appears on your invoices and account records.</p>
           </div>
-          <form onSubmit={saveSection}>
+          <form onSubmit={saveAddress}>
             <div className="grid gap-4 sm:grid-cols-2">
               <label><span className={labelClass}>Country</span><select value={form.country} onChange={(event) => updateField("country", event.target.value)} className={inputClass}><option>India</option><option>United States</option><option>United Kingdom</option></select></label>
               <label><span className={labelClass}>State</span><select value={form.state} onChange={(event) => updateField("state", event.target.value)} className={inputClass}><option>Tamil Nadu</option><option>Karnataka</option><option>Kerala</option></select></label>
               <label><span className={labelClass}>District</span><select value={form.district} onChange={(event) => updateField("district", event.target.value)} className={inputClass}><option>Coimbatore</option><option>Chennai</option><option>Madurai</option></select></label>
               <label><span className={labelClass}>Pin code</span><input value={form.pincode} onChange={(event) => updateField("pincode", event.target.value)} className={inputClass} placeholder="e.g. 641006" /></label>
             </div>
-            <div className="mt-4 flex justify-end"><button type="submit" className="rounded-lg bg-sky-400 px-3 py-2 text-xs font-medium text-white hover:bg-sky-500">▣&nbsp; Save</button></div>
+            <div className="mt-4 flex justify-end gap-3">{addressNotice && <span className="text-xs text-green-600">{addressNotice}</span>}<button type="submit" className="rounded-lg bg-sky-400 px-3 py-2 text-xs font-medium text-white hover:bg-sky-500">▣&nbsp; Save</button></div>
           </form>
         </section>
 
