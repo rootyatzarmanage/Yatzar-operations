@@ -433,12 +433,12 @@ export default function RecordPage<T extends StoredRecord>({
             record.id === updated.id ? (updated as T) : record,
           ),
         );
-        setNotice(`${singular} updated in this browser.`);
+        setNotice(`${singular} updated successfully.`);
       } else {
         const created = await store.create(cleaned);
         setRecords((current) => [created, ...current]);
         setPage(1);
-        setNotice(`${singular} saved in this browser.`);
+        setNotice(`${singular} saved successfully.`);
       }
       closeForm();
     } catch (error) {
@@ -872,7 +872,7 @@ export default function RecordPage<T extends StoredRecord>({
                   {viewing ? `View ${singular}` : editingId ? `Edit ${singular}` : addLabel}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {singular} details are stored locally in this browser.
+                  {singular} details are stored.
                 </p>
               </div>
               <div className="flex items-center gap-2">
