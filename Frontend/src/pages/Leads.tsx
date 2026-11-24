@@ -149,7 +149,7 @@ export default function Leads({ embed }: EmbedProps = {}) {
           tone: "emerald",
           confirm: (n) => `Move ${n} to Customers? It will be removed from Leads.`,
           done: (n) => `${n} moved to Customers.`,
-          run: (r) => addLeadToCustomers(r.id, r.workspaceId),
+          run: (r) => addLeadToCustomers(r.id, typeof r.workspaceId === "string" ? r.workspaceId : undefined),
         },
       ]}
     />
