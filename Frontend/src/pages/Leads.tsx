@@ -1,5 +1,7 @@
 import { listOptions } from "@/api/options";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { useAuth } from "../context/AuthContext";
+
 import {
   addLeadToCustomers,
   createLead,
