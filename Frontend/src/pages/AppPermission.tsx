@@ -48,6 +48,8 @@ const knownMenuItems: MenuItem[] = [
   { name: "App Permission", icon: ShieldIcon },
   { name: "Workspace", icon: WorkspaceIcon },
   { name: "Contacts", icon: ContactsIcon },
+  { name: "Leads", icon: ContactsIcon },
+  { name: "Customers", icon: UsersIcon },
   { name: "Tasks", icon: ShieldIcon },
   { name: "Meetings", icon: ContactsIcon },
   { name: "Calls", icon: UsersIcon },

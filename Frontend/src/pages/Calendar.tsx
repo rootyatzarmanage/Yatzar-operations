@@ -158,6 +158,8 @@ function Swatch({ color }: { color: string }) {
 export default function Calendar() {
   const { user } = useAuth();
   const canCreateContacts = hasPermission(user, "Contacts", "create");
+  const canCreateLeads = hasPermission(user, "Leads", "create");
+  const canCreateCustomers = hasPermission(user, "Customers", "create");
   const canCreateTasks = hasPermission(user, "Tasks", "create");
   const canCreateMeetings = hasPermission(user, "Meetings", "create");
   const canCreateCalls = hasPermission(user, "Calls", "create");
@@ -841,8 +843,8 @@ export default function Calendar() {
                 {menu === "engagement" && (
                   <div className={`${menuBox} left-0 w-44 p-1`}>
                     <button type="button" className={menuItem} onClick={() => openForm("contacts")}><Swatch color={EVC.Contact} />Add Contact</button>
-                    {canCreateContacts && <button type="button" className={menuItem} onClick={() => openForm("leads")}><Swatch color={EVC.Lead} />Add Leads</button>}
-                    {canCreateContacts && <button type="button" className={menuItem} onClick={() => openForm("customers")}><Swatch color={EVC.Customer} />Add Customer</button>}
+                    {canCreateLeads && <button type="button" className={menuItem} onClick={() => openForm("leads")}><Swatch color={EVC.Lead} />Add Leads</button>}
+                    {canCreateCustomers && <button type="button" className={menuItem} onClick={() => openForm("customers")}><Swatch color={EVC.Customer} />Add Customer</button>}
                   </div>
                 )}
               </div>}

@@ -9,7 +9,15 @@ import {
 } from "@/api/contacts";
 import type { RecordValues, StoredRecord } from "@/storage/localStore";
 
-export type LeadRecord = StoredRecord;
+export type LeadRecord = StoredRecord & {
+  workspaceId: string;
+  leadOwner: string;
+  company: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+};
 
 const text = (values: RecordValues, key: string) => String(values[key] ?? "").trim();
 const nullable = (values: RecordValues, key: string) => text(values, key) || null;

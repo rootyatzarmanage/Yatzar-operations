@@ -119,7 +119,7 @@ export default function Customers({ embed }: EmbedProps = {}) {
 
   return (
     <RecordPage<CustomerRecord>
-      permissionMenu="Contacts"
+      permissionMenu="Customers"
       embed={embed}
       pageTitle="Customers"
       parent={{ label: "Engagement" }}
