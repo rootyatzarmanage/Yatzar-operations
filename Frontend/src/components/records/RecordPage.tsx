@@ -433,12 +433,12 @@ export default function RecordPage<T extends StoredRecord>({
             record.id === updated.id ? (updated as T) : record,
           ),
         );
-        setNotice(`${singular} updated successfully.`);
+        setNotice(`${singular} updated in this browser.`);
       } else {
         const created = await store.create(cleaned);
         setRecords((current) => [created, ...current]);
         setPage(1);
-        setNotice(`${singular} saved successfully.`);
+        setNotice(`${singular} saved in this browser.`);
       }
       closeForm();
     } catch (error) {
@@ -872,11 +872,11 @@ export default function RecordPage<T extends StoredRecord>({
                   {viewing ? `View ${singular}` : editingId ? `Edit ${singular}` : addLabel}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {singular} details are stored.
+                  {singular} details are stored locally in this browser.
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={closeForm} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5">
+                <button type="button" onClick={closeForm} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-dark">
                   ← Back to table
                 </button>
                 {!viewing && canUpdate && canSave && moves.map((move) => (

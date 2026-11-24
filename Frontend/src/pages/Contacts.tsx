@@ -112,7 +112,7 @@ function contactFieldError(field: StringFieldKey, value: string) {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800";
+  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-700 transition outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:focus:border-brand-800";
 const tableHeaderClass =
   "px-3 py-3 text-start text-xs font-medium tracking-wide whitespace-nowrap text-gray-500 uppercase sm:px-5 dark:text-gray-400";
 const defaultLeadSources = [
@@ -946,7 +946,7 @@ const handleBulkDelete = async () => {
                 setPage(1);
               }}
               placeholder="Search contacts"
-              className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-white/3 dark:text-white/90 dark:focus:border-brand-800"
+              className="h-11 w-full min-w-0 rounded-lg border border-gray-200 bg-transparent px-3 ps-9 text-base text-gray-800 shadow-theme-xs transition outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 sm:text-sm dark:border-gray-800 dark:bg-gray-dark dark:text-white/90 dark:focus:border-brand-800"
             />
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
@@ -958,7 +958,7 @@ const handleBulkDelete = async () => {
                   setEntriesPerPage(Number(event.target.value));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300"
+                className="h-9 rounded-lg border border-gray-200 bg-transparent px-2 text-gray-700 dark:border-gray-800 dark:text-gray-300 dark:bg-gray-dark"
               >
                 {[5, 10, 25, 50].map((size) => (
                   <option key={size} value={size}>
@@ -1166,7 +1166,7 @@ const handleBulkDelete = async () => {
               type="button"
               disabled={currentPage === 1}
               onClick={() => setPage((current) => Math.max(1, current - 1))}
-              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+              className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-300 dark:hover:bg-white/5 dark:disabled:bg-gray-dark"
             >
               Previous
             </button>
@@ -1175,7 +1175,7 @@ const handleBulkDelete = async () => {
                 key={pageNumber}
                 type="button"
                 onClick={() => setPage(pageNumber)}
-                className={`size-9 rounded-lg border text-sm font-medium ${currentPage === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/5"}`}
+                className={`size-9 rounded-lg border text-sm font-medium ${currentPage === pageNumber ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-300 dark:hover:bg-white/5"}`}
                 aria-current={currentPage === pageNumber ? "page" : undefined}
               >
                 {pageNumber}
@@ -1187,7 +1187,7 @@ const handleBulkDelete = async () => {
               onClick={() =>
                 setPage((current) => Math.min(totalPages, current + 1))
               }
-              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:text-gray-300"
+              className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-800 dark:bg-gray-dark dark:text-gray-300 dark:hover:bg-white/5 dark:disabled:bg-gray-dark"
             >
               Next
             </button>

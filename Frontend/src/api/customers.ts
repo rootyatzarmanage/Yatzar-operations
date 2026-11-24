@@ -119,11 +119,20 @@ export const listCustomers = async () => {
     }));
 };
 
-export const createCustomer = async (values: RecordValues) =>
-  fromContact(await moveContact((await createContact(toPayload(values))).id, "customer"));
+const getCustomerWithDisplayId = async (customer: CustomerRecord) =>
+  (await listCustomers()).find((item) => item.id === customer.id) ?? customer;
 
-export const updateCustomer = async (id: string, values: RecordValues) =>
-  fromContact(await updateContact(id, toPayload(values)));
+export const createCustomer = async (values: RecordValues) => {
+  const customer = fromContact(
+    await moveContact((await createContact(toPayload(values))).id, "customer"),
+  );
+  return getCustomerWithDisplayId(customer);
+};
+
+export const updateCustomer = async (id: string, values: RecordValues) => {
+  const customer = fromContact(await updateContact(id, toPayload(values)));
+  return getCustomerWithDisplayId(customer);
+};
 
 export const deleteCustomer = async (id: string) => {
   await deleteContact(id);
