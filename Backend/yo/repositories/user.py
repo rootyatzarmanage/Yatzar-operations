@@ -35,3 +35,20 @@ class UserRepository:
         user.updated_by = user.id
         await self.session.flush()
         return user
+
+    async def get_by_email(self, email: str, exclude_user_id: UUID) -> User | None:
+        result = await self.session.execute(
+            select(User).where(User.email == email, User.id != exclude_user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_profile(self, user: User, values: dict, employee_values: dict) -> User:
+        for key, value in values.items():
+            setattr(user, key, value)
+        if user.employee is not None:
+            for key, value in employee_values.items():
+                setattr(user.employee, key, value)
+            user.employee.updated_by = user.id
+        user.updated_by = user.id
+        await self.session.flush()
+        return user

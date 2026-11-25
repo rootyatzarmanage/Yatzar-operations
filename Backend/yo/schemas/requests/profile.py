@@ -1,6 +1,28 @@
 import re
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str = Field(max_length=150)
+    email: EmailStr
+    mobile: str = Field(max_length=30)
+    country: str = Field(max_length=100)
+    state: str = Field(max_length=100)
+    district: str = Field(max_length=100)
+    pincode: str = Field(max_length=20)
+
+    @field_validator("name", "mobile", "country", "state", "district", "pincode", mode="before")
+    @classmethod
+    def strip_profile_values(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
+    name: str
+    email: EmailStr
+    mobile: str
+    country: str
+    state: str
+    district: str
+    pincode: str
 
 
 class ChangePasswordRequest(BaseModel):

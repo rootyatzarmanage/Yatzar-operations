@@ -14,12 +14,13 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 async def _user_response(user: User, session: DatabaseSession, token: str | None = None) -> AuthUserResponse:
+    profile_name = " ".join(part for part in (user.first_name, user.last_name) if part) or None
     return AuthUserResponse(
         id=user.id,
         username=user.username,
         email=user.email,
-        employee_name=user.employee.employee_name if user.employee else None,
-        display_name=user.employee.display_name if user.employee else None,
+        employee_name=user.employee.employee_name if user.employee else profile_name,
+        display_name=user.employee.display_name if user.employee else profile_name,
         role=user.role.name if user.role else "",
         photo=user.employee.photo if user.employee else None,
         token=token,
