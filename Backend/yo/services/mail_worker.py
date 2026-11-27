@@ -11,7 +11,7 @@ from sqlalchemy import select, or_
 
 from yo.core.config import settings
 from yo.core.database import AsyncSessionLocal
-from yo.core.email import send_email, smtp_configured
+from yo.core.email import send_email
 from yo.core.mail_schedule import aware, reminder_offset
 from yo.models.calendar_event import CalendarEvent
 from yo.models.call import Call
@@ -228,8 +228,6 @@ async def process_campaign(campaign_id):
             workspace = await session.get(Workspace, campaign.workspace_id) if campaign.workspace_id else None
             if not workspace or workspace.deleted_at is not None or workspace.status != "Enabled":
                 return
-            if not await user_email(session, campaign.created_by, campaign.workspace_id):
-                return
             recipients = list(await session.scalars(select(EmailMarketingRecipient).where(
                 EmailMarketingRecipient.email_marketing_id == campaign.id,
             ).order_by(EmailMarketingRecipient.created_at, EmailMarketingRecipient.id)))
@@ -279,10 +277,10 @@ async def process_campaign(campaign_id):
             else:
                 eligible = [r for r in recipients if r.is_enabled]
                 if campaign.mail_type == "Test Email":
-                    # Test mails are not counted as a send; the campaign stays editable.
+                    # A test campaign has one recipient, so count it after SMTP accepts it.
                     campaign.status = "Test" if sent else "Failed"
-                    campaign.sent_count = 0
-                    campaign.sent_at = None
+                    campaign.sent_count = sent
+                    campaign.sent_at = now if sent else None
                 else:
                     campaign.status = "Email Sent" if eligible and all(r.sent for r in eligible) else ("Partially Sent" if sent else "Failed")
                     campaign.sent_at = now if sent else None
@@ -290,8 +288,6 @@ async def process_campaign(campaign_id):
 
 
 async def tick():
-    if not smtp_configured():
-        return
     now = datetime.now(timezone.utc)
     for model, filters in (
         (Task, [Task.reminder_enabled.is_(True), Task.reminder_at <= now]),
@@ -316,8 +312,6 @@ async def tick():
 
 
 async def run_mail_worker(stop: asyncio.Event):
-    if not smtp_configured():
-        logger.warning("Mail worker is enabled but MAIL_HOST or MAIL_FROM_ADDRESS is missing")
     while not stop.is_set():
         try:
             await tick()

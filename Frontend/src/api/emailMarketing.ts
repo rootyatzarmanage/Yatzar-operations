@@ -114,6 +114,25 @@ export function createEmailMarketingCampaign(payload: EmailMarketingCreatePayloa
   });
 }
 
+export function createEmailMarketingCampaignDraft(payload: EmailMarketingCreatePayload) {
+  return request<EmailMarketingCampaign>("/email-marketing/draft", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateEmailMarketingCampaign(
+  campaignId: string,
+  payload: EmailMarketingCreatePayload,
+  saveAsDraft = false,
+) {
+  const suffix = saveAsDraft ? "/draft" : "";
+  return request<EmailMarketingCampaign>(`/email-marketing/${campaignId}${suffix}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function scheduleEmailMarketingCampaign(campaignId: string, scheduledAt: string) {
   return request<EmailMarketingCampaign>(`/email-marketing/${campaignId}/schedule`, {
     method: "PATCH",

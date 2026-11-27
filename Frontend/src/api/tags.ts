@@ -12,10 +12,10 @@ export function listTags(includeInactive = false) {
   return request<Tag[]>(`/tags?include_inactive=${includeInactive}`);
 }
 
-export function createTag(name: string, status = 1) {
+export function createTag(name: string, workspace_id: string, status = 1) {
   return request<Tag>("/tags", {
     method: "POST",
-    body: JSON.stringify({ name, status }),
+    body: JSON.stringify({ name, workspace_id, status }),
   });
 }
 

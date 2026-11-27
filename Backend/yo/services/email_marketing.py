@@ -3,11 +3,11 @@ import hmac
 import logging
 from datetime import datetime, timezone
 
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from uuid import UUID
 
 from bs4 import BeautifulSoup
-from sqlalchemy import select
+from sqlalchemy import delete, func, or_, select
 
 from yo.services.workspace import WorkspaceService
 from yo.core.config import settings
@@ -16,6 +16,7 @@ from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.schemas.requests.email_marketing import EmailMarketingCreateRequest
 from yo.models.email_marketing import EmailMarketingRecipient
+from yo.models.mail_delivery import MailDelivery
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,21 @@ class EmailMarketingService:
     def __init__(self, repository: EmailMarketingRepository, user_id: UUID | None = None):
         self.repository = repository
         self.user_id = user_id
-        self.tracking_base_url = settings.EMAIL_TRACKING_BASE_URL.rstrip("/")
+        configured_tracking = settings.EMAIL_TRACKING_BASE_URL.rstrip("/")
+        public_api_tracking = f"{settings.PUBLIC_API_URL.rstrip('/')}/email-marketing".rstrip("/")
+        configured_host = urlsplit(configured_tracking).hostname
+        public_api_host = urlsplit(public_api_tracking).hostname
+        configured_is_local = configured_host in {"localhost", "127.0.0.1", "::1"}
+        public_api_is_local = public_api_host in {"localhost", "127.0.0.1", "::1"}
+        if configured_tracking and not configured_is_local:
+            tracking_base = configured_tracking
+        elif public_api_tracking and not public_api_is_local:
+            # Avoid shipping a localhost pixel URL when the app already knows
+            # its externally reachable API origin.
+            tracking_base = public_api_tracking
+        else:
+            tracking_base = configured_tracking or public_api_tracking
+        self.tracking_base_url = tracking_base.rstrip("/")
         self.tracking_secret = settings.EMAIL_TRACKING_SECRET or settings.SESSION_SECRET
 
     async def get_campaign(self, campaign_id: UUID):
@@ -45,12 +60,26 @@ class EmailMarketingService:
             await WorkspaceService(self.repository.session).ensure_access(
                 self.user_id, self.repository.workspace_id,
             )
-        return await self.repository.list_campaigns(
+        result = await self.repository.list_campaigns(
             user_id=self.user_id,
             search=search,
             page=page,
             per_page=per_page,
         )
+        campaigns = result["items"]
+        if campaigns:
+            sent_counts = dict((await self.repository.session.execute(
+                select(
+                    EmailMarketingRecipient.email_marketing_id,
+                    func.count(EmailMarketingRecipient.id),
+                ).where(
+                    EmailMarketingRecipient.email_marketing_id.in_([item.id for item in campaigns]),
+                    EmailMarketingRecipient.sent.is_(True),
+                ).group_by(EmailMarketingRecipient.email_marketing_id)
+            )).all())
+            for campaign in campaigns:
+                campaign.sent_count = max(campaign.sent_count, sent_counts.get(campaign.id, 0))
+        return result
 
     async def list_recipients(self, campaign_id: UUID, page: int, per_page: int):
         await WorkspaceService(self.repository.session).ensure_access(
@@ -129,13 +158,16 @@ class EmailMarketingService:
         pixel["src"] = open_url
         pixel["width"] = "1"
         pixel["height"] = "1"
-        pixel["style"] = "width:1px;height:1px;border:0;"
+        # Keep the beacon as a normal, cache-busted remote image. Some mail
+        # clients discard fully transparent/hidden images before loading them.
+        pixel["style"] = "display:block;width:1px;height:1px;border:0;outline:none;text-decoration:none;"
         pixel["alt"] = ""
+        pixel["border"] = "0"
 
         if soup.body:
             soup.body.append(pixel)
         else:
-            soup.append(pixel)
+            soup.insert(0, pixel)
 
         return str(soup)
 
@@ -173,7 +205,17 @@ class EmailMarketingService:
         await self.repository.create_recipients(campaign.id, recipients_data)
         return campaign
 
-    async def edit_campaign(self, campaign_id: UUID, payload: EmailMarketingCreateRequest):
+    async def create_draft(self, payload: EmailMarketingCreateRequest, logged_user_id: UUID):
+        values, recipients_data = await self._prepare_campaign(payload, logged_user_id)
+        values["status"] = "Draft"
+        campaign = await self.repository.create_campaign(values)
+        await self.repository.create_recipients(campaign.id, recipients_data)
+        return campaign
+
+    async def edit_campaign(
+        self, campaign_id: UUID, payload: EmailMarketingCreateRequest,
+        *, save_as_draft: bool = False,
+    ):
         await WorkspaceService(self.repository.session).ensure_access(
             self.user_id, self.repository.workspace_id,
         )
@@ -192,7 +234,7 @@ class EmailMarketingService:
                     EmailMarketingRecipient.sent.is_(True),
                 ).exists(),
             )))
-            if campaign.status not in {"Draft", "Queued", "Scheduled"} or campaign.sent_count or attempted:
+            if campaign.status not in {"Draft", "Queued", "Scheduled", "Email Sent"} or campaign.sent_count or attempted:
                 raise AppException("Campaigns can only be edited before sending starts. Replicate a sent campaign instead.", 409)
         else:
             # Allow a test campaign to be sent again after editing.
@@ -200,6 +242,8 @@ class EmailMarketingService:
                 MailDelivery.source_type == "marketing", MailDelivery.source_id == campaign.id,
             ))
         values, recipients_data = await self._prepare_campaign(payload, self.user_id)
+        if save_as_draft:
+            values["status"] = "Draft"
         values.pop("created_by", None)
         for field, value in values.items():
             setattr(campaign, field, value)
@@ -254,10 +298,15 @@ class EmailMarketingService:
         if not self.verify_signature(campaign_id, user_id, signature, url):
             raise AppException("Invalid tracking signature", 403)
 
-        return await self.repository.register_click(
+        clicked = await self.repository.register_click(
             campaign_id,
             user_id,
         )
+        if clicked:
+            # A tracked link click proves the recipient opened the message,
+            # even when their mail client blocks remote images.
+            await self.repository.register_open(campaign_id, user_id)
+        return clicked
 
     async def update_recipient_status(self, recipient_id: UUID, is_enabled: bool):
         await WorkspaceService(self.repository.session).ensure_access(
@@ -289,11 +338,17 @@ class EmailMarketingService:
             self.user_id, self.repository.workspace_id,
         )
         campaign = await self.get_campaign(campaign_id)
+        sent_count = await self.repository.session.scalar(select(func.count(
+            EmailMarketingRecipient.id,
+        )).where(
+            EmailMarketingRecipient.email_marketing_id == campaign_id,
+            EmailMarketingRecipient.sent.is_(True),
+        ))
 
         return {
             "campaign_id": campaign.id,
             "campaign_name": campaign.campaign_name,
-            "sent": campaign.sent_count,
+            "sent": max(campaign.sent_count, sent_count or 0),
             "opens": campaign.open_count,
             "clicks": campaign.click_count,
             "last_edited": campaign.updated_at,

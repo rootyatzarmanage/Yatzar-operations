@@ -16,6 +16,7 @@ MENU_SEEDS = [
     ("App Permission", "appPermission", "/app-permission"),
     ("Workspace", "workspace", "/workspace"),
     ("Contacts", "contacts", "/contacts"),
+    ("Tags", "tags", "/tags"),
     ("Leads", "leads", "/leads"),
     ("Customers", "customers", "/customers"),
     ("Tasks", "tasks", "/tasks"),

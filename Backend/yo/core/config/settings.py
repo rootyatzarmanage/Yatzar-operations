@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     MAIL_POLL_SECONDS: float = Field(default=30, ge=1)
     MAIL_MAX_ATTEMPTS: int = Field(default=5, ge=1)
     MAIL_TIMEZONE: str = "Asia/Kolkata"
-    EMAIL_TRACKING_BASE_URL: str = "http://localhost:8000/api/v1/email-marketing"
+    EMAIL_TRACKING_BASE_URL: str = ""
     EMAIL_TRACKING_SECRET: str = ""
 
     model_config = SettingsConfigDict(

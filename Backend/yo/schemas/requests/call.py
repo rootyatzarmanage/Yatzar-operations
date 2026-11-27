@@ -30,10 +30,11 @@ class CallCreateRequest(BaseModel):
     voice_recording: str | None = None
     call_purpose: str | None = None
     call_agenda: str | None = None
+    follow_up: str | None = None
     reminder: str | None = None
     assigned_to: UUID | None = None
 
-    @field_validator("subject", "call_status", "related_to", "voice_recording", "call_purpose", "call_agenda", "reminder")
+    @field_validator("subject", "call_status", "related_to", "voice_recording", "call_purpose", "call_agenda", "follow_up", "reminder")
     @classmethod
     def strip_whitespace(cls, value: str | None) -> str | None:
         if value is not None:
@@ -79,10 +80,11 @@ class CallUpdateRequest(BaseModel):
     voice_recording: str | None = None
     call_purpose: str | None = None
     call_agenda: str | None = None
+    follow_up: str | None = None
     reminder: str | None = None
     assigned_to: UUID | None = None
 
-    @field_validator("subject", "call_status", "related_to", "voice_recording", "call_purpose", "call_agenda", "reminder")
+    @field_validator("subject", "call_status", "related_to", "voice_recording", "call_purpose", "call_agenda", "follow_up", "reminder")
     @classmethod
     def strip_optional_whitespace(cls, value: str | None) -> str | None:
         if value is not None:

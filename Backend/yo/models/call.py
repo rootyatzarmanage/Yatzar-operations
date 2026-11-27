@@ -32,6 +32,7 @@ class Call(Base):
     voice_recording: Mapped[str | None] = mapped_column(Text, nullable=True)
     call_purpose: Mapped[str | None] = mapped_column(String(100), nullable=True)
     call_agenda: Mapped[str | None] = mapped_column(Text, nullable=True)
+    follow_up: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)

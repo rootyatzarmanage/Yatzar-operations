@@ -4,10 +4,9 @@ import logging
 from uuid import UUID
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Query, status
 from fastapi.responses import RedirectResponse, Response
 
-from yo.core.auth.permissions import require_permission
 from yo.core.database import DatabaseSession
 from yo.core.schemas.responses import SuccessResponse
 from yo.core.auth.dependencies import CurrentUser
@@ -15,6 +14,7 @@ from yo.core.exceptions import AppException
 
 from yo.repositories.email_marketing import EmailMarketingRepository
 from yo.services.email_marketing import EmailMarketingService
+from yo.services.role import RoleService
 
 from yo.schemas.requests.email_marketing import (
     EmailMarketingCreateRequest,
@@ -135,6 +135,7 @@ async def create_email_campaign(
     session: DatabaseSession,
     current_user: CurrentUser,
 ) -> SuccessResponse[EmailMarketingResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "create")
     service = get_service(session, payload.workspace_id, current_user.id)
 
     campaign = await service.create_and_send(
@@ -154,11 +155,73 @@ async def create_email_campaign(
     )
 
 
+@router.post(
+    "/draft",
+    response_model=SuccessResponse[EmailMarketingResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Save an email marketing campaign as a draft",
+)
+async def create_email_campaign_draft(
+    payload: EmailMarketingCreateRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> SuccessResponse[EmailMarketingResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "create")
+    service = get_service(session, payload.workspace_id, current_user.id)
+    campaign = await service.create_draft(payload, current_user.id)
+    return SuccessResponse(
+        success=True,
+        message="Email marketing draft saved successfully",
+        data=EmailMarketingResponse.model_validate(campaign),
+    )
+
+
+@router.put(
+    "/{campaign_id}",
+    response_model=SuccessResponse[EmailMarketingResponse],
+)
+async def update_email_campaign(
+    campaign_id: UUID,
+    payload: EmailMarketingCreateRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+    workspace_id: UUID = Query(...),
+) -> SuccessResponse[EmailMarketingResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "update")
+    service = get_service(session, workspace_id, current_user.id)
+    campaign = await service.edit_campaign(campaign_id, payload)
+    return SuccessResponse(
+        success=True,
+        message="Email marketing campaign updated and queued",
+        data=EmailMarketingResponse.model_validate(campaign),
+    )
+
+
+@router.put(
+    "/{campaign_id}/draft",
+    response_model=SuccessResponse[EmailMarketingResponse],
+)
+async def save_email_campaign_draft(
+    campaign_id: UUID,
+    payload: EmailMarketingCreateRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+    workspace_id: UUID = Query(...),
+) -> SuccessResponse[EmailMarketingResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "update")
+    service = get_service(session, workspace_id, current_user.id)
+    campaign = await service.edit_campaign(campaign_id, payload, save_as_draft=True)
+    return SuccessResponse(
+        success=True,
+        message="Email marketing draft saved",
+        data=EmailMarketingResponse.model_validate(campaign),
+    )
+
+
 @router.patch(
     "/{campaign_id}/schedule",
     response_model=SuccessResponse[EmailMarketingResponse],
     summary="Set or change the send time before campaign delivery starts",
-    dependencies=[Depends(require_permission("emailMarketing", "update"))],
 )
 async def schedule_email_campaign(
     campaign_id: UUID,
@@ -167,6 +230,7 @@ async def schedule_email_campaign(
     current_user: CurrentUser,
     workspace_id: UUID = Query(...),
 ) -> SuccessResponse[EmailMarketingResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "update")
     campaign = await get_service(session, workspace_id, current_user.id).schedule_campaign(
         campaign_id, payload.scheduled_at,
     )
@@ -180,7 +244,6 @@ async def schedule_email_campaign(
     "",
     status_code=status.HTTP_200_OK,
     summary="Get email marketing campaigns",
-    dependencies=[Depends(require_permission("emailMarketing", "view"))],
 )
 async def get_email_campaigns(
     session: DatabaseSession,
@@ -191,6 +254,7 @@ async def get_email_campaigns(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=10, ge=1, le=100),
 ):
+    await RoleService(session).check_permission(current_user, "emailMarketing", "view")
     service = get_service(session, workspace_id, current_user.id)
 
     if campaign_id:
@@ -230,7 +294,6 @@ async def get_email_campaigns(
     response_model=SuccessResponse[EmailMarketingRecipientListResponse],
     status_code=status.HTTP_200_OK,
     summary="Get email marketing campaign recipients",
-    dependencies=[Depends(require_permission("emailMarketing", "view"))],
 )
 async def get_email_recipients(
     campaign_id: UUID,
@@ -240,6 +303,7 @@ async def get_email_recipients(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=10, ge=1, le=100),
 ) -> SuccessResponse[EmailMarketingRecipientListResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "view")
     service = get_service(session, workspace_id, current_user.id)
 
     result = await service.list_recipients(
@@ -270,7 +334,6 @@ async def get_email_recipients(
     response_model=SuccessResponse[EmailMarketingRecipientResponse],
     status_code=status.HTTP_200_OK,
     summary="Enable or disable email recipient",
-    dependencies=[Depends(require_permission("emailMarketing", "update"))],
 )
 async def update_recipient_status(
     recipient_id: UUID,
@@ -279,6 +342,7 @@ async def update_recipient_status(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[EmailMarketingRecipientResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "update")
     service = get_service(session, workspace_id, current_user.id)
 
     recipient = await service.update_recipient_status(
@@ -298,7 +362,6 @@ async def update_recipient_status(
     response_model=SuccessResponse[EmailMarketingReportResponse],
     status_code=status.HTTP_200_OK,
     summary="Get email marketing campaign report",
-    dependencies=[Depends(require_permission("emailMarketing", "view"))],
 )
 async def get_campaign_report(
     campaign_id: UUID,
@@ -306,6 +369,7 @@ async def get_campaign_report(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[EmailMarketingReportResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "view")
     service = get_service(session, workspace_id, current_user.id)
 
     report = await service.get_report(campaign_id)
@@ -322,7 +386,6 @@ async def get_campaign_report(
     response_model=SuccessResponse[EmailMarketingResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Replicate email marketing campaign",
-    dependencies=[Depends(require_permission("emailMarketing", "create"))],
 )
 async def replicate_campaign(
     campaign_id: UUID,
@@ -330,6 +393,7 @@ async def replicate_campaign(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[EmailMarketingResponse]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "create")
     service = get_service(session, workspace_id, current_user.id)
 
     campaign = await service.replicate_campaign(
@@ -349,7 +413,6 @@ async def replicate_campaign(
     response_model=SuccessResponse[dict[str, str]],
     status_code=status.HTTP_200_OK,
     summary="Delete email marketing campaign",
-    dependencies=[Depends(require_permission("emailMarketing", "delete"))],
 )
 async def delete_email_campaign(
     campaign_id: UUID,
@@ -357,6 +420,7 @@ async def delete_email_campaign(
     current_user: CurrentUser,
     workspace_id: UUID | None = Query(default=None),
 ) -> SuccessResponse[dict[str, str]]:
+    await RoleService(session).check_permission(current_user, "emailMarketing", "delete")
     service = get_service(session, workspace_id, current_user.id)
 
     await service.delete_campaign(

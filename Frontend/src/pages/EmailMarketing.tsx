@@ -5,15 +5,17 @@ import {
 } from "@/api/contacts";
 import {
   createEmailMarketingCampaign,
+  createEmailMarketingCampaignDraft,
   deleteEmailMarketingCampaign,
   getEmailMarketingCampaign,
   getEmailMarketingReport,
   getEmailMarketingRecipients,
   listEmailMarketingCampaigns,
-  replicateEmailMarketingCampaign,
   scheduleEmailMarketingCampaign,
+  updateEmailMarketingCampaign,
   setEmailMarketingRecipientEnabled,
   type EmailMarketingCampaign as ApiEmailCampaign,
+  type EmailMarketingCreatePayload,
   type EmailMarketingReport,
   type EmailMarketingRecipient,
 } from "@/api/emailMarketing";
@@ -42,6 +44,30 @@ import DOMPurify from "dompurify";
 
 const isContentEmpty = (html: string) =>
   html.replace(/<[^>]*>/g, "").trim().length === 0 && !/<(img|hr|table)/.test(html);
+
+function EmailPreview({ content }: { content: string }) {
+  const safeContent = DOMPurify.sanitize(content);
+  const responsiveStyles = `<style>
+    html,body{width:100%;min-width:0;margin:0;padding:0;overflow-x:hidden}
+    body{box-sizing:border-box}
+    img{max-width:100%;height:auto}
+    table[width="600"],table[style*="width:600px"]{width:100%!important;max-width:600px!important}
+    table{max-width:100%}
+    td,th{overflow-wrap:anywhere}
+  </style>`;
+  const srcDoc = /<html[\s>]/i.test(safeContent)
+    ? safeContent.replace(/<\/head\s*>/i, `${responsiveStyles}</head>`)
+    : `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${responsiveStyles}</head><body>${safeContent}</body></html>`;
+
+  return (
+    <iframe
+      title="Email preview"
+      srcDoc={srcDoc}
+      sandbox=""
+      className="block h-[720px] w-full border-0 bg-white"
+    />
+  );
+}
 
 type MailType = "test" | "bulk";
 
@@ -518,7 +544,7 @@ function ViewCampaignModal({
 
           <DetailRow
             label="Scheduled send"
-            value={campaignDetails.mailType === "test" ? "Immediate" : campaignDetails.scheduledAt ? new Date(campaignDetails.scheduledAt).toLocaleString() : "Immediate"}
+            value={campaignDetails.scheduledAt ? new Date(campaignDetails.scheduledAt).toLocaleString() : "Immediate"}
           />
 
           <DetailRow
@@ -528,13 +554,13 @@ function ViewCampaignModal({
 
           <DetailRow
             label="Status"
-            value={campaignDetails.mailType === "test" ? "Test" : "Email Sent"}
+            value={campaignStatusLabel(campaignDetails.mailType, campaignDetails.status)}
           />
 
           <div>
             <p className={labelClass}>Content</p>
 
-            <div className="email-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(campaignDetails.content) }} />
+            <EmailPreview content={campaignDetails.content} />
           </div>
 
           {canUpdateRecipients && ["Queued", "Scheduled"].includes(campaignDetails.status) && (
@@ -726,6 +752,7 @@ export default function EmailMarketing() {
 
   const [replicateCampaign, setReplicateCampaign] =
     useState<EmailCampaign | null>(null);
+  const [isReplicating, setIsReplicating] = useState(false);
 
   const filteredCampaigns = campaigns.filter(
     (campaign) =>
@@ -736,6 +763,12 @@ export default function EmailMarketing() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const canEditCampaign = (campaign: EmailCampaign) =>
+    canUpdate && (
+      ["Draft", "Queued", "Scheduled"].includes(campaign.status) ||
+      ((campaign.status === "Email Sent" || campaign.status === "Test") && campaign.sendTo === 0) ||
+      (campaign.mailType === "test" && campaign.status === "Failed")
+    );
 
   /* ---------------------------------------------------------------------- */
   /* Add Campaign                                                           */
@@ -761,8 +794,49 @@ export default function EmailMarketing() {
     void refreshCampaigns();
   }, [workspaceKey]);
 
-  const handleAddCampaign = async (form: EmailCampaignForm) => {
-    if (!canCreate) return;
+  useEffect(() => {
+    let active = true;
+    const refreshDeliveryStats = async () => {
+      try {
+        const result = await listEmailMarketingCampaigns();
+        if (active) {
+          setCampaignsByWorkspace((current) => ({
+            ...current,
+            [workspaceKey]: result.map(fromApiListItem),
+          }));
+        }
+      } catch {
+        // Keep the last visible state if a background refresh fails.
+      }
+    };
+    const timer = window.setInterval(() => void refreshDeliveryStats(), 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [workspaceKey]);
+
+  useEffect(() => {
+    const campaignId = selectedCampaign?.id;
+    if (!showReportModal || !campaignId) return;
+    let active = true;
+    const refreshReport = async () => {
+      try {
+        const report = await getEmailMarketingReport(campaignId);
+        if (active) setCampaignReport(report);
+      } catch {
+        // Keep the last report values visible if a refresh fails.
+      }
+    };
+    const timer = window.setInterval(() => void refreshReport(), 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [showReportModal, selectedCampaign?.id]);
+
+  const handleSaveCampaign = async (form: EmailCampaignForm, saveAsDraft = false) => {
+    if (isReplicating ? !canCreate : replicateCampaign ? !canUpdate : !canCreate) return;
     if (!currentWorkspace?.id) {
       setPageError("Open a workspace before creating an email campaign.");
       setShowNewCampaign(false);
@@ -771,7 +845,7 @@ export default function EmailMarketing() {
     setIsSaving(true);
     setPageError("");
     try {
-      await createEmailMarketingCampaign({
+      const payload: EmailMarketingCreatePayload = {
         workspace_id: currentWorkspace.id,
         campaign_name: form.campaignName,
         platform: "Email",
@@ -785,9 +859,18 @@ export default function EmailMarketing() {
         subject: form.subject,
         content: form.content,
         scheduled_at: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
-      });
+      };
+      if (isReplicating) {
+        if (saveAsDraft) await createEmailMarketingCampaignDraft(payload);
+        else await createEmailMarketingCampaign(payload);
+      } else if (replicateCampaign) {
+        await updateEmailMarketingCampaign(replicateCampaign.id, payload, saveAsDraft);
+      } else {
+        await createEmailMarketingCampaign(payload);
+      }
       await refreshCampaigns();
       setReplicateCampaign(null);
+      setIsReplicating(false);
       setShowNewCampaign(false);
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Unable to create campaign.");
@@ -832,10 +915,34 @@ export default function EmailMarketing() {
   const handleReplicateCampaign = async (campaign: EmailCampaign) => {
     if (!canCreate) return;
     try {
-      const replicated = await replicateEmailMarketingCampaign(campaign.id);
-      setCampaigns((previous) => [fromApiCampaign(replicated), ...previous]);
+      const source = fromApiCampaign(await getEmailMarketingCampaign(campaign.id));
+      const draft = {
+        ...source,
+        id: "",
+        campaignName: `${source.campaignName} - Copy`,
+        status: "Draft",
+        sendTo: 0,
+        opens: 0,
+        clicks: 0,
+        scheduledAt: null,
+      };
+      setReplicateCampaign(draft);
+      setIsReplicating(true);
+      setShowNewCampaign(true);
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Unable to replicate campaign.");
+    }
+  };
+
+  const handleEditCampaign = async (campaign: EmailCampaign) => {
+    if (!canUpdate) return;
+    try {
+      const detail = await getEmailMarketingCampaign(campaign.id);
+      setReplicateCampaign(fromApiCampaign(detail));
+      setIsReplicating(false);
+      setShowNewCampaign(true);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Unable to load campaign for editing.");
     }
   };
 
@@ -856,6 +963,7 @@ export default function EmailMarketing() {
   useEffect(() => {
     setShowNewCampaign(false);
     setReplicateCampaign(null);
+    setIsReplicating(false);
     setSelectedCampaign(null);
     setShowViewModal(false);
     setShowReportModal(false);
@@ -871,9 +979,10 @@ export default function EmailMarketing() {
         initialCampaign={replicateCampaign}
         onCancel={() => {
           setReplicateCampaign(null);
+          setIsReplicating(false);
           setShowNewCampaign(false);
         }}
-        onSave={handleAddCampaign}
+        onSave={handleSaveCampaign}
         isSaving={isSaving}
       />
     );
@@ -913,6 +1022,7 @@ export default function EmailMarketing() {
               type="button"
               onClick={() => {
                 setReplicateCampaign(null);
+                setIsReplicating(false);
                 setShowNewCampaign(true);
               }}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600"
@@ -1022,7 +1132,7 @@ export default function EmailMarketing() {
                       </td>
 
                       <td className="px-3 py-4 text-sm text-gray-600 sm:px-5 dark:text-gray-300">
-                        {campaign.mailType !== "test" && campaign.scheduledAt
+                        {campaign.scheduledAt
                           ? new Date(campaign.scheduledAt).toLocaleString()
                           : "Immediate"}
                       </td>
@@ -1063,6 +1173,14 @@ export default function EmailMarketing() {
 
                       <td className="px-3 py-4 sm:px-5">
                         <div className="flex items-center gap-1">
+                          {canEditCampaign(campaign) && <button
+                            type="button"
+                            title="Edit draft"
+                            onClick={() => void handleEditCampaign(campaign)}
+                            className="rounded-md bg-brand-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-600"
+                          >
+                            Edit
+                          </button>}
                           {/* VIEW */}
 
                           <button
@@ -1080,7 +1198,7 @@ export default function EmailMarketing() {
 
                           {/* REPORT */}
 
-                          <button
+                          {campaign.sendTo > 0 && <button
                             type="button"
                             title="Report"
                             onClick={() =>
@@ -1091,7 +1209,7 @@ export default function EmailMarketing() {
                             className="rounded-md bg-blue-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-600"
                           >
                             Report
-                          </button>
+                          </button>}
 
                           {/* REPLICATE */}
 
@@ -1220,7 +1338,7 @@ function EmailCampaignForm({
 }: {
   initialCampaign: EmailCampaign | null;
   onCancel: () => void;
-  onSave: (form: EmailCampaignForm) => Promise<void>;
+  onSave: (form: EmailCampaignForm, saveAsDraft?: boolean) => Promise<void>;
   isSaving: boolean;
 }) {
   const { user } = useAuth();
@@ -1296,7 +1414,7 @@ function EmailCampaignForm({
     setTags([]);
     setContacts([]);
     void Promise.all([
-      listTags(),
+      currentWorkspace?.id ? listTags() : Promise.resolve([]),
       listContactStage("contact"),
     ])
       .then(
@@ -1362,9 +1480,10 @@ function EmailCampaignForm({
   }
 
   async function handleSubmit(
-    event: FormEvent<HTMLFormElement>,
+    event?: FormEvent<HTMLFormElement>,
+    saveAsDraft = false,
   ) {
-    event.preventDefault();
+    event?.preventDefault();
 
     setError("");
     setNotice("");
@@ -1419,7 +1538,7 @@ function EmailCampaignForm({
           content: content.trim(),
           mailType,
           scheduledAt,
-        });
+        }, saveAsDraft);
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Unable to queue campaign.");
       }
@@ -1455,7 +1574,7 @@ function EmailCampaignForm({
         content: content.trim(),
         mailType,
         scheduledAt,
-      });
+      }, saveAsDraft);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to queue campaign.");
     }
@@ -1758,6 +1877,16 @@ function EmailCampaignForm({
             {/* Buttons */}
 
             <div className="mt-6 flex justify-end gap-3">
+  {isEditing && (
+    <button
+      type="button"
+      onClick={() => void handleSubmit(undefined, true)}
+      disabled={isSaving}
+      className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
+    >
+      Save draft
+    </button>
+  )}
   {!isEditing && (
     <button
       type="button"
@@ -1783,7 +1912,7 @@ function EmailCampaignForm({
     disabled={isSaving}
     className="rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-700 disabled:cursor-wait disabled:opacity-60"
   >
-    {isSaving ? "Saving…" : scheduledAt ? "Schedule email" : "Send email"}
+    {isSaving ? "Saving…" : scheduledAt ? (isEditing ? "Save and schedule" : "Schedule email") : (isEditing ? "Save and send" : "Send email")}
   </button>
 </div>
           </form>
@@ -1795,8 +1924,8 @@ function EmailCampaignForm({
               Preview
             </h2>
 
-            <div className="mt-5 rounded-xl bg-gray-100 p-5 dark:bg-white/[0.03]">
-              <article className="mx-auto min-h-64 max-w-lg bg-white p-7 text-sm text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+            <div className="mt-5 overflow-x-auto rounded-xl bg-gray-100 p-3 sm:p-5 dark:bg-white/[0.03]">
+              <article className="mx-auto min-h-64 w-full max-w-lg overflow-hidden bg-white p-4 text-sm text-gray-600 sm:p-7 dark:bg-gray-900 dark:text-gray-300">
                 <h3 className="mb-6 text-center font-semibold">
                   {campaignName ||
                     "Campaign preview"}
@@ -1805,7 +1934,7 @@ function EmailCampaignForm({
                 {isContentEmpty(content) ? (
                   <p>Your email content will appear here.</p>
                 ) : (
-                  <div className="email-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
+                  <EmailPreview content={content} />
                 )}
               </article>
             </div>
@@ -1845,23 +1974,35 @@ function StatusBadge({
   mailType: MailType;
   status: string;
 }) {
-  const isTest = mailType === "test";
-  const isScheduled = !isTest && status === "Scheduled";
-  const label = isTest ? "Test" : isScheduled ? "Scheduled" : "Email Sent";
+  const label = campaignStatusLabel(mailType, status);
+  const isComplete = ["Email Sent", "Test"].includes(status);
+  const isPending = ["Queued", "Scheduled", "Sending"].includes(status);
 
   return (
     <span
       className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ${
-        isTest
-          ? "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400"
-          : isScheduled
+        isComplete
+          ? (mailType === "test"
+            ? "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400"
+            : "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-400")
+          : isPending
             ? "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400"
-            : "bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-400"
+            : status === "Failed"
+              ? "bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400"
+              : "bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300"
       }`}
     >
       {label}
     </span>
   );
+}
+
+function campaignStatusLabel(mailType: MailType, status: string): string {
+  if (status === "Test") return "Test sent";
+  if (status === "Partially Sent") return "Partially sent";
+  if (status === "Email Sent") return "Email Sent";
+  if (["Draft", "Queued", "Scheduled", "Sending", "Failed"].includes(status)) return status;
+  return mailType === "test" ? "Test" : status || "Unknown";
 }
 
 function TableHeader({

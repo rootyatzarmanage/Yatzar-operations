@@ -1,4 +1,5 @@
 from uuid import UUID,uuid4
+from sqlalchemy import select
 from fastapi import  UploadFile
  
 from yo.core.exceptions import (
@@ -8,6 +9,7 @@ from yo.core.exceptions import (
 )
 from yo.core.storage import STORAGE_DIR, read_image
 from yo.models.contact import Contact
+from yo.models.tag import Tag
 from yo.repositories.contact import ContactRepository
 from yo.repositories.workspace import WorkspaceRepository
 from yo.schemas.requests.contact import ContactCreateRequest,ContactUpdateRequest
@@ -25,6 +27,16 @@ class ContactService:
             raise AppException("Select a workspace to access contacts.", 403)
         if not await access.user_has_workspace(user_id, workspace_id):
             raise AppException("You do not have access to the selected workspace.", 403)
+
+    async def _ensure_tag_workspace(self, tag_id: UUID | None, workspace_id: UUID | None) -> None:
+        if tag_id is None:
+            return
+        tag = await self.repository.session.scalar(select(Tag.id).where(
+            Tag.id == tag_id, Tag.workspace_id == workspace_id,
+            Tag.status == 1, Tag.deleted_at.is_(None),
+        ))
+        if tag is None:
+            raise AppException("Select an active tag from this workspace.", 400)
  
     async def get_by_id(
         self,
@@ -45,6 +57,7 @@ class ContactService:
  
     async def create(self,request: ContactCreateRequest,user_id: UUID,) -> Contact:
         await self._ensure_workspace_access(request.workspace_id, user_id)
+        await self._ensure_tag_workspace(request.tag_id, request.workspace_id)
         values = request.model_dump()
         values["owner_id"] = user_id
         values["email_opt_out"] = bool(values.get("email_opt_out", False))
@@ -109,6 +122,7 @@ class ContactService:
                     403,
                 )
             await self._ensure_workspace_access(values["workspace_id"], user_id)
+        await self._ensure_tag_workspace(values.get("tag_id", None), values.get("workspace_id", workspace_id))
         if (
             "email_opt_out" in values
             and values["email_opt_out"] is None

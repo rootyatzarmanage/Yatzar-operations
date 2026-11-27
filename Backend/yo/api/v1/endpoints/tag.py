@@ -11,6 +11,8 @@ from yo.services.tag import TagService
 from yo.schemas.requests.tag import TagCreateRequest, TagUpdateRequest
 from yo.schemas.responses.tag import TagResponse
 from yo.core.exceptions import AppException
+from yo.services.role import RoleService
+from yo.services.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,9 @@ router = APIRouter(prefix="/tags", tags=["Tags"])
 
 @router.post("", response_model=SuccessResponse[TagResponse],status_code=status.HTTP_201_CREATED)
 async def create_tag(payload: TagCreateRequest,session: DatabaseSession,current_user: CurrentUser):
-    service = TagService(TagRepository(session))
+    await RoleService(session).check_permission(current_user, "tags", "create")
+    await WorkspaceService(session).ensure_access(current_user.id, payload.workspace_id)
+    service = TagService(TagRepository(session, payload.workspace_id))
     try:
         tag = await service.create_tag(payload, current_user.id)
         return SuccessResponse(
@@ -35,8 +39,10 @@ async def create_tag(payload: TagCreateRequest,session: DatabaseSession,current_
 
 
 @router.get("", response_model=SuccessResponse[list[TagResponse]])
-async def list_tags(session: DatabaseSession,current_user: CurrentUser,include_inactive: bool = Query(default=False)):
-    service = TagService(TagRepository(session))
+async def list_tags(session: DatabaseSession,current_user: CurrentUser,include_inactive: bool = Query(default=False), workspace_id: UUID = Query(...)):
+    await RoleService(session).check_permission(current_user, "tags", "view")
+    await WorkspaceService(session).ensure_access(current_user.id, workspace_id)
+    service = TagService(TagRepository(session, workspace_id))
     try:
         tags = await service.list_tags(include_inactive)
         return SuccessResponse(
@@ -52,8 +58,10 @@ async def list_tags(session: DatabaseSession,current_user: CurrentUser,include_i
 
 
 @router.get("/{tag_id}", response_model=SuccessResponse[TagResponse])
-async def get_tag(tag_id: UUID,session: DatabaseSession,current_user: CurrentUser):
-    service = TagService(TagRepository(session))
+async def get_tag(tag_id: UUID,session: DatabaseSession,current_user: CurrentUser, workspace_id: UUID = Query(...)):
+    await RoleService(session).check_permission(current_user, "tags", "view")
+    await WorkspaceService(session).ensure_access(current_user.id, workspace_id)
+    service = TagService(TagRepository(session, workspace_id))
     try:
         tag = await service.get_tag(tag_id)
         return SuccessResponse(
@@ -69,8 +77,10 @@ async def get_tag(tag_id: UUID,session: DatabaseSession,current_user: CurrentUse
 
 
 @router.put("/{tag_id}", response_model=SuccessResponse[TagResponse])
-async def update_tag(tag_id: UUID,payload: TagUpdateRequest,session: DatabaseSession,current_user: CurrentUser):
-    service = TagService(TagRepository(session))
+async def update_tag(tag_id: UUID,payload: TagUpdateRequest,session: DatabaseSession,current_user: CurrentUser, workspace_id: UUID = Query(...)):
+    await RoleService(session).check_permission(current_user, "tags", "update")
+    await WorkspaceService(session).ensure_access(current_user.id, workspace_id)
+    service = TagService(TagRepository(session, workspace_id))
     try:
         tag = await service.update_tag(tag_id, payload)
         return SuccessResponse(
@@ -86,8 +96,10 @@ async def update_tag(tag_id: UUID,payload: TagUpdateRequest,session: DatabaseSes
 
 
 @router.delete("/{tag_id}", response_model=SuccessResponse[None])
-async def delete_tag(tag_id: UUID,session: DatabaseSession,current_user: CurrentUser):
-    service = TagService(TagRepository(session))
+async def delete_tag(tag_id: UUID,session: DatabaseSession,current_user: CurrentUser, workspace_id: UUID = Query(...)):
+    await RoleService(session).check_permission(current_user, "tags", "delete")
+    await WorkspaceService(session).ensure_access(current_user.id, workspace_id)
+    service = TagService(TagRepository(session, workspace_id))
     try:
         await service.delete_tag(tag_id, current_user.id)
         return SuccessResponse(

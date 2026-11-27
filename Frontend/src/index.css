@@ -312,6 +312,11 @@
 .email-editor h3, .email-content h3 { font-size: 1.15rem; font-weight: 700; }
 .email-editor a, .email-content a { color: #465fff; text-decoration: underline; }
 .email-editor img, .email-content img { max-width: 100%; height: auto; }
+.email-editor img { display: inline-block; min-width: 24px; min-height: 24px; resize: both; overflow: auto; cursor: nwse-resize; }
+.email-content { max-width: 100%; overflow-wrap: anywhere; }
+.email-content table { width: 100% !important; max-width: 100% !important; table-layout: fixed; }
+.email-content img { height: auto !important; }
+.email-content td, .email-content th { max-width: 100%; overflow-wrap: anywhere; }
 .email-editor blockquote, .email-content blockquote { border-left: 3px solid #d0d5dd; padding-left: 1rem; color: #667085; }
 .email-editor table, .email-content table { border-collapse: collapse; width: 100%; }
 .email-editor td, .email-editor th, .email-content td, .email-content th { border: 1px solid #d0d5dd; padding: 6px 10px; }

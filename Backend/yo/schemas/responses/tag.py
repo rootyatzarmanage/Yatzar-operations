@@ -8,6 +8,7 @@ class TagResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    workspace_id: UUID | None = None
     name: str
     status: int
     created_at: datetime

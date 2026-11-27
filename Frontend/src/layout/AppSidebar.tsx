@@ -12,7 +12,7 @@ import {
   UsersIcon,
   WorkspaceIcon,
 } from "../icons";
-import { CalendarDays, Volume1, Calendar1 } from 'lucide-react'
+import { CalendarDays, Volume1, Calendar1, Tag } from 'lucide-react'
 import { ChevronLeft, MessageSquare, User } from "lucide-react"
 import { cn } from "../utils";
 import { hasPermission, useAuth } from "@/context/AuthContext";
@@ -41,6 +41,7 @@ function permissionMenuForPath(path: string): string | null {
     "/app-permission": "App Permission",
     "/workspace": "Workspace",
     "/contacts": "Contacts",
+    "/tags": "Tags",
     "/leads": "Leads",
     "/customers": "Customers",
     "/task": "Tasks",
@@ -138,6 +139,11 @@ const workspaceNavItems: NavItem[] = [
     icon: <Calendar1 size={24} />,
     name: "Calendar",
     path: "/calendar"
+  },
+  {
+    icon: <Tag size={24} />,
+    name: "Tags",
+    path: "/tags",
   },
 ];
 

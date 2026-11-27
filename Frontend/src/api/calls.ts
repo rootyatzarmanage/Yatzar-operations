@@ -17,6 +17,7 @@ export type CallApi = {
   voice_recording: string | null;
   call_purpose: string | null;
   call_agenda: string | null;
+  follow_up: string | null;
   reminder: string | null;
   created_by: string | null;
   updated_by: string | null;
@@ -44,6 +45,7 @@ export type CallPayload = {
   voice_recording?: string | null;
   call_purpose?: string | null;
   call_agenda?: string | null;
+  follow_up?: string | null;
   reminder?: string | null;
 };
 

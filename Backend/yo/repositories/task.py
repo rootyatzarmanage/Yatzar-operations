@@ -46,6 +46,7 @@ class TaskRepository:
         result = await self.session.execute(
             select(Tag).where(
                 Tag.id == tag_id,
+                Tag.workspace_id == self.workspace_id,
                 Tag.status == 1,
                 Tag.deleted_at.is_(None),
             )

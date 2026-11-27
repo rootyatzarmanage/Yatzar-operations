@@ -7,6 +7,7 @@ import Customers from "./pages/Customers";
 import Leads from "./pages/Leads";
 import NotFound from "./pages/OtherPage/NotFound";
 import Others from "./pages/Others";
+import Tags from "./pages/Tags";
 import Teams from "./pages/Teams";
 import Workspace from "./pages/Workspace";
 import Login from "./pages/Login";
@@ -60,10 +61,14 @@ function ContactsScopeRoute({ children }: { children: ReactNode }) {
   );
 }
 
-function MenuPermissionRoute({ menu, children }: { menu: string; children: ReactNode }) {
+function MenuPermissionRoute({ menu, children, requireWorkspace = false }: { menu: string; children: ReactNode; requireWorkspace?: boolean }) {
   const { user } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const isSuperAdmin = user?.role === "Super Admin";
+
+  if (requireWorkspace && !currentWorkspace) {
+    return <Navigate to="/workspace" replace />;
+  }
 
   if (!isSuperAdmin && !currentWorkspace) {
     return (
@@ -114,6 +119,7 @@ export default function App() {
             <Route index path="/" element={<DefaultAppRoute />} />
             <Route path="/teams" element={<PermissionRoute menu="Teams"><Teams /></PermissionRoute>} />
             <Route path="/others" element={<PermissionRoute menu="Teams"><Others /></PermissionRoute>} />
+            <Route path="/tags" element={<MenuPermissionRoute menu="Tags" requireWorkspace><Tags /></MenuPermissionRoute>} />
 
             {/* App Permission */}
             <Route path="/app-permission" element={<PermissionRoute menu="App Permission"><AppPermission /></PermissionRoute>} />
