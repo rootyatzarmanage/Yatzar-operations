@@ -13,6 +13,24 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (element) => {
+          const width = element.style.width || element.getAttribute("width");
+          return width ? Number.parseInt(width, 10) || null : null;
+        },
+        renderHTML: (attributes) => attributes.width
+          ? { style: `width:${attributes.width}px;max-width:100%;height:auto` }
+          : {},
+      },
+    };
+  },
+});
+
 const MAX_IMAGE_MB = 2;
 
 const readAsDataUrl = (file: File) =>
@@ -267,6 +285,17 @@ function Toolbar({
       >
         <HelpCircle size={16} />
       </button>
+      <select
+        className={sel}
+        title="Image width"
+        aria-label="Image width"
+        value={editor.isActive("image") ? String(editor.getAttributes("image").width ?? "") : ""}
+        disabled={!editor.isActive("image")}
+        onChange={(event) => editor.chain().focus().updateAttributes("image", { width: Number(event.target.value) }).run()}
+      >
+        <option value="" disabled>Image size</option>
+        {[120, 180, 240, 300, 420, 560].map((width) => <option key={width} value={width}>{width}px</option>)}
+      </select>
     </div>
   );
 }
@@ -288,12 +317,11 @@ export default function RichTextEditor({
       TextStyleKit,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Image,
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({ allowBase64: true }),
+      ResizableImage.configure({ allowBase64: true }),
     ],
     content: value,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
@@ -314,7 +342,7 @@ export default function RichTextEditor({
   return (
     <div
       className={`overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 ${
-        fullscreen ? "fixed inset-4 z-99999 flex flex-col shadow-2xl" : ""
+        fullscreen ? "fixed inset-4 z-[99999] flex min-h-0 flex-col shadow-2xl" : ""
       }`}
     >
       <Toolbar
@@ -331,7 +359,7 @@ export default function RichTextEditor({
           spellCheck={false}
         />
       ) : (
-        <div className={fullscreen ? "flex-1 overflow-y-auto" : "max-h-[500px] overflow-y-auto"}>
+        <div className={fullscreen ? "min-h-0 flex-1 overflow-auto" : "max-h-[500px] overflow-auto"}>
           <EditorContent editor={editor} placeholder={placeholder} />
         </div>
       )}

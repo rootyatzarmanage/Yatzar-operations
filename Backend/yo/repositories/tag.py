@@ -10,11 +10,12 @@ from yo.repositories.base import BaseRepository
 
 class TagRepository(BaseRepository[Tag]):
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID | None = None):
         super().__init__(Tag, session)
+        self.workspace_id = workspace_id
 
     async def list_tags(self,include_inactive: bool = False,) -> list[Tag]:
-        query = select(Tag).where(Tag.deleted_at.is_(None))
+        query = select(Tag).where(Tag.deleted_at.is_(None), Tag.workspace_id == self.workspace_id)
         if not include_inactive:
             query = query.where(Tag.status == 1)
         query = query.order_by(Tag.name.asc())
@@ -25,12 +26,14 @@ class TagRepository(BaseRepository[Tag]):
         query = select(Tag).where(
             Tag.id == tag_id,
             Tag.deleted_at.is_(None),
+            Tag.workspace_id == self.workspace_id,
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def create_tag(self,name: str,status: int,user_id: uuid.UUID,) -> Tag:
+    async def create_tag(self,name: str,status: int,user_id: uuid.UUID, workspace_id: uuid.UUID) -> Tag:
         tag = Tag(
+            workspace_id=workspace_id,
             name=name.strip(),
             status=status,
             created_by=user_id,

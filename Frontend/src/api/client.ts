@@ -77,6 +77,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       : url.pathname;
     const roots = [
       "/contacts",
+      "/tags",
       "/calls",
       "/meetings",
       "/tasks",
@@ -94,10 +95,15 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (root && !isEmailTracking) {
       if (root !== "/contacts" || (pathname === root && method === "GET")) {
         url.searchParams.set("workspace_id", workspaceId);
+      } else if (root === "/contacts" && pathname !== root) {
+        // Contact detail mutations are authorized against the selected
+        // workspace by the backend, even when workspace_id is also in body.
+        url.searchParams.set("workspace_id", workspaceId);
       }
 
       const createRoots = [
         "/contacts",
+        "/tags",
         "/calls",
         "/meetings",
         "/tasks",

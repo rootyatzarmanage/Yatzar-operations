@@ -58,7 +58,7 @@ const sourceLabels: Record<ParticipantType, string> = {
 const venues = ["Client location", "In-office", "Online"];
 const meetingProviders: MeetingProvider[] = ["Google Meet", "Zoom", "Microsoft Teams", "Webex", "Skype", "Other"];
 const repeats = ["None", "Daily", "Weekly", "Monthly", "Yearly"];
-const participantReminders = ["None", "Email", "Popup", "Email and Popup"];
+const participantReminders = ["None", "Email"];
 const reminders = [
   "None",
   "At time of meeting",
@@ -263,7 +263,7 @@ export default function Meetings({ embed }: EmbedProps = {}) {
       }),
       relatedTo: meeting.related_to ?? "",
       repeat: meeting.repeat_frequency,
-      participantsReminder: meeting.participants_reminder,
+      participantsReminder: meeting.participants_reminder === "Email" ? "Email" : "None",
       participantsReminderTime: meeting.reminder_type,
       reminder: meeting.reminder,
       description: meeting.description ?? "",

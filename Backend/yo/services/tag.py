@@ -1,8 +1,10 @@
 import uuid
+from sqlalchemy import select
 
 from yo.core.exceptions import AppException, NotFoundException
 from yo.repositories.tag import TagRepository
 from yo.schemas.requests.tag import TagCreateRequest, TagUpdateRequest
+from yo.models.tag import Tag
 
 
 class TagService:
@@ -24,7 +26,10 @@ class TagService:
         if not name:
             raise AppException("Tag name cannot be empty.", 400)
 
-        existing = await self.repository.get_by_field("name", name)
+        existing = await self.repository.session.scalar(select(Tag).where(
+            Tag.workspace_id == request.workspace_id, Tag.name == name,
+            Tag.deleted_at.is_(None),
+        ))
         if existing:
             raise AppException("Tag name already exists.", 409)
 
@@ -32,6 +37,7 @@ class TagService:
             name=name,
             status=request.status,
             user_id=user_id,
+            workspace_id=request.workspace_id,
         )
 
     async def update_tag(self,tag_id: uuid.UUID,request: TagUpdateRequest):
@@ -43,10 +49,10 @@ class TagService:
             if not values["name"]:
                 raise AppException("Tag name cannot be empty.", 400)
 
-            existing = await self.repository.get_by_field(
-                "name",
-                values["name"],
-            )
+            existing = await self.repository.session.scalar(select(Tag).where(
+                Tag.workspace_id == tag.workspace_id, Tag.name == values["name"],
+                Tag.deleted_at.is_(None),
+            ))
             if existing and existing.id != tag_id:
                 raise AppException("Tag name already exists.", 409)
 

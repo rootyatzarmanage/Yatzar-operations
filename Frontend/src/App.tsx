@@ -7,6 +7,7 @@ import Customers from "./pages/Customers";
 import Leads from "./pages/Leads";
 import NotFound from "./pages/OtherPage/NotFound";
 import Others from "./pages/Others";
+import Tags from "./pages/Tags";
 import Teams from "./pages/Teams";
 import Workspace from "./pages/Workspace";
 import Login from "./pages/Login";
@@ -18,6 +19,7 @@ import Calendar from "./pages/Calendar";
 import EmailMarketing from "./pages/EmailMarketing";
 import Campaign from "./pages/Campaigns";
 import EventWebinar from "./pages/EventWebinar";
+import ControlPanel from "./pages/ControlPanel";
 import { hasPermission, useAuth } from "./context/AuthContext";
 import { useWorkspace } from "./context/WorkspaceContext";
 import { Navigate, useLocation } from "react-router";
@@ -31,12 +33,12 @@ function ProtectedApp() {
   return <AppLayout />;
 }
 
-function PermissionRoute({ menu, children }: { menu: string | string[]; children: ReactNode }) {
+function PermissionRoute({ menu, children, role }: { menu: string | string[]; children: ReactNode; role?: string }) {
   const { user } = useAuth();
   const allowed = Array.isArray(menu)
     ? menu.some((permissionMenu) => hasPermission(user, permissionMenu))
     : hasPermission(user, menu);
-  return allowed ? children : <Navigate to="/" replace />;
+  return allowed && (!role || user?.role === role) ? children : <Navigate to="/" replace />;
 }
 
 function ContactsScopeRoute({ children }: { children: ReactNode }) {
@@ -60,10 +62,14 @@ function ContactsScopeRoute({ children }: { children: ReactNode }) {
   );
 }
 
-function MenuPermissionRoute({ menu, children }: { menu: string; children: ReactNode }) {
+function MenuPermissionRoute({ menu, children, requireWorkspace = false }: { menu: string; children: ReactNode; requireWorkspace?: boolean }) {
   const { user } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const isSuperAdmin = user?.role === "Super Admin";
+
+  if (requireWorkspace && !currentWorkspace) {
+    return <Navigate to="/workspace" replace />;
+  }
 
   if (!isSuperAdmin && !currentWorkspace) {
     return (
@@ -114,6 +120,8 @@ export default function App() {
             <Route index path="/" element={<DefaultAppRoute />} />
             <Route path="/teams" element={<PermissionRoute menu="Teams"><Teams /></PermissionRoute>} />
             <Route path="/others" element={<PermissionRoute menu="Teams"><Others /></PermissionRoute>} />
+            <Route path="/control-panel" element={<PermissionRoute menu="Teams" role="Super Admin"><ControlPanel /></PermissionRoute>} />
+            <Route path="/tags" element={<MenuPermissionRoute menu="Tags" requireWorkspace><Tags /></MenuPermissionRoute>} />
 
             {/* App Permission */}
             <Route path="/app-permission" element={<PermissionRoute menu="App Permission"><AppPermission /></PermissionRoute>} />

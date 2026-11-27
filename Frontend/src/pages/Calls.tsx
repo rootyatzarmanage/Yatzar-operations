@@ -38,12 +38,13 @@ type Call = {
   reminder: string;
   purpose: string;
   agenda: string;
+  followUp: string;
 };
 
 const callTypes: CallType[] = ["Outbound", "Inbound", "Missed"];
 const loggedStatuses: CallStatus[] = ["Completed", "Missed"];
 const reminders = ["None", "At time of call", "5 minutes before", "15 minutes before", "30 minutes before", "1 hour before", "1 day before"];
-const purposes = ["-None-", "Prospecting", "Administrative", "Negotiation", "Demo", "Project", "Desk"];
+const purposes = ["-None-", "Prospecting", "Administrative", "Negotiation", "Demo", "Appointment", "Project", "Desk", "Other"];
 
 const inputClass =
   "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-brand-300 focus:bg-white focus:ring-2 focus:ring-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:bg-gray-dark dark:text-white/90";
@@ -77,6 +78,7 @@ function formatDateTime(value: string) {
 
 function formatDuration(seconds: number | null) {
   if (seconds === null) return "—";
+  if (seconds >= 3600) return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds % 3600 / 60))}:${pad(seconds % 60)}`;
   return `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
 }
 
@@ -98,6 +100,7 @@ const emptyForm = {
   callType: "Outbound" as CallType,
   status: "Completed" as CallStatus,
   startTime: "",
+  hours: "",
   minutes: "",
   seconds: "",
   subject: "",
@@ -106,6 +109,8 @@ const emptyForm = {
   reminder: "None",
   purpose: "-None-",
   agenda: "",
+  followUp: "",
+  otherPurpose: "",
   assignedTo: "",
 };
 
@@ -170,8 +175,9 @@ export default function Calls({ embed }: EmbedProps = {}) {
       assignedTo: workspaceMembers.find((member) => member.id === call.assigned_to)?.name ?? (call.assigned_to === user?.id ? callOwner : ""),
       voiceRecording: call.voice_recording ?? "",
       reminder: call.reminder ?? "None",
-      purpose: call.call_purpose ?? "-None-",
+      purpose: call.call_purpose?.startsWith("Other: ") ? "Other" : call.call_purpose ?? "-None-",
       agenda: call.call_agenda ?? "",
+      followUp: call.follow_up ?? "",
     };
   }
 
@@ -243,7 +249,6 @@ export default function Calls({ embed }: EmbedProps = {}) {
 
   const openEdit = (call: Call) => {
     if (!canUpdate) return;
-    const mins = call.durationSeconds === null ? "" : String(Math.floor(call.durationSeconds / 60));
     const secs = call.durationSeconds === null ? "" : String(call.durationSeconds % 60);
     setEditingId(call.id);
     setErrors({});
@@ -253,14 +258,17 @@ export default function Calls({ embed }: EmbedProps = {}) {
       callType: call.callType,
       status: call.status,
       startTime: call.startTime,
-      minutes: mins,
+      hours: String(Math.floor((call.durationSeconds ?? 0) / 3600)),
+      minutes: String(Math.floor((call.durationSeconds ?? 0) % 3600 / 60)),
       seconds: secs,
       subject: call.subject,
       subjectEdited: true,
       voiceRecording: call.voiceRecording,
       reminder: call.reminder,
       purpose: call.purpose,
+      otherPurpose: call.purpose.startsWith("Other: ") ? call.purpose.slice(7) : "",
       agenda: call.agenda,
+      followUp: call.followUp,
       assignedTo: call.assignedToId,
     });
     setView(call.kind);
@@ -280,21 +288,22 @@ export default function Calls({ embed }: EmbedProps = {}) {
 
     let durationSeconds: number | null = null;
     if (!isSchedule && form.callType !== "Missed") {
-      if (form.minutes !== "" || form.seconds !== "") {
+      if (form.hours !== "" || form.minutes !== "" || form.seconds !== "") {
+        const h = Number(form.hours || 0);
         const m = Number(form.minutes || 0);
         const s = Number(form.seconds || 0);
 
         if (
-          m < 0 ||
+          h < 0 || m < 0 ||
           s < 0 ||
           s > 59 ||
-          !Number.isInteger(m) ||
+          !Number.isInteger(h) || !Number.isInteger(m) ||
           !Number.isInteger(s)
         ) {
           next.duration =
             "Enter whole minutes and seconds (0–59).";
         } else {
-          durationSeconds = m * 60 + s;
+          durationSeconds = h * 3600 + m * 60 + s;
         }
       }
     }
@@ -317,8 +326,9 @@ export default function Calls({ embed }: EmbedProps = {}) {
         duration_seconds: durationSeconds === null ? null : durationSeconds % 60,
         related_to: form.account.trim() || null,
         voice_recording: isSchedule ? null : form.voiceRecording.trim() || null,
-        call_purpose: isOutbound ? form.purpose : "-None-",
+        call_purpose: isOutbound ? (form.purpose === "Other" ? `Other: ${form.otherPurpose.trim()}` : form.purpose) : "-None-",
         call_agenda: isOutbound ? form.agenda.trim() || null : null,
+        follow_up: form.followUp.trim() || null,
         reminder: isSchedule ? form.reminder : "None",
       };
       const savedApi = editingId
@@ -623,6 +633,8 @@ export default function Calls({ embed }: EmbedProps = {}) {
                     Call duration
                   </label>
                   <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input type="number" min={0} inputMode="numeric" aria-label="Hours" placeholder="00" value={form.hours} disabled={form.callType === "Missed"} onChange={(e) => setForm({ ...form, hours: e.target.value })} className={`${inputClass} w-20!`} />
+                    hours
                     <input
                       type="number"
                       min={0}
@@ -717,6 +729,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
                       {purposes.map((p) => <option key={p}>{p}</option>)}
                     </select>
                   </div>
+                  {form.purpose === "Other" && <div><label htmlFor="call-purpose-other" className={labelClass}>Specify purpose</label><input id="call-purpose-other" value={form.otherPurpose} onChange={(e) => setForm({ ...form, otherPurpose: e.target.value })} placeholder="Enter call purpose" className={inputClass} /></div>}
                   <div>
                     <label htmlFor="call-agenda" className={labelClass}>Call agenda</label>
                     <input id="call-agenda" value={form.agenda} onChange={(e) => setForm({ ...form, agenda: e.target.value })} placeholder="Enter agenda" className={inputClass} />
@@ -724,6 +737,7 @@ export default function Calls({ embed }: EmbedProps = {}) {
                 </div>
               </>
             )}
+            {!isSchedule && <div className="mt-5"><label htmlFor="call-follow-up" className={labelClass}>Follow up</label><input id="call-follow-up" value={form.followUp} onChange={(e) => setForm({ ...form, followUp: e.target.value })} placeholder="Enter follow up" className={inputClass} /></div>}
           </div>
         </form>
       )}

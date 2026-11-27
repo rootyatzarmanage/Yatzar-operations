@@ -46,6 +46,7 @@ const emptyForm: ContactFields = {
   description: "",
   firstName: "",
   lastName: "",
+  company: "",
   email: "",
   phone: "",
   otherPhone: "",
@@ -139,6 +140,7 @@ function fromApiContact(contact: Contact): LocalContact {
     description: contact.description ?? "",
     firstName: contact.first_name ?? "",
     lastName: contact.last_name ?? "",
+    company: contact.company ?? "",
     email: contact.email ?? "",
     phone: contact.phone ?? "",
     otherPhone: contact.other_phone ?? "",
@@ -243,10 +245,14 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
   }, [currentWorkspace]);
 
   useEffect(() => {
+    if (!currentWorkspace?.id) {
+      setTags([]);
+      return;
+    }
     void listTags()
       .then(setTags)
       .catch(() => setTags([]));
-  }, []);
+  }, [currentWorkspace?.id]);
 
   useEffect(() => {
     let active = true;
@@ -396,6 +402,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       description: contact.description,
       firstName: contact.firstName,
       lastName: contact.lastName,
+      company: contact.company ?? "",
       email: contact.email,
       phone: contact.phone,
       otherPhone: contact.otherPhone,
@@ -437,6 +444,7 @@ useClickOutside(workspaceMenuRef, () => setWorkspaceMenuOpen(false));
       description: contact.description,
       firstName: contact.firstName,
       lastName: contact.lastName,
+      company: contact.company ?? "",
       email: contact.email,
       phone: contact.phone,
       otherPhone: contact.otherPhone,
@@ -1429,6 +1437,9 @@ const handleBulkDelete = async () => {
                     })}
                     {renderInput("lastName", "Last Name", {
                       placeholder: "Enter last name",
+                    })}
+                    {renderInput("company", "Company name", {
+                      placeholder: "Enter company name (optional)",
                     })}
                     {renderInput("email", "Email", {
                       type: "email",

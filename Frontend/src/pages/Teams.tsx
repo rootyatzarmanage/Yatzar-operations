@@ -37,6 +37,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { hasPermission, useAuth } from "@/context/AuthContext";
+import { Eye, EyeOff } from "lucide-react";
 
 type Field = {
   name: string;
@@ -313,7 +314,7 @@ const fieldGroups: {
       {
         name: "password",
         label: "Password",
-        type: "password",
+        type: "password-toggle",
         required: true,
       },
       {
@@ -516,6 +517,7 @@ function FieldControl({
   const [isDragging, setIsDragging] = useState(false);
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const workspaceWrapperRef = useRef<HTMLDivElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -814,17 +816,20 @@ function FieldControl({
         className={`${inputClass} ${fieldClass} h-24 py-3`}
       />
     );
-  return (
+  return field.type === "password-toggle" ? (
+    <div className="relative">
+      <input type={showPassword ? "text" : "password"} value={value} onChange={(event) => onValueChange(event.target.value)} placeholder={`Enter ${field.label.toLowerCase()}`} className={`${inputClass} ${fieldClass} pe-11`} />
+      <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute inset-y-0 end-0 flex items-center px-3 text-gray-500">
+        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
+  ) : (
     <input
       type={field.type || "text"}
       readOnly={field.name === "employee_code"}
       value={value}
       onChange={(event) => onValueChange(event.target.value)}
-      placeholder={
-        field.name === "employee_code"
-          ? "Generated employee ID"
-          : `Enter ${field.label.toLowerCase()}`
-      }
+      placeholder={field.name === "employee_code" ? "Generated employee ID" : `Enter ${field.label.toLowerCase()}`}
       className={`${inputClass} ${fieldClass} ${field.name === "employee_code" ? "bg-gray-50 text-gray-500 dark:bg-white/5" : ""}`}
     />
   );

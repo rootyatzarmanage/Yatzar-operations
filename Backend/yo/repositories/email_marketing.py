@@ -128,7 +128,8 @@ class EmailMarketingRepository:
 
     async def get_active_tag_ids(self, tag_ids: list[UUID]) -> set[UUID]:
         return set(await self.session.scalars(select(Tag.id).where(
-            Tag.id.in_(tag_ids), Tag.deleted_at.is_(None), Tag.status == 1,
+            Tag.id.in_(tag_ids), Tag.workspace_id == self.workspace_id,
+            Tag.deleted_at.is_(None), Tag.status == 1,
         )))
 
     async def get_recipients_by_tags(
@@ -141,6 +142,7 @@ class EmailMarketingRepository:
         query = select(Contact.id, Contact.email).join(Tag, Tag.id == Contact.tag_id).where(
             Contact.tag_id.in_(tag_ids),
             Tag.deleted_at.is_(None), Tag.status == 1,
+            Tag.workspace_id == self.workspace_id,
             Contact.workspace_id == self.workspace_id,
             ContactRepository.access_condition(user_id),
             Contact.deleted_at.is_(None),

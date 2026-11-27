@@ -11,6 +11,7 @@ export type ContactFields = {
   description: string;
   firstName: string;
   lastName: string;
+  company: string;
   email: string;
   phone: string;
   otherPhone: string;
@@ -100,7 +101,7 @@ export type ContactList = {
   per_page: number;
 };
 
-const nullable = (value: string): string | null => value.trim() || null;
+const nullable = (value: string | null | undefined): string | null => value?.trim() || null;
 
 export function toContactPayload(fields: ContactFields): ContactPayload {
   return {
@@ -112,7 +113,7 @@ export function toContactPayload(fields: ContactFields): ContactPayload {
     description: nullable(fields.description),
     first_name: fields.firstName.trim(),
     last_name: nullable(fields.lastName),
-    company: null,
+    company: nullable(fields.company),
     email: nullable(fields.email),
     phone: fields.phone.trim(),
     other_phone: nullable(fields.otherPhone),

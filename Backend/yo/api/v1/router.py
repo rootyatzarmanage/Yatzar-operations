@@ -16,6 +16,7 @@ from yo.api.v1.endpoints.email_marketing import router as email_marketing_router
 from yo.api.v1.endpoints.mail import router as mail_router
 from yo.api.v1.endpoints.calendar_event import router as calendar_event_router
 from yo.api.v1.endpoints.profile import router as profile_router
+from yo.api.v1.endpoints.control_panel import router as control_panel_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(employee_router)
@@ -23,6 +24,7 @@ api_v1_router.include_router(role_router)
 api_v1_router.include_router(support_router)
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(profile_router)
+api_v1_router.include_router(control_panel_router)
 api_v1_router.include_router(workspace_router)
 api_v1_router.include_router(contact_router)
 api_v1_router.include_router(tag_router)
