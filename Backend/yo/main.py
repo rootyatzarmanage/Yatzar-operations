@@ -23,6 +23,13 @@ from yo.repositories.workspace import WorkspaceRepository
 from yo.services.role import RoleService
 from sqlalchemy import select
 from yo.services.mail_worker import run_mail_worker
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
+)
 
 
 @asynccontextmanager

@@ -288,7 +288,7 @@ async def process_campaign(campaign_id):
                     await session.flush()
                     await send_campaign_summary(
                         session, campaign, recipients,
-                        aware(campaign.sent_at or campaign.updated_at or now),
+                        aware(campaign.sent_at or campaign.scheduled_at  or campaign.created_at),
                     )
                 return
 
@@ -310,11 +310,19 @@ async def send_campaign_summary(session, campaign, recipients, when):
         f"<ul>{failures or '<li>None</li>'}</ul>"
     )
     for address in settings_row.to_emails:
-        await deliver(
-            session, campaign, "marketing_summary", aware(campaign.updated_at or campaign.created_at), address,
-            f"Email delivery summary: {campaign.campaign_name}", body,
-            reply_to=campaign.from_email, cc=settings_row.cc_emails,
-        )
+        print(f"Sending to: {address}")
+        logger.info("Sending marketing summary to %s (campaign: %s)", address, campaign.campaign_name)
+
+        try:
+            await deliver(
+                session, campaign, "marketing_summary",
+                aware(campaign.updated_at or campaign.created_at), address,
+                f"Email delivery summary: {campaign.campaign_name}", body,
+                reply_to=campaign.from_email, cc=settings_row.cc_emails,
+            )
+            logger.info("Delivered to %s", address)
+        except Exception:
+            logger.exception("Delivery failed for %s", address)
 
 
 async def tick():
