@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import type { EmbedConfig } from "@/components/records/embed";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { hasPermission, useAuth } from "@/context/AuthContext";
+import SpreadsheetBulkImport, { type SpreadsheetImportField } from "@/components/records/SpreadsheetBulkImport";
 
 export type FieldDef = {
   key: string;
@@ -98,6 +99,7 @@ type Props<T extends StoredRecord> = {
   recordName: (record: T) => string;
   store: RecordStore<T>;
   showExport?: boolean;
+  bulkImportFields?: SpreadsheetImportField[];
 };
 
 const inputClass =
@@ -138,6 +140,7 @@ export default function RecordPage<T extends StoredRecord>({
   recordName,
   store,
   showExport = true,
+  bulkImportFields,
   moves = [],
   filters = [],
   sorts = [],
@@ -640,10 +643,22 @@ export default function RecordPage<T extends StoredRecord>({
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">{heading}</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
             </div>
-            {canCreate && <button type="button" onClick={openAdd} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
-              <span className="text-lg leading-none">+</span>
-              {addLabel}
-            </button>}
+            <div className="flex flex-wrap items-center gap-2">
+              {canCreate && bulkImportFields && <SpreadsheetBulkImport
+                label={singular}
+                fileName={plural}
+                fields={bulkImportFields}
+                onImportRow={async (row) => {
+                  const created = await store.create(row);
+                  setRecords((current) => [created, ...current]);
+                  setPage(1);
+                }}
+              />}
+              {canCreate && <button type="button" onClick={openAdd} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
+                <span className="text-lg leading-none">+</span>
+                {addLabel}
+              </button>}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">

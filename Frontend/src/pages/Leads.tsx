@@ -34,6 +34,27 @@ const columns: Column<LeadRecord>[] = [
   { header: "Lead Owner", render: (r) => text(r.leadOwner) || "—" },
 ];
 
+const bulkImportFields = [
+  { key: "company", label: "Company", required: true },
+  { key: "firstName", label: "First name", required: true },
+  { key: "lastName", label: "Last name" },
+  { key: "title", label: "Title" },
+  { key: "email", label: "Email", type: "email" as const },
+  { key: "phone", label: "Phone" },
+  { key: "fax", label: "Fax" },
+  { key: "mobile", label: "Mobile" },
+  { key: "leadSource", label: "Lead source" },
+  { key: "secondaryEmail", label: "Secondary email", type: "email" as const },
+  { key: "emailOptOut", label: "Email opt out", type: "checkbox" as const },
+  { key: "country", label: "Country / Region" },
+  { key: "flat", label: "Flat / House no. / Building" },
+  { key: "street", label: "Street address" },
+  { key: "city", label: "City" },
+  { key: "state", label: "State / Province" },
+  { key: "zip", label: "Zip / Postal code" },
+  { key: "description", label: "Description" },
+];
+
 export default function Leads({ embed }: EmbedProps = {}) {
   const { currentWorkspace } = useWorkspace();
   const { user } = useAuth();
@@ -141,6 +162,7 @@ export default function Leads({ embed }: EmbedProps = {}) {
       searchText={(r) => [leadName(r), text(r.company), text(r.email), text(r.phone), text(r.leadSource), text(r.leadOwner)]}
       recordName={leadName}
       store={store}
+      bulkImportFields={bulkImportFields}
       showExport={false}
       viewBadge={() => currentWorkspace?.name ?? ""}
       moves={[

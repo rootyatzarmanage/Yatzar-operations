@@ -40,34 +40,10 @@ import {
   type FormEvent,
 } from "react";
 import RichTextEditor from "@/components/common/RichTextEditor";
-import DOMPurify from "dompurify";
+import EmailHtmlPreview from "@/components/common/EmailHtmlPreview";
 
 const isContentEmpty = (html: string) =>
   html.replace(/<[^>]*>/g, "").trim().length === 0 && !/<(img|hr|table)/.test(html);
-
-function EmailPreview({ content }: { content: string }) {
-  const safeContent = DOMPurify.sanitize(content);
-  const responsiveStyles = `<style>
-    html,body{width:100%;min-width:0;margin:0;padding:0;overflow-x:hidden}
-    body{box-sizing:border-box}
-    img{max-width:100%;height:auto}
-    table[width="600"],table[style*="width:600px"]{width:100%!important;max-width:600px!important}
-    table{max-width:100%}
-    td,th{overflow-wrap:anywhere}
-  </style>`;
-  const srcDoc = /<html[\s>]/i.test(safeContent)
-    ? safeContent.replace(/<\/head\s*>/i, `${responsiveStyles}</head>`)
-    : `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${responsiveStyles}</head><body>${safeContent}</body></html>`;
-
-  return (
-    <iframe
-      title="Email preview"
-      srcDoc={srcDoc}
-      sandbox=""
-      className="block h-[720px] w-full border-0 bg-white"
-    />
-  );
-}
 
 type MailType = "test" | "bulk";
 
@@ -560,7 +536,7 @@ function ViewCampaignModal({
           <div>
             <p className={labelClass}>Content</p>
 
-            <EmailPreview content={campaignDetails.content} />
+            <EmailHtmlPreview content={campaignDetails.content} height="h-[560px]" />
           </div>
 
           {canUpdateRecipients && ["Queued", "Scheduled"].includes(campaignDetails.status) && (
@@ -1934,7 +1910,7 @@ function EmailCampaignForm({
                 {isContentEmpty(content) ? (
                   <p>Your email content will appear here.</p>
                 ) : (
-                  <EmailPreview content={content} />
+                  <EmailHtmlPreview content={content} />
                 )}
               </article>
             </div>

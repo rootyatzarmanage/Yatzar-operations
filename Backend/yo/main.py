@@ -1,5 +1,11 @@
 from contextlib import asynccontextmanager
 import asyncio
+import logging
+
+from yo.core.logging_config import configure_logging
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +40,7 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    logger.info("Starting %s", settings.PROJECT_NAME)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     async with AsyncSessionLocal() as session:
@@ -47,6 +54,7 @@ async def lifespan(application: FastAPI):
         if worker:
             await worker
         await engine.dispose()
+        logger.info("Stopped %s", settings.PROJECT_NAME)
 
 
 app = FastAPI(

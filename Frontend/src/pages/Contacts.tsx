@@ -22,6 +22,7 @@ import { addContactToLeads } from "@/api/leads";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
 import PageMeta from "@/components/common/PageMeta";
 import RecordView from "@/components/records/RecordView";
+import SpreadsheetBulkImport, { type SpreadsheetImportField } from "@/components/records/SpreadsheetBulkImport";
 import type { EmbedProps } from "@/components/records/embed";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 import { getEmployeeWorkspaceIds } from "@/utils/workspaceAccess";
@@ -98,6 +99,35 @@ const contactFieldLimits: Partial<Record<StringFieldKey, { maxLength?: number; m
   department: { maxLength: 150 },
 };
 const maxContactPhotoSize = 5 * 1024 * 1024;
+const contactBulkImportFields: SpreadsheetImportField[] = [
+  { key: "firstName", label: "First name", required: true },
+  { key: "lastName", label: "Last name" },
+  { key: "company", label: "Company" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "secondaryEmail", label: "Secondary email", type: "email" },
+  { key: "phone", label: "Phone" },
+  { key: "otherPhone", label: "Other phone" },
+  { key: "homePhone", label: "Home phone" },
+  { key: "mobile", label: "Mobile" },
+  { key: "dateOfBirth", label: "Date of birth", type: "date" },
+  { key: "department", label: "Department" },
+  { key: "leadSource", label: "Lead source" },
+  { key: "tagId", label: "Tag ID" },
+  { key: "emailOptOut", label: "Email opt out", type: "checkbox" },
+  { key: "addressLine1", label: "Mailing building" },
+  { key: "addressLine2", label: "Mailing street" },
+  { key: "city", label: "Mailing city" },
+  { key: "state", label: "Mailing state" },
+  { key: "country", label: "Mailing country" },
+  { key: "pincode", label: "Mailing postal code" },
+  { key: "otherAddressLine1", label: "Other address building" },
+  { key: "otherAddressLine2", label: "Other address street" },
+  { key: "otherCity", label: "Other city" },
+  { key: "otherState", label: "Other state" },
+  { key: "otherCountry", label: "Other country" },
+  { key: "otherPincode", label: "Other postal code" },
+  { key: "description", label: "Description" },
+];
 
 function contactFieldError(field: StringFieldKey, value: string) {
   const limits = contactFieldLimits[field];
@@ -932,13 +962,26 @@ const handleBulkDelete = async () => {
               Manage contact records and their information in one place.
             </p>
           </div>
-          {canCreate && <button
-            type="button"
-            onClick={openAddForm}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
-          >
-            <span className="text-lg leading-none">+</span>Add Contact
-          </button>}
+          <div className="flex flex-wrap items-center gap-2">
+            {canCreate && <SpreadsheetBulkImport
+              label="Contact"
+              fileName="contacts"
+              fields={contactBulkImportFields}
+              onImportRow={async (row) => {
+                const values = { ...emptyForm, ...row, workspace: currentWorkspace?.id ?? "" } as ContactFields;
+                const created = fromApiContact(await createContact(toContactPayload(values)));
+                setContacts((current) => [created, ...current]);
+                setPage(1);
+              }}
+            />}
+            {canCreate && <button
+              type="button"
+              onClick={openAddForm}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
+            >
+              <span className="text-lg leading-none">+</span>Add Contact
+            </button>}
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">

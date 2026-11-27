@@ -19,6 +19,10 @@ env/
 *.sqlite3
 storage/
 
+# Application logs (keep the folder in the repository, not generated log files)
+logs/*.log
+logs/*.log.*
+
 # Test and tool caches
 .pytest_cache/
 .mypy_cache/

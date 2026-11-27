@@ -45,6 +45,29 @@ const columns: Column<CustomerRecord>[] = [
   } },
 ];
 
+const bulkImportFields = [
+  { key: "firstName", label: "First name", required: true },
+  { key: "lastName", label: "Last name" },
+  { key: "email", label: "Email", type: "email" as const },
+  { key: "phone", label: "Phone", required: true },
+  { key: "otherPhone", label: "Other phone" },
+  { key: "department", label: "Department" },
+  { key: "leadSource", label: "Lead source" },
+  { key: "addressLine1", label: "Flat / House no. / Building" },
+  { key: "addressLine2", label: "Street address" },
+  { key: "city", label: "City" },
+  { key: "state", label: "State" },
+  { key: "country", label: "Country" },
+  { key: "pincode", label: "Pincode" },
+  { key: "otherAddressLine1", label: "Other address building" },
+  { key: "otherAddressLine2", label: "Other street address" },
+  { key: "otherCity", label: "Other city" },
+  { key: "otherState", label: "Other state" },
+  { key: "otherCountry", label: "Other country" },
+  { key: "otherPincode", label: "Other pincode" },
+  { key: "purchasedProducts", label: "Purchased products (JSON)" },
+];
+
 const addressFields = (prefix: "" | "other"): FieldDef[] => {
   const k = (name: string) => (prefix ? `${prefix}${name}` : name[0].toLowerCase() + name.slice(1));
   return [
@@ -134,6 +157,7 @@ export default function Customers({ embed }: EmbedProps = {}) {
       searchText={(r) => [text(r.customerId), customerName(r), text(r.email), text(r.phone), text(r.department), text(r.leadSource), ...purchasedProducts(r.purchasedProducts).map((product) => product.name)]}
       recordName={customerName}
       store={store}
+      bulkImportFields={bulkImportFields}
       showExport={false}
       viewBadge={() => currentWorkspace?.name ?? ""}
     />
