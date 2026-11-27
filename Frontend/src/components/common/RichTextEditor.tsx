@@ -12,6 +12,7 @@ import {
   Image as ImageIcon, Video, Minus, Maximize2, Code2, HelpCircle, Highlighter,
 } from "lucide-react";
 import Swal from "sweetalert2";
+import EmailHtmlPreview from "@/components/common/EmailHtmlPreview";
 
 const ResizableImage = Image.extend({
   addAttributes() {
@@ -310,6 +311,7 @@ export default function RichTextEditor({
 }) {
   const [codeView, setCodeView] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const isFullEmailHtml = /<(?:!doctype|html|head|meta|style)\b/i.test(value);
 
   const editor = useEditor({
     extensions: [
@@ -341,8 +343,8 @@ export default function RichTextEditor({
 
   return (
     <div
-      className={`overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 ${
-        fullscreen ? "fixed inset-4 z-[99999] flex min-h-0 flex-col shadow-2xl" : ""
+      className={`min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 ${
+        fullscreen ? "fixed inset-4 z-[99999] flex min-h-0 min-w-0 flex-col shadow-2xl" : ""
       }`}
     >
       <Toolbar
@@ -355,11 +357,16 @@ export default function RichTextEditor({
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="min-h-48 w-full flex-1 bg-gray-900 p-4 font-mono text-xs text-green-300 outline-none"
+          wrap="off"
+          className="min-h-48 min-w-0 w-full flex-1 resize-none overflow-auto whitespace-pre bg-gray-900 p-4 font-mono text-xs text-green-300 outline-none"
           spellCheck={false}
         />
+      ) : isFullEmailHtml ? (
+        <div className={fullscreen ? "min-h-0 min-w-0 flex-1 overflow-auto bg-gray-100 p-4 dark:bg-gray-800" : "max-h-[500px] min-w-0 overflow-auto bg-gray-100 p-3 dark:bg-gray-800"}>
+          <EmailHtmlPreview content={value} height={fullscreen ? "h-full min-h-[600px]" : "h-[500px]"} />
+        </div>
       ) : (
-        <div className={fullscreen ? "min-h-0 flex-1 overflow-auto" : "max-h-[500px] overflow-auto"}>
+        <div className={fullscreen ? "min-h-0 min-w-0 flex-1 overflow-auto" : "max-h-[500px] min-w-0 overflow-auto"}>
           <EditorContent editor={editor} placeholder={placeholder} />
         </div>
       )}
