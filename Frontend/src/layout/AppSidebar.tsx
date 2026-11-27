@@ -14,6 +14,7 @@ import {
 } from "../icons";
 import { CalendarDays, Volume1, Calendar1, Tag } from 'lucide-react'
 import { ChevronLeft, MessageSquare, User } from "lucide-react"
+import { Settings2 } from "lucide-react"
 import { cn } from "../utils";
 import { hasPermission, useAuth } from "@/context/AuthContext";
 
@@ -101,6 +102,11 @@ const navItems: NavItem[] = [
     path: "/profile",
   },
   {
+    icon: <Settings2 size={24} />,
+    name: "Control Panel",
+    path: "/control-panel",
+  },
+  {
     icon: <GridIcon fontSize={24} />,
     name: "Others",
     path: "/others",
@@ -171,6 +177,7 @@ const AppSidebar: React.FC = () => {
         ) {
           return false;
         }
+        if (!currentWorkspace && item.path === "/control-panel" && user?.role !== "Super Admin") return false;
         return item.subItems
           ? item.subItems.length > 0
           : !item.path || canViewPath(user, item.path);

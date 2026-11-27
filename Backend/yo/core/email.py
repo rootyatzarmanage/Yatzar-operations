@@ -31,7 +31,7 @@ def _env_config() -> dict:
 
 
 def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_id: str | None,
-          calendar=None, smtp_config: dict | None = None):
+          calendar=None, smtp_config: dict | None = None, cc: list[str] | None = None):
     cfg = smtp_config or _env_config()
     if (cfg["mailer"] or "").lower() != "smtp" or not (cfg["host"] and cfg["from_address"]):
         raise RuntimeError("Configure mailer=smtp, host and from address.")
@@ -42,6 +42,8 @@ def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_i
     message["Subject"] = subject
     message["From"] = formataddr((cfg["from_name"], cfg["from_address"]))
     message["To"] = to
+    if cc:
+        message["Cc"] = ", ".join(cc)
     message["Message-ID"] = message_id or make_msgid()
     if reply_to:
         message["Reply-To"] = reply_to
@@ -62,14 +64,14 @@ def _send(to: str, subject: str, html_body: str, reply_to: str | None, message_i
             smtp.starttls(context=context)
         if cfg["username"]:
             smtp.login(cfg["username"], cfg["password"])
-        smtp.send_message(message, from_addr=cfg["from_address"], to_addrs=[to])
+        smtp.send_message(message, from_addr=cfg["from_address"], to_addrs=[to, *(cc or [])])
 
 
 async def send_email(to: str, subject: str, html_body: str, *, reply_to: str | None = None,
                      message_id: str | None = None, calendar=None,
-                     smtp_config: dict | None = None) -> None:
+                     smtp_config: dict | None = None, cc: list[str] | None = None) -> None:
     try:
-        await run_in_threadpool(_send, to, subject, html_body, reply_to, message_id, calendar, smtp_config)
+        await run_in_threadpool(_send, to, subject, html_body, reply_to, message_id, calendar, smtp_config, cc)
     except Exception:
         logger.exception("SMTP delivery failed")
         raise AppException("SMTP delivery failed. Check mail configuration and backend logs.", 502) from None

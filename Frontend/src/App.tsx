@@ -19,6 +19,7 @@ import Calendar from "./pages/Calendar";
 import EmailMarketing from "./pages/EmailMarketing";
 import Campaign from "./pages/Campaigns";
 import EventWebinar from "./pages/EventWebinar";
+import ControlPanel from "./pages/ControlPanel";
 import { hasPermission, useAuth } from "./context/AuthContext";
 import { useWorkspace } from "./context/WorkspaceContext";
 import { Navigate, useLocation } from "react-router";
@@ -32,12 +33,12 @@ function ProtectedApp() {
   return <AppLayout />;
 }
 
-function PermissionRoute({ menu, children }: { menu: string | string[]; children: ReactNode }) {
+function PermissionRoute({ menu, children, role }: { menu: string | string[]; children: ReactNode; role?: string }) {
   const { user } = useAuth();
   const allowed = Array.isArray(menu)
     ? menu.some((permissionMenu) => hasPermission(user, permissionMenu))
     : hasPermission(user, menu);
-  return allowed ? children : <Navigate to="/" replace />;
+  return allowed && (!role || user?.role === role) ? children : <Navigate to="/" replace />;
 }
 
 function ContactsScopeRoute({ children }: { children: ReactNode }) {
@@ -119,6 +120,7 @@ export default function App() {
             <Route index path="/" element={<DefaultAppRoute />} />
             <Route path="/teams" element={<PermissionRoute menu="Teams"><Teams /></PermissionRoute>} />
             <Route path="/others" element={<PermissionRoute menu="Teams"><Others /></PermissionRoute>} />
+            <Route path="/control-panel" element={<PermissionRoute menu="Teams" role="Super Admin"><ControlPanel /></PermissionRoute>} />
             <Route path="/tags" element={<MenuPermissionRoute menu="Tags" requireWorkspace><Tags /></MenuPermissionRoute>} />
 
             {/* App Permission */}

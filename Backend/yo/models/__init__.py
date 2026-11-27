@@ -7,4 +7,5 @@ from yo.models.workspace import Workspace
 from yo.models.tag import Tag
 from yo.models.mail_delivery import MailDelivery
 from yo.models.calendar_event import CalendarEvent , CalendarEventGuest
-__all__ = ["Base", "DropdownOption", "Employee", "Menu", "Role", "RolePermission", "SoftDeleteMixin", "TimestampMixin", "Workspace", "User","Tag","MailDelivery","CalendarEvent","CalendarEventGuest"]
+from yo.models.control_panel import EmailNotificationSettings
+__all__ = ["Base", "DropdownOption", "Employee", "EmailNotificationSettings", "Menu", "Role", "RolePermission", "SoftDeleteMixin", "TimestampMixin", "Workspace", "User","Tag","MailDelivery","CalendarEvent","CalendarEventGuest"]

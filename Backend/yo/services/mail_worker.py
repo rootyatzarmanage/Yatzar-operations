@@ -18,6 +18,7 @@ from yo.models.call import Call
 from yo.models.contact import Contact
 from yo.models.email_marketing import EmailMarketing, EmailMarketingRecipient
 from yo.models.mail_delivery import MailDelivery
+from yo.models.control_panel import EmailNotificationSettings
 from yo.models.meeting import Meeting
 from yo.models.task import Task
 from yo.models.tag import Tag
@@ -74,7 +75,7 @@ async def workspace_smtp(session, workspace_id):
     }
 
 
-async def deliver(session, source, kind, when, recipient, subject, body, reply_to=None, calendar=None):
+async def deliver(session, source, kind, when, recipient, subject, body, reply_to=None, calendar=None, cc=None):
     recipient = recipient.strip().lower()
     key = hashlib.sha256(f"{kind}:{source.id}:{when.isoformat()}:{recipient}".encode()).hexdigest()
     delivery = await session.scalar(select(MailDelivery).where(MailDelivery.delivery_key == key))
@@ -94,7 +95,7 @@ async def deliver(session, source, kind, when, recipient, subject, body, reply_t
     try:
         await send_email(recipient, subject[:500], body, reply_to=reply_to,
                          message_id=f"<{key}@yatzar.operations>", calendar=calendar,
-                         smtp_config=await workspace_smtp(session, source.workspace_id))
+                         smtp_config=await workspace_smtp(session, source.workspace_id), cc=cc)
     except Exception:
         delivery.status = "Failed" if delivery.attempts >= settings.MAIL_MAX_ATTEMPTS else "Pending"
         delivery.last_error = "SMTP delivery failed; see backend logs."
@@ -284,7 +285,36 @@ async def process_campaign(campaign_id):
                 else:
                     campaign.status = "Email Sent" if eligible and all(r.sent for r in eligible) else ("Partially Sent" if sent else "Failed")
                     campaign.sent_at = now if sent else None
+                    await session.flush()
+                    await send_campaign_summary(
+                        session, campaign, recipients,
+                        aware(campaign.sent_at or campaign.updated_at or now),
+                    )
                 return
+
+
+async def send_campaign_summary(session, campaign, recipients, when):
+    settings_row = await session.get(EmailNotificationSettings, True)
+    if not settings_row or not settings_row.to_emails:
+        return
+    enabled = [recipient for recipient in recipients if recipient.is_enabled]
+    successful = [recipient for recipient in enabled if recipient.sent]
+    unsuccessful = [recipient for recipient in enabled if not recipient.sent]
+    local_time = when.astimezone(ZoneInfo(settings.MAIL_TIMEZONE)).strftime("%Y-%m-%d %H:%M:%S %Z")
+    failures = "".join(f"<li>{escape(recipient.email)}</li>" for recipient in unsuccessful)
+    body = (
+        f"<h2>Email marketing delivery summary</h2><p><strong>Campaign:</strong> {escape(campaign.campaign_name)}</p>"
+        f"<p><strong>Subject:</strong> {escape(campaign.subject)}</p><p><strong>Sent on:</strong> {escape(local_time)}</p>"
+        f"<p>{len(successful)} successful email(s) sent; {len(unsuccessful)} unsuccessful.</p>"
+        f"<p><strong>Successful:</strong> {len(successful)}</p><p><strong>Unsuccessful recipients:</strong></p>"
+        f"<ul>{failures or '<li>None</li>'}</ul>"
+    )
+    for address in settings_row.to_emails:
+        await deliver(
+            session, campaign, "marketing_summary", aware(campaign.updated_at or campaign.created_at), address,
+            f"Email delivery summary: {campaign.campaign_name}", body,
+            reply_to=campaign.from_email, cc=settings_row.cc_emails,
+        )
 
 
 async def tick():
@@ -307,6 +337,22 @@ async def tick():
                     await process_reminder(model, source_id)
             except Exception:
                 logger.exception("Mail worker could not process %s %s", model.__tablename__, source_id)
+    async with AsyncSessionLocal() as session:
+        completed_ids = list(await session.scalars(select(EmailMarketing.id).where(
+            EmailMarketing.deleted_at.is_(None),
+            EmailMarketing.status.in_(("Email Sent", "Partially Sent", "Failed")),
+        )))
+    for campaign_id in completed_ids:
+        try:
+            async with AsyncSessionLocal() as session, session.begin():
+                campaign = await session.get(EmailMarketing, campaign_id)
+                if campaign:
+                    recipients = list(await session.scalars(select(EmailMarketingRecipient).where(
+                        EmailMarketingRecipient.email_marketing_id == campaign.id,
+                    )))
+                    await send_campaign_summary(session, campaign, recipients, datetime.now(timezone.utc))
+        except Exception:
+            logger.exception("Mail worker could not send campaign summary for %s", campaign_id)
     from yo.services.calendar_mail import sweep_calendar_mail  # local import avoids a circular import
     await sweep_calendar_mail()
 
